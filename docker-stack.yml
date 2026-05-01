@@ -69,14 +69,17 @@ services:
       --maxmemory-policy allkeys-lru
     networks:
       - n8n_internal
+    environment:
+      # redis-cli lee REDISCLI_AUTH automáticamente — evita pasar password en el healthcheck
+      REDISCLI_AUTH: ${REDIS_PASSWORD}
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ['CMD-SHELL', 'redis-cli -a "$$REDIS_PASSWORD" ping | grep -q PONG']
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 15s
     deploy:
       replicas: 1
       restart_policy:
