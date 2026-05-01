@@ -1,0 +1,343 @@
+version: '3.8'
+
+# ============================================================
+# N8N PRODUCTION STACK — Docker Swarm
+# Desplegar con: make deploy
+# Variables: copiar .env.example → .env y rellenar
+# ============================================================
+
+networks:
+  n8n_internal:
+    driver: overlay
+    attachable: true
+  traefik_public:
+    external: true
+    name: ${TRAEFIK_NETWORK}
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  minio_data:
+    driver: local
+  n8n_main_data:
+    driver: local
+  n8n_webhook_data:
+    driver: local
+
+services:
+
+  # ==========================================================
+  # POSTGRESQL
+  # ==========================================================
+  postgres:
+    image: postgres:16-alpine
+    networks:
+      - n8n_internal
+    environment:
+      POSTGRES_DB: n8n
+      POSTGRES_USER: n8n
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U n8n']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+      placement:
+        constraints:
+          - node.role == manager
+
+  # ==========================================================
+  # REDIS
+  # ==========================================================
+  redis:
+    image: redis:7-alpine
+    command: >
+      redis-server
+      --appendonly yes
+      --requirepass ${REDIS_PASSWORD}
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+    networks:
+      - n8n_internal
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD-SHELL', 'redis-cli -a "$$REDIS_PASSWORD" ping | grep -q PONG']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+      placement:
+        constraints:
+          - node.role == manager
+
+  # ==========================================================
+  # MINIO — Almacenamiento S3-compatible
+  # ==========================================================
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    networks:
+      - n8n_internal
+      - traefik_public
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_SERVER_URL: https://${MINIO_DOMAIN}
+      MINIO_BROWSER_REDIRECT_URL: https://${MINIO_CONSOLE_DOMAIN}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -sf http://localhost:9000/minio/health/live || exit 1']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+      placement:
+        constraints:
+          - node.role == manager
+      labels:
+        - "traefik.enable=true"
+        - "traefik.docker.network=${TRAEFIK_NETWORK}"
+        # S3 API
+        - "traefik.http.routers.minio-s3.rule=Host(`${MINIO_DOMAIN}`)"
+        - "traefik.http.routers.minio-s3.entrypoints=websecure"
+        - "traefik.http.routers.minio-s3.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.minio-s3.service=minio-s3-svc"
+        - "traefik.http.services.minio-s3-svc.loadbalancer.server.port=9000"
+        # Consola web
+        - "traefik.http.routers.minio-console.rule=Host(`${MINIO_CONSOLE_DOMAIN}`)"
+        - "traefik.http.routers.minio-console.entrypoints=websecure"
+        - "traefik.http.routers.minio-console.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.minio-console.service=minio-console-svc"
+        - "traefik.http.services.minio-console-svc.loadbalancer.server.port=9001"
+
+  # ==========================================================
+  # MINIO INIT — Crea el bucket n8n-data (one-shot)
+  # ==========================================================
+  minio-init:
+    image: minio/mc:latest
+    networks:
+      - n8n_internal
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    entrypoint: >
+      /bin/sh -c "
+        until mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD 2>/dev/null; do
+          echo 'Esperando MinIO...'; sleep 5;
+        done &&
+        mc mb --ignore-existing local/n8n-data &&
+        mc anonymous set none local/n8n-data &&
+        echo 'Bucket n8n-data listo.'
+      "
+    deploy:
+      restart_policy:
+        condition: none
+
+  # ==========================================================
+  # N8N MAIN — UI, triggers programados, REST API
+  # ==========================================================
+  n8n-main:
+    image: n8nio/n8n:latest
+    command: n8n start
+    networks:
+      - n8n_internal
+      - traefik_public
+    environment:
+      # Base de datos
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: n8n
+      DB_POSTGRESDB_USER: n8n
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
+      # Cola Redis
+      EXECUTIONS_MODE: queue
+      QUEUE_BULL_REDIS_HOST: redis
+      QUEUE_BULL_REDIS_PORT: 6379
+      QUEUE_BULL_REDIS_PASSWORD: ${REDIS_PASSWORD}
+      QUEUE_BULL_REDIS_DB: 0
+      # Seguridad — MISMO VALOR en todos los servicios n8n
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+      # Dominio
+      N8N_PORT: 5678
+      N8N_PROTOCOL: https
+      N8N_HOST: ${N8N_HOST}
+      WEBHOOK_URL: https://${N8N_HOST}/
+      N8N_EDITOR_BASE_URL: https://${N8N_HOST}/
+      N8N_SECURE_COOKIE: "true"
+      # Zona horaria
+      GENERIC_TIMEZONE: America/Santo_Domingo
+      TZ: America/Santo_Domingo
+      # Almacenamiento S3 — variables correctas (verificadas en código fuente n8n)
+      N8N_DEFAULT_BINARY_DATA_MODE: s3
+      N8N_EXTERNAL_STORAGE_S3_HOST: ${MINIO_DOMAIN}
+      N8N_EXTERNAL_STORAGE_S3_PROTOCOL: https
+      N8N_EXTERNAL_STORAGE_S3_BUCKET_NAME: n8n-data
+      N8N_EXTERNAL_STORAGE_S3_BUCKET_REGION: us-east-1
+      N8N_EXTERNAL_STORAGE_S3_ACCESS_KEY: ${MINIO_ROOT_USER}
+      N8N_EXTERNAL_STORAGE_S3_ACCESS_SECRET: ${MINIO_ROOT_PASSWORD}
+      N8N_EXTERNAL_STORAGE_S3_FORCE_PATH_STYLE: "true"
+      # Rendimiento
+      N8N_PAYLOAD_SIZE_MAX: 16
+    volumes:
+      - n8n_main_data:/home/node/.n8n
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:5678/healthz || exit 1']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 15s
+      labels:
+        - "traefik.enable=true"
+        - "traefik.docker.network=${TRAEFIK_NETWORK}"
+        # Catch-all para UI y API — prioridad baja
+        - "traefik.http.routers.n8n-main.rule=Host(`${N8N_HOST}`)"
+        - "traefik.http.routers.n8n-main.priority=1"
+        - "traefik.http.routers.n8n-main.entrypoints=websecure"
+        - "traefik.http.routers.n8n-main.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.n8n-main.service=n8n-main-svc"
+        - "traefik.http.services.n8n-main-svc.loadbalancer.server.port=5678"
+        # Redirect HTTP → HTTPS
+        - "traefik.http.routers.n8n-main-http.rule=Host(`${N8N_HOST}`)"
+        - "traefik.http.routers.n8n-main-http.entrypoints=web"
+        - "traefik.http.routers.n8n-main-http.middlewares=redirect-to-https"
+        - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+
+  # ==========================================================
+  # N8N WEBHOOK — Recibe webhooks HTTP y encola en Redis
+  # ==========================================================
+  n8n-webhook:
+    image: n8nio/n8n:latest
+    command: n8n webhook
+    networks:
+      - n8n_internal
+      - traefik_public
+    environment:
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: n8n
+      DB_POSTGRESDB_USER: n8n
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
+      EXECUTIONS_MODE: queue
+      QUEUE_BULL_REDIS_HOST: redis
+      QUEUE_BULL_REDIS_PORT: 6379
+      QUEUE_BULL_REDIS_PASSWORD: ${REDIS_PASSWORD}
+      QUEUE_BULL_REDIS_DB: 0
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+      N8N_PORT: 5678
+      N8N_PROTOCOL: https
+      N8N_HOST: ${N8N_HOST}
+      WEBHOOK_URL: https://${N8N_HOST}/
+      GENERIC_TIMEZONE: America/Santo_Domingo
+      TZ: America/Santo_Domingo
+      N8N_DEFAULT_BINARY_DATA_MODE: s3
+      N8N_EXTERNAL_STORAGE_S3_HOST: ${MINIO_DOMAIN}
+      N8N_EXTERNAL_STORAGE_S3_PROTOCOL: https
+      N8N_EXTERNAL_STORAGE_S3_BUCKET_NAME: n8n-data
+      N8N_EXTERNAL_STORAGE_S3_BUCKET_REGION: us-east-1
+      N8N_EXTERNAL_STORAGE_S3_ACCESS_KEY: ${MINIO_ROOT_USER}
+      N8N_EXTERNAL_STORAGE_S3_ACCESS_SECRET: ${MINIO_ROOT_PASSWORD}
+      N8N_EXTERNAL_STORAGE_S3_FORCE_PATH_STYLE: "true"
+      # Mantiene webhooks registrados durante reinicios
+      N8N_SKIP_WEBHOOK_DEREGISTRATION_SHUTDOWN: "true"
+    volumes:
+      - n8n_webhook_data:/home/node/.n8n
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:5678/healthz || exit 1']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+      labels:
+        - "traefik.enable=true"
+        - "traefik.docker.network=${TRAEFIK_NETWORK}"
+        # /webhook/* — prioridad alta (10 > 1)
+        - "traefik.http.routers.n8n-webhook.rule=Host(`${N8N_HOST}`) && PathPrefix(`/webhook/`)"
+        - "traefik.http.routers.n8n-webhook.priority=10"
+        - "traefik.http.routers.n8n-webhook.entrypoints=websecure"
+        - "traefik.http.routers.n8n-webhook.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.n8n-webhook.service=n8n-webhook-svc"
+        - "traefik.http.services.n8n-webhook-svc.loadbalancer.server.port=5678"
+
+  # ==========================================================
+  # N8N WORKERS — Ejecutan workflows desde la cola Redis
+  # Escalar: docker service scale n8n_n8n-worker=5
+  # Los workers NO reciben HTTP — procesan la cola Bull
+  # ==========================================================
+  n8n-worker:
+    image: n8nio/n8n:latest
+    command: n8n worker
+    networks:
+      - n8n_internal
+    environment:
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: n8n
+      DB_POSTGRESDB_USER: n8n
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
+      EXECUTIONS_MODE: queue
+      QUEUE_BULL_REDIS_HOST: redis
+      QUEUE_BULL_REDIS_PORT: 6379
+      QUEUE_BULL_REDIS_PASSWORD: ${REDIS_PASSWORD}
+      QUEUE_BULL_REDIS_DB: 0
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+      GENERIC_TIMEZONE: America/Santo_Domingo
+      TZ: America/Santo_Domingo
+      N8N_DEFAULT_BINARY_DATA_MODE: s3
+      N8N_EXTERNAL_STORAGE_S3_HOST: ${MINIO_DOMAIN}
+      N8N_EXTERNAL_STORAGE_S3_PROTOCOL: https
+      N8N_EXTERNAL_STORAGE_S3_BUCKET_NAME: n8n-data
+      N8N_EXTERNAL_STORAGE_S3_BUCKET_REGION: us-east-1
+      N8N_EXTERNAL_STORAGE_S3_ACCESS_KEY: ${MINIO_ROOT_USER}
+      N8N_EXTERNAL_STORAGE_S3_ACCESS_SECRET: ${MINIO_ROOT_PASSWORD}
+      N8N_EXTERNAL_STORAGE_S3_FORCE_PATH_STYLE: "true"
+      # Cuántos workflows puede ejecutar en paralelo cada worker
+      N8N_CONCURRENCY_PRODUCTION_LIMIT: 10
+      # Expone /healthz en el worker (requiere esta flag)
+      QUEUE_HEALTH_CHECK_ACTIVE: "true"
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:5678/healthz || exit 1']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      replicas: 3
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
