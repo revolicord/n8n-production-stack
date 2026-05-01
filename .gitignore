@@ -1,0 +1,27 @@
+# Secrets — NUNCA subir al repo
+.env
+.env.local
+.env.production
+*.pem
+*.key
+secrets/
+
+# Docker override local
+docker-compose.override.yml
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Backups locales
+backups/
