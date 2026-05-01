@@ -163,7 +163,7 @@ services:
   # ==========================================================
   n8n-main:
     image: n8nio/n8n:latest
-    command: n8n start
+    command: start
     networks:
       - n8n_internal
       - traefik_public
@@ -193,17 +193,11 @@ services:
       # Zona horaria
       GENERIC_TIMEZONE: America/Santo_Domingo
       TZ: America/Santo_Domingo
-      # Almacenamiento S3 — variables correctas (verificadas en código fuente n8n)
-      N8N_DEFAULT_BINARY_DATA_MODE: s3
-      N8N_EXTERNAL_STORAGE_S3_HOST: ${MINIO_DOMAIN}
-      N8N_EXTERNAL_STORAGE_S3_PROTOCOL: https
-      N8N_EXTERNAL_STORAGE_S3_BUCKET_NAME: n8n-data
-      N8N_EXTERNAL_STORAGE_S3_BUCKET_REGION: us-east-1
-      N8N_EXTERNAL_STORAGE_S3_ACCESS_KEY: ${MINIO_ROOT_USER}
-      N8N_EXTERNAL_STORAGE_S3_ACCESS_SECRET: ${MINIO_ROOT_PASSWORD}
-      N8N_EXTERNAL_STORAGE_S3_FORCE_PATH_STYLE: "true"
+      # Almacenamiento — database mode (S3 requiere licencia Enterprise)
+      N8N_DEFAULT_BINARY_DATA_MODE: database
       # Rendimiento
       N8N_PAYLOAD_SIZE_MAX: 16
+      OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS: "true"
     volumes:
       - n8n_main_data:/home/node/.n8n
     healthcheck:
@@ -238,7 +232,7 @@ services:
   # ==========================================================
   n8n-webhook:
     image: n8nio/n8n:latest
-    command: n8n webhook
+    command: webhook
     networks:
       - n8n_internal
       - traefik_public
@@ -261,14 +255,7 @@ services:
       WEBHOOK_URL: https://${N8N_HOST}/
       GENERIC_TIMEZONE: America/Santo_Domingo
       TZ: America/Santo_Domingo
-      N8N_DEFAULT_BINARY_DATA_MODE: s3
-      N8N_EXTERNAL_STORAGE_S3_HOST: ${MINIO_DOMAIN}
-      N8N_EXTERNAL_STORAGE_S3_PROTOCOL: https
-      N8N_EXTERNAL_STORAGE_S3_BUCKET_NAME: n8n-data
-      N8N_EXTERNAL_STORAGE_S3_BUCKET_REGION: us-east-1
-      N8N_EXTERNAL_STORAGE_S3_ACCESS_KEY: ${MINIO_ROOT_USER}
-      N8N_EXTERNAL_STORAGE_S3_ACCESS_SECRET: ${MINIO_ROOT_PASSWORD}
-      N8N_EXTERNAL_STORAGE_S3_FORCE_PATH_STYLE: "true"
+      N8N_DEFAULT_BINARY_DATA_MODE: database
       # Mantiene webhooks registrados durante reinicios
       N8N_SKIP_WEBHOOK_DEREGISTRATION_SHUTDOWN: "true"
     volumes:
@@ -302,7 +289,7 @@ services:
   # ==========================================================
   n8n-worker:
     image: n8nio/n8n:latest
-    command: n8n worker
+    command: worker
     networks:
       - n8n_internal
     environment:
@@ -320,14 +307,7 @@ services:
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
       GENERIC_TIMEZONE: America/Santo_Domingo
       TZ: America/Santo_Domingo
-      N8N_DEFAULT_BINARY_DATA_MODE: s3
-      N8N_EXTERNAL_STORAGE_S3_HOST: ${MINIO_DOMAIN}
-      N8N_EXTERNAL_STORAGE_S3_PROTOCOL: https
-      N8N_EXTERNAL_STORAGE_S3_BUCKET_NAME: n8n-data
-      N8N_EXTERNAL_STORAGE_S3_BUCKET_REGION: us-east-1
-      N8N_EXTERNAL_STORAGE_S3_ACCESS_KEY: ${MINIO_ROOT_USER}
-      N8N_EXTERNAL_STORAGE_S3_ACCESS_SECRET: ${MINIO_ROOT_PASSWORD}
-      N8N_EXTERNAL_STORAGE_S3_FORCE_PATH_STYLE: "true"
+      N8N_DEFAULT_BINARY_DATA_MODE: database
       # Cuántos workflows puede ejecutar en paralelo cada worker
       N8N_CONCURRENCY_PRODUCTION_LIMIT: 10
       # Expone /healthz en el worker (requiere esta flag)
