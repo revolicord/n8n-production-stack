@@ -99,22 +99,24 @@ info "Red ${TRAEFIK_NETWORK} lista."
 # ── 7. Instalar Traefik (si no está corriendo) ───────────────
 section "Verificando Traefik..."
 if ! docker service ls --format '{{.Name}}' | grep -q '^traefik$'; then
-  info "Instalando Traefik v3.3..."
+  # Traefik v2.11: el Swarm provider de v3.x usa Docker API 1.24 hardcodeada,
+  # incompatible con Docker Engine 29+ (requiere mínimo 1.40). v2.11 negocia bien.
+  info "Instalando Traefik v2.11..."
 
   mkdir -p /etc/traefik/dynamic
   touch /etc/traefik/acme.json
   chmod 600 /etc/traefik/acme.json
 
-  # Configuración de Traefik v3 con Swarm provider
   cat > /etc/traefik/traefik.yml <<TRAEFIKEOF
 global:
   sendAnonymousUsage: false
 
 providers:
-  swarm:
+  docker:
     endpoint: "unix:///var/run/docker.sock"
     network: ${TRAEFIK_NETWORK}
     exposedByDefault: false
+    swarmMode: true
     watch: true
   file:
     directory: /etc/traefik/dynamic
@@ -154,10 +156,10 @@ TRAEFIKEOF
     --publish published=443,target=443,mode=host \
     --mount type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock,readonly \
     --mount type=bind,source=/etc/traefik/traefik.yml,target=/traefik.yml \
-    --mount type=bind,source=/etc/traefik/acme.json,target=/acme.json \
+    --mount type=bind,source=/etc/traefik/acme.json,target=/etc/traefik/acme.json \
     --mount type=bind,source=/etc/traefik/dynamic,target=/etc/traefik/dynamic \
     --network "$TRAEFIK_NETWORK" \
-    traefik:v3.3 \
+    traefik:v2.11 \
     --configFile=/traefik.yml
 
   info "Traefik instalado. Esperando 15s para que arranque..."
