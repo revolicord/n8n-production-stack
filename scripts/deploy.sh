@@ -37,7 +37,7 @@ docker info --format '{{.Swarm.LocalNodeState}}' 2>/dev/null | grep -q active ||
 
 # Verificar red Traefik
 docker network ls --format '{{.Name}}' | grep -q "^${TRAEFIK_NETWORK}$" || \
-  error "Red '$TRAEFIK_NETWORK' no existe. ¿Está Traefik iniciado en Dokploy?"
+  error "Red '$TRAEFIK_NETWORK' no existe. Ejecuta primero: bash scripts/setup.sh"
 
 info "Desplegando stack '$STACK_NAME'..."
 docker stack deploy \

@@ -151,6 +151,7 @@ TRAEFIKEOF
 
   docker service create \
     --name traefik \
+    --detach=false \
     --constraint 'node.role==manager' \
     --publish published=80,target=80,mode=host \
     --publish published=443,target=443,mode=host \
@@ -162,8 +163,16 @@ TRAEFIKEOF
     traefik:v2.11 \
     --configFile=/traefik.yml
 
-  info "Traefik instalado. Esperando 15s para que arranque..."
-  sleep 15
+  info "Esperando que Traefik esté listo en el puerto 80..."
+  TRAEFIK_WAIT=0
+  until bash -c 'echo > /dev/tcp/127.0.0.1/80' 2>/dev/null; do
+    echo -n "."
+    sleep 2
+    TRAEFIK_WAIT=$((TRAEFIK_WAIT + 2))
+    [[ $TRAEFIK_WAIT -ge 120 ]] && error "Traefik no arrancó en 120s. Revisa: docker service ps traefik"
+  done
+  echo ""
+  info "Traefik listo."
 else
   info "Traefik ya está corriendo."
 fi
