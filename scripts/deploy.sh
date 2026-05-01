@@ -42,12 +42,11 @@ docker network ls --format '{{.Name}}' | grep -q "^${TRAEFIK_NETWORK}$" || \
 info "Desplegando stack '$STACK_NAME'..."
 docker stack deploy \
   --with-registry-auth \
-  --detach=false \
   -c "$STACK_FILE" \
   "$STACK_NAME"
 
-info "Stack desplegado. Estado de servicios:"
-sleep 3
+info "Stack enviado. Esperando que los servicios arranquen..."
+sleep 5
 docker stack services "$STACK_NAME"
 
 echo ""

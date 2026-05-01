@@ -1,98 +1,100 @@
-# n8n Production Stack — Revolicord
+# n8n Production Stack
 
-Stack de n8n en producción con Docker Swarm, MinIO, Redis y PostgreSQL.  
-Dominio: `paneln8n.revolicord.com` | Webhooks ManyChat/Instagram.
+Stack de n8n en producción con Docker Swarm, Traefik, MinIO, Redis y PostgreSQL.
 
 ## Arquitectura
 
 ```
-Internet
-   │
-   ▼
-Traefik (Dokploy) — TLS automático Let's Encrypt
-   │
-   ├── paneln8n.revolicord.com/webhook/*  → n8n-webhook (prioridad alta)
-   ├── paneln8n.revolicord.com/*          → n8n-main    (UI + API)
-   ├── minio.revolicord.com               → MinIO S3 API
-   └── minio-console.revolicord.com       → MinIO Console
-            │
-       [Redis Queue]
-       /     |     \
-  [worker] [worker] [worker]   ← 3 réplicas, escalables
-       \     |     /
-    [PostgreSQL] [MinIO]
+Internet (HTTP/HTTPS)
+       │
+       ▼
+  Traefik v3.3  — TLS automático Let's Encrypt
+       │
+       ├── <N8N_HOST>/webhook/*  → n8n-webhook  (prioridad 10)
+       ├── <N8N_HOST>/*          → n8n-main     (UI + API, prioridad 1)
+       ├── <MINIO_DOMAIN>        → MinIO S3 API
+       └── <MINIO_CONSOLE_DOMAIN>→ MinIO Console
+                   │
+             [Redis Queue - Bull]
+             /      |      \
+       [worker] [worker] [worker]   ← 3 réplicas, escalables
+             \      |      /
+          [PostgreSQL] [MinIO]
 ```
 
 ## Prerequisitos
 
-- [ ] Docker Swarm activo (`docker info | grep Swarm`)
-- [ ] Traefik iniciado desde el panel de Dokploy (puerto 3000 → Settings → Traefik → Enable)
-- [ ] DNS creados y propagados:
-  - `paneln8n.revolicord.com` → IP del servidor
-  - `minio.revolicord.com` → IP del servidor
-  - `minio-console.revolicord.com` → IP del servidor
+- [ ] Servidor con Ubuntu 22.04 o Debian 12
+- [ ] Docker instalado (`curl -fsSL https://get.docker.com | sh`)
 - [ ] Puertos 80 y 443 abiertos en el firewall
+- [ ] 3 registros DNS apuntando a la IP del servidor:
+  - `n8n.tudominio.com`
+  - `minio.tudominio.com`
+  - `minio-console.tudominio.com`
 
-## Instalación desde cero
+## Instalación desde cero (una sola vez)
 
 ```bash
 # 1. Clonar el repositorio
-git clone <repo-url> /opt/n8n-production
+git clone <URL-DEL-REPO> /opt/n8n-production
 cd /opt/n8n-production
 
-# 2. Crear el archivo de configuración
-cp .env.example .env
-
-# 3. Generar claves seguras y rellenar .env
-echo "N8N_ENCRYPTION_KEY=$(openssl rand -hex 32)"
-echo "POSTGRES_PASSWORD=$(openssl rand -base64 24)"
-echo "REDIS_PASSWORD=$(openssl rand -base64 24)"
-echo "MINIO_ROOT_PASSWORD=$(openssl rand -base64 24)"
-# Pegar los valores generados en .env
-
-nano .env  # o el editor de tu preferencia
-
-# 4. Dar permisos a los scripts
+# 2. Dar permisos a los scripts
 chmod +x scripts/*.sh
 
-# 5. Desplegar
-make deploy
+# 3. Ejecutar setup (instala Traefik, genera credenciales, despliega todo)
+bash scripts/setup.sh
+```
 
-# 6. Verificar que todos los servicios están corriendo
-make status
+El script `setup.sh`:
+- Pide los dominios y email para SSL
+- Genera credenciales seguras y crea el `.env`
+- Inicializa Docker Swarm (si no está activo)
+- Crea la red overlay `traefik-public`
+- Instala Traefik v3.3 con Let's Encrypt
+- Despliega el stack completo
+
+## Reinstalar / actualizar (cuando ya está corriendo)
+
+```bash
+cd /opt/n8n-production
+make deploy    # redesplegar con los cambios actuales
+make update    # actualizar imágenes n8n a latest
+make status    # ver estado de todos los servicios
 ```
 
 ## Operaciones habituales
 
 ```bash
-make status          # Estado de todos los servicios
-make logs-webhook    # Logs del receptor de webhooks
-make logs-worker     # Logs de los workers
+make status             # Estado de todos los servicios
+make logs-main          # Logs del proceso principal (UI)
+make logs-webhook       # Logs del receptor de webhooks
+make logs-worker        # Logs de los workers
 make scale-workers N=5  # Escalar a 5 workers
-make backup          # Backup manual de Postgres + MinIO
-make update          # Actualizar n8n a latest
-make down            # Parar el stack (datos seguros en volúmenes)
+make backup             # Backup manual de Postgres + MinIO
+make update             # Actualizar n8n a latest
+make down               # Parar el stack (datos seguros en volúmenes)
 ```
 
-## Configurar backup automático (cron diario a las 2am)
+## Backup automático (cron diario a las 2am)
 
 ```bash
 crontab -e
-# Añadir la siguiente línea:
+# Añadir:
 0 2 * * * /opt/n8n-production/scripts/backup.sh >> /var/log/n8n-backup.log 2>&1
 ```
 
-## Configurar ManyChat
+## Configurar webhooks
 
-1. Entrar a `https://paneln8n.revolicord.com` y crear cuenta
-2. Crear un workflow nuevo con trigger **Webhook**
+1. Entrar a `https://n8n.tudominio.com` y crear la cuenta
+2. Crear workflow → trigger **Webhook**
 3. Activar el workflow
-4. Copiar la URL de producción (ej. `https://paneln8n.revolicord.com/webhook/manychat-instagram`)
-5. En ManyChat → Integrations → Webhook → pegar la URL
+4. Copiar la URL de producción (siempre empieza por `/webhook/`)
+5. Pegar en la plataforma externa (ManyChat, etc.)
 
-Para verificar que el webhook funciona:
+Verificar que el webhook responde:
 ```bash
-curl -X POST https://paneln8n.revolicord.com/webhook/TU_PATH \
+curl -X POST https://n8n.tudominio.com/webhook/TU_PATH \
   -H "Content-Type: application/json" \
   -d '{"test": true}'
 ```
@@ -101,25 +103,50 @@ curl -X POST https://paneln8n.revolicord.com/webhook/TU_PATH \
 
 | Variable | Descripción |
 |---|---|
-| `N8N_HOST` | Dominio de n8n (paneln8n.revolicord.com) |
-| `N8N_ENCRYPTION_KEY` | Clave de cifrado de credenciales — NO cambiar después del primer deploy |
+| `N8N_HOST` | Dominio del panel n8n |
+| `N8N_ENCRYPTION_KEY` | Clave de cifrado de credenciales — **NO cambiar** después del primer deploy |
 | `POSTGRES_PASSWORD` | Contraseña de PostgreSQL |
 | `REDIS_PASSWORD` | Contraseña de Redis |
 | `MINIO_ROOT_USER` | Usuario admin de MinIO |
 | `MINIO_ROOT_PASSWORD` | Contraseña admin de MinIO |
-| `MINIO_DOMAIN` | Dominio público S3 (minio.revolicord.com) |
-| `MINIO_CONSOLE_DOMAIN` | Dominio consola MinIO (minio-console.revolicord.com) |
-| `TRAEFIK_NETWORK` | Red Docker de Traefik (dokploy-network) |
+| `MINIO_DOMAIN` | Dominio público S3 |
+| `MINIO_CONSOLE_DOMAIN` | Dominio consola MinIO |
+| `TRAEFIK_NETWORK` | Red Docker overlay de Traefik (`traefik-public`) |
+
+## Troubleshooting
+
+**n8n no responde / Traefik da 404**
+```bash
+# Verificar que todos los servicios están corriendo
+docker stack services n8n
+
+# Verificar que Traefik está en la red correcta
+docker service inspect traefik --format '{{range .Endpoint.VirtualIPs}}{{.NetworkID}} {{end}}'
+
+# Forzar redescubrimiento de servicios
+docker service update --force traefik
+```
+
+**Certificados SSL no se generan**
+```bash
+# Los dominios deben apuntar al servidor ANTES de arrancar Traefik
+# Verificar con:
+dig +short n8n.tudominio.com
+
+# Si los DNS se configuraron después de instalar Traefik:
+docker service update --force traefik
+```
+
+**Workers no procesan jobs**
+```bash
+make logs-worker   # buscar errores de conexión a Redis o Postgres
+make status        # verificar que los 3 workers están Running
+```
 
 ## ADRs (Decisiones arquitecturales)
 
-- [ADR-0001](docs/adr/0001-arquitectura-general.md) — Arquitectura general y topología
+- [ADR-0001](docs/adr/0001-arquitectura-general.md) — Arquitectura general
 - [ADR-0002](docs/adr/0002-swarm-replicas.md) — Docker Swarm para réplicas
-- [ADR-0003](docs/adr/0003-almacenamiento-minio.md) — Almacenamiento binario con MinIO
-- [ADR-0004](docs/adr/0004-proxy-traefik.md) — Routing con Traefik de Dokploy
-- [ADR-0005](docs/adr/0005-webhooks-manychat.md) — Integración ManyChat/Instagram
-
-## Observabilidad (futura — no en este deploy)
-
-n8n expone métricas en `/metrics` compatibles con Prometheus.  
-Para activar: añadir `N8N_METRICS=true` al stack cuando sea necesario.
+- [ADR-0003](docs/adr/0003-almacenamiento-minio.md) — Almacenamiento con MinIO
+- [ADR-0004](docs/adr/0004-proxy-traefik.md) — Routing con Traefik
+- [ADR-0005](docs/adr/0005-webhooks-manychat.md) — Integración webhooks

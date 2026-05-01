@@ -1,4 +1,4 @@
-# ADR-0004: Routing con Traefik de Dokploy
+# ADR-0004: Routing con Traefik (standalone)
 
 **Status:** Accepted  
 **Date:** 2026-05-01
@@ -7,73 +7,106 @@
 
 ## Y-Statement
 
-> _In the context of_ having Traefik already configured via Dokploy on the server with Let's Encrypt,  
-> _facing_ the need to route webhook traffic to `n8n-webhook` and UI traffic to `n8n-main` on the same domain,  
-> _we decided_ to use **Traefik labels en Swarm mode** con prioridades para separar el tráfico sin un nginx adicional,  
-> _to achieve_ TLS automático, routing por path prefix, y zero-downtime deploys sin infraestructura adicional,  
-> _accepting_ que el routing depende de que Traefik esté corriendo (debe iniciarse desde el panel de Dokploy).
+> _In the context of_ needing HTTPS termination and routing of webhook vs UI traffic on the same domain,  
+> _facing_ the need for automatic Let's Encrypt certificates and path-based routing without extra infrastructure,  
+> _we decided_ to run **Traefik v3.3 as a Docker Swarm service** in the same cluster, using the Swarm provider to autodiscover services via labels,  
+> _to achieve_ zero-config TLS, priority-based routing, and zero-downtime deploys,  
+> _accepting_ that if Traefik is down no traffic reaches n8n (single point of ingress).
 
 ---
 
-## Configuración Traefik verificada en el servidor
+## Configuración de Traefik (generada por setup.sh en /etc/traefik/traefik.yml)
 
 ```yaml
-# /etc/dokploy/traefik/traefik.yml
+global:
+  sendAnonymousUsage: false
+
 providers:
   swarm:
+    endpoint: "unix:///var/run/docker.sock"
+    network: traefik-public    # ← CRÍTICO: red overlay compartida con los servicios
     exposedByDefault: false
-    network: dokploy-network     # ← red a usar
+    watch: true
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true
+
 entryPoints:
-  web:      # puerto 80
-  websecure: # puerto 443
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+  websecure:
+    address: ":443"
+
 certificatesResolvers:
-  letsencrypt:                   # ← nombre del resolver
+  letsencrypt:
     acme:
+      email: <ACME_EMAIL>
+      storage: /acme.json
       httpChallenge:
         entryPoint: web
 ```
 
+### Por qué `network: traefik-public` es crítico
+
+En Traefik v3 con el Swarm provider, cuando un servicio tiene múltiples redes (ej. `n8n_internal` + `traefik-public`), Traefik no sabe a cuál conectarse. Sin `network: traefik-public`, intenta la red equivocada y no puede alcanzar el container → 502/504.
+
+La label `traefik.docker.network=traefik-public` en cada servicio actúa como fallback, pero la config a nivel de provider es más confiable en Traefik v3.
+
+---
+
 ## Reglas de routing
 
 ```
-paneln8n.revolicord.com
-├── /webhook/*      → n8n-webhook:5678  (prioridad 10)
-└── /*              → n8n-main:5678     (prioridad 1)
+<N8N_HOST>
+├── /webhook/*      → n8n-webhook:5678  (priority=10)
+└── /*              → n8n-main:5678     (priority=1)
 
-minio.revolicord.com           → minio:9000
-minio-console.revolicord.com   → minio:9001
+<MINIO_DOMAIN>           → minio:9000
+<MINIO_CONSOLE_DOMAIN>   → minio:9001
 ```
 
-## Labels en el stack (patrón)
+## Labels en docker-stack.yml (patrón obligatorio en Swarm)
+
+En Swarm, los labels de Traefik **deben ir bajo `deploy.labels`**, no bajo `labels`. De lo contrario Traefik no los lee.
 
 ```yaml
 deploy:
   labels:
-    # Necesario para que Traefik descubra el servicio
     - "traefik.enable=true"
-    - "traefik.docker.network=dokploy-network"
-
-    # Router con nombre único por servicio
-    - "traefik.http.routers.<nombre>.rule=Host(`dominio`) && PathPrefix(`/webhook/`)"
-    - "traefik.http.routers.<nombre>.priority=10"
+    - "traefik.docker.network=traefik-public"
+    - "traefik.http.routers.<nombre>.rule=Host(`<dominio>`)"
     - "traefik.http.routers.<nombre>.entrypoints=websecure"
     - "traefik.http.routers.<nombre>.tls.certresolver=letsencrypt"
     - "traefik.http.routers.<nombre>.service=<nombre>-svc"
-
-    # Service (define el puerto del backend)
-    - "traefik.http.services.<nombre>-svc.loadbalancer.server.port=5678"
+    - "traefik.http.services.<nombre>-svc.loadbalancer.server.port=<puerto>"
 ```
 
-## Prerequisito: Iniciar Traefik
+## Ciclo de vida del servicio Traefik
 
-Traefik está configurado pero debe iniciarse. Desde el panel de Dokploy (puerto 3000):
-1. Settings → Traefik → Enable
-2. O manualmente: ver `scripts/deploy.sh` que verifica si Traefik está corriendo.
+```bash
+# Ver estado
+docker service ls | grep traefik
+docker service logs -f traefik
 
-## DNS requerido (todos apuntan a la misma IP del servidor)
+# Si los servicios no aparecen en Traefik (forzar redescubrimiento)
+docker service update --force traefik
 
-| Dominio | Servicio |
+# Ver certificados generados
+docker service exec $(docker ps -q -f name=traefik) cat /acme.json | python3 -m json.tool
+```
+
+## DNS requerido
+
+Todos los dominios deben apuntar a la IP del servidor **antes** de arrancar Traefik. Let's Encrypt valida por HTTP en el puerto 80.
+
+| Variable | Ejemplo |
 |---|---|
-| `paneln8n.revolicord.com` | n8n UI + webhooks |
-| `minio.revolicord.com` | MinIO S3 API |
-| `minio-console.revolicord.com` | MinIO Console |
+| `N8N_HOST` | `n8n.tudominio.com` |
+| `MINIO_DOMAIN` | `minio.tudominio.com` |
+| `MINIO_CONSOLE_DOMAIN` | `minio-console.tudominio.com` |

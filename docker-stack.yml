@@ -193,7 +193,6 @@ services:
       # Zona horaria
       GENERIC_TIMEZONE: America/Santo_Domingo
       TZ: America/Santo_Domingo
-      # Almacenamiento — database mode (S3 requiere licencia Enterprise)
       N8N_DEFAULT_BINARY_DATA_MODE: database
       # Rendimiento
       N8N_PAYLOAD_SIZE_MAX: 16
@@ -221,11 +220,12 @@ services:
         - "traefik.http.routers.n8n-main.tls.certresolver=letsencrypt"
         - "traefik.http.routers.n8n-main.service=n8n-main-svc"
         - "traefik.http.services.n8n-main-svc.loadbalancer.server.port=5678"
-        # Redirect HTTP → HTTPS
+        # Redirect HTTP → HTTPS (301 permanente)
         - "traefik.http.routers.n8n-main-http.rule=Host(`${N8N_HOST}`)"
         - "traefik.http.routers.n8n-main-http.entrypoints=web"
-        - "traefik.http.routers.n8n-main-http.middlewares=redirect-to-https"
-        - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+        - "traefik.http.routers.n8n-main-http.middlewares=n8n-https-redirect"
+        - "traefik.http.middlewares.n8n-https-redirect.redirectscheme.scheme=https"
+        - "traefik.http.middlewares.n8n-https-redirect.redirectscheme.permanent=true"
 
   # ==========================================================
   # N8N WEBHOOK — Recibe webhooks HTTP y encola en Redis
