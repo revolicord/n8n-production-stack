@@ -15,7 +15,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 ENV_FILE="$ROOT_DIR/.env"
 
-# ── 1. Verificar que no exista .env ya ───────────────────────
+# ── 1. Verificar .env ────────────────────────────────────────
 if [[ -f "$ENV_FILE" ]]; then
   warn ".env ya existe. ¿Sobreescribir? (s/N)"
   read -r CONFIRM
@@ -24,17 +24,21 @@ fi
 
 section "INSTALACIÓN N8N PRODUCCIÓN — DOCKER SWARM"
 
-# ── 2. Pedir dominios ────────────────────────────────────────
+# ── 2. Pedir dominios y email ────────────────────────────────
 echo ""
 info "Ingresa los subdominios (sin https://):"
 echo ""
-read -rp "  Panel n8n      (ej: n8n.tudominio.com):         " N8N_HOST
-read -rp "  MinIO S3       (ej: minio.tudominio.com):       " MINIO_DOMAIN
-read -rp "  MinIO Consola  (ej: minio-console.tudominio.com): " MINIO_CONSOLE_DOMAIN
+read -rp "  Panel n8n        (ej: n8n.tudominio.com):           " N8N_HOST
+read -rp "  MinIO S3         (ej: minio.tudominio.com):         " MINIO_DOMAIN
+read -rp "  MinIO Consola    (ej: minio-console.tudominio.com): " MINIO_CONSOLE_DOMAIN
+read -rp "  Email Let's Encrypt:                                 " ACME_EMAIL
 
-[[ -z "$N8N_HOST" || -z "$MINIO_DOMAIN" || -z "$MINIO_CONSOLE_DOMAIN" ]] && error "Todos los dominios son obligatorios."
+[[ -z "$N8N_HOST" ]]             && error "Panel n8n es obligatorio."
+[[ -z "$MINIO_DOMAIN" ]]         && error "MinIO S3 es obligatorio."
+[[ -z "$MINIO_CONSOLE_DOMAIN" ]] && error "MinIO Consola es obligatorio."
+[[ -z "$ACME_EMAIL" ]]           && error "Email es obligatorio para SSL."
 
-# ── 3. Generar passwords ─────────────────────────────────────
+# ── 3. Generar credenciales ──────────────────────────────────
 section "Generando credenciales seguras..."
 POSTGRES_PASSWORD=$(openssl rand -base64 32 | tr -d '/+=\n' | head -c 32)
 REDIS_PASSWORD=$(openssl rand -base64 32 | tr -d '/+=\n' | head -c 32)
@@ -44,7 +48,7 @@ MINIO_ROOT_USER="minio_admin"
 TRAEFIK_NETWORK="traefik-public"
 
 # ── 4. Escribir .env ─────────────────────────────────────────
-cat > "$ENV_FILE" << ENVEOF
+cat > "$ENV_FILE" <<ENVEOF
 # N8N Production — generado $(date '+%Y-%m-%d %H:%M')
 # NO subir este archivo al repo
 # ---- Dominios -----------------------------------------------
@@ -63,37 +67,35 @@ N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
 MINIO_ROOT_USER=${MINIO_ROOT_USER}
 MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
 ENVEOF
+info ".env generado."
 
-info ".env generado correctamente."
+# ── 5. Verificar Docker ──────────────────────────────────────
+section "Verificando Docker..."
+command -v docker &>/dev/null || error "Docker no está instalado. Corre: curl -fsSL https://get.docker.com | sh"
 
-# ── 5. Verificar dependencias ────────────────────────────────
-section "Verificando dependencias..."
-command -v docker &>/dev/null || error "Docker no está instalado."
 docker info --format '{{.Swarm.LocalNodeState}}' 2>/dev/null | grep -q active || {
-  warn "Docker Swarm no está activo. Inicializando..."
+  warn "Swarm no activo. Inicializando..."
   docker swarm init
 }
 info "Docker Swarm activo."
 
-# ── 6. Crear red Traefik si no existe ────────────────────────
+# ── 6. Crear red overlay ─────────────────────────────────────
 docker network ls --format '{{.Name}}' | grep -q "^${TRAEFIK_NETWORK}$" || {
   info "Creando red overlay '${TRAEFIK_NETWORK}'..."
   docker network create --driver overlay --attachable "$TRAEFIK_NETWORK"
 }
 info "Red ${TRAEFIK_NETWORK} lista."
 
-# ── 7. Instalar Traefik si no corre ──────────────────────────
+# ── 7. Instalar Traefik ──────────────────────────────────────
 section "Verificando Traefik..."
 if ! docker service ls --format '{{.Name}}' | grep -q traefik; then
-  warn "Traefik no está corriendo. Instalando..."
-  read -rp "  Email para Let's Encrypt: " ACME_EMAIL
-  [[ -z "$ACME_EMAIL" ]] && error "Email requerido para SSL."
+  info "Instalando Traefik..."
 
-  mkdir -p /etc/traefik
+  mkdir -p /etc/traefik/dynamic
   touch /etc/traefik/acme.json
   chmod 600 /etc/traefik/acme.json
 
-  cat > /etc/traefik/traefik.yml << TRAEFIKEOF
+  cat > /etc/traefik/traefik.yml <<TRAEFIKEOF
 global:
   sendAnonymousUsage: false
 providers:
@@ -127,8 +129,6 @@ certificatesResolvers:
         entryPoint: web
 TRAEFIKEOF
 
-  mkdir -p /etc/traefik/dynamic
-
   docker service create \
     --name traefik \
     --constraint 'node.role==manager' \
@@ -142,15 +142,16 @@ TRAEFIKEOF
     traefik:v3.0 \
     --configFile=/traefik.yml
 
-  info "Traefik instalado. Esperando 10s..."
-  sleep 10
+  info "Traefik instalado. Esperando 15s..."
+  sleep 15
 else
   info "Traefik ya está corriendo."
 fi
 
-# ── 8. Desplegar stack ───────────────────────────────────────
+# ── 8. Desplegar stack n8n ───────────────────────────────────
 section "Desplegando stack n8n..."
 set -a
+# shellcheck disable=SC1090
 source "$ENV_FILE"
 set +a
 
@@ -159,8 +160,8 @@ docker stack deploy \
   -c "$ROOT_DIR/docker-stack.yml" \
   n8n
 
-info "Stack desplegado. Esperando servicios..."
-sleep 5
+info "Esperando servicios..."
+sleep 8
 docker stack services n8n
 
 section "✅ INSTALACIÓN COMPLETA"
@@ -169,11 +170,12 @@ echo -e "  Panel n8n:      ${GREEN}https://${N8N_HOST}${NC}"
 echo -e "  MinIO S3:       ${GREEN}https://${MINIO_DOMAIN}${NC}"
 echo -e "  MinIO Consola:  ${GREEN}https://${MINIO_CONSOLE_DOMAIN}${NC}"
 echo ""
-echo -e "  ${YELLOW}Credenciales guardadas en: .env${NC}"
-echo -e "  ${YELLOW}MinIO user: ${MINIO_ROOT_USER} / pass: ${MINIO_ROOT_PASSWORD}${NC}"
+echo -e "  ${YELLOW}Credenciales en: ${ROOT_DIR}/.env${NC}"
+echo -e "  ${YELLOW}MinIO user: ${MINIO_ROOT_USER}${NC}"
+echo -e "  ${YELLOW}MinIO pass: ${MINIO_ROOT_PASSWORD}${NC}"
 echo ""
 info "Comandos útiles:"
-echo "  make status        — ver estado de servicios"
-echo "  make logs-main     — logs del panel n8n"
-echo "  make logs-worker   — logs de los workers"
+echo "  make status             — estado de servicios"
+echo "  make logs-main          — logs panel n8n"
+echo "  make logs-worker        — logs workers"
 echo "  make scale-workers N=5  — escalar workers"
