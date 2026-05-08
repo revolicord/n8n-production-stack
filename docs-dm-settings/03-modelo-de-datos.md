@@ -247,6 +247,25 @@ conversation.last_bot_msg_at update            │
 mem Redis (chat history) ──── TTL 12h ─────────┘
 ```
 
+## Cambios alineados con docs 12-14 (funnel y triggers)
+
+Las tablas anteriores se complementan con:
+
+1. **`messages_raw`** añade columnas: `trigger_source TEXT`, `trigger_channel TEXT`, `trigger_ref TEXT`. Vienen del payload de ManyChat (doc 12).
+
+2. **`turns`** añade columnas: `trigger_source TEXT`, `trigger_channel TEXT`. Heredadas del primer mensaje del batch para que el agente discrimine.
+
+3. **`subscribers`** añade columna: `current_channel TEXT` (último canal por el que escribió, útil para enrutar audios/respuestas).
+
+4. **Tablas nuevas del funnel** (definidas en doc 13):
+   - `lead_stages` — etapa actual del lead, follow-ups, descalificación
+   - `stage_transitions` — historial de cambios de etapa
+   - `closers` — los humanos que reciben los leads en D
+   - `follow_up_templates` — textos editables de los 8 follow-ups por etapa
+   - `notifications` — centro de notificaciones para el dashboard
+
+5. **Buffer Redis con canal en la clave** (alineado con doc 13): `buffer:{tenant}:{subscriber}:{channel}`. Permite que un mismo lead tenga conversaciones aisladas por canal (DM vs comentario).
+
 ## Backups
 
 - Postgres: `pg_dump` diario + WAL archiving (PITR) si el cliente lo paga.
