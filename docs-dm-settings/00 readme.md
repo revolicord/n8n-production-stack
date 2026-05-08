@@ -30,6 +30,9 @@ Esta capa **agrupa** los mensajes en ráfaga (debounce con timer reset), valida 
 | 09 | [`09-seguridad-y-compliance.md`](./09-seguridad-y-compliance.md) | Firma, PII, ventana 24h Meta |
 | 10 | [`10-roadmap-de-implementacion.md`](./10-roadmap-de-implementacion.md) | Plan por sprints para Claude Code |
 | 11 | [`11-glosario-y-decisiones.md`](./11-glosario-y-decisiones.md) | ADRs y términos |
+| 12 | [`12-manychat-setup-y-canales.md`](./12-manychat-setup-y-canales.md) | Configuración exacta de ManyChat (custom fields, flows, body) |
+| 13 | [`13-funnel-y-agente.md`](./13-funnel-y-agente.md) | **Las 5 etapas del funnel**, agente, follow-ups, escalations |
+| 14 | [`14-dashboard-y-metricas.md`](./14-dashboard-y-metricas.md) | Admin web, Grafana, queries de MSR/PRR/CSR/ABR, Calendly |
 
 ## Para Claude Code
 
