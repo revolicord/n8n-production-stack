@@ -324,3 +324,103 @@ services:
         condition: on-failure
         delay: 5s
         max_attempts: 5
+
+  # ==========================================================
+  # API DM SETTER — Fastify (webhooks ManyChat + admin endpoints)
+  # ==========================================================
+  api:
+    image: ${API_IMAGE:-dm-api:local}
+    command: ["node", "/app/apps/api/dist/server.js"]
+    networks:
+      - n8n_internal
+      - traefik_public
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: info
+      PORT: 3000
+      DATABASE_URL: postgres://n8n:${POSTGRES_PASSWORD}@postgres:5432/n8n
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      MC_WEBHOOK_TOKEN: ${MC_WEBHOOK_TOKEN}
+      N8N_CALLBACK_TOKEN: ${N8N_CALLBACK_TOKEN}
+      N8N_BASE_URL: http://n8n-webhook:5678
+      PUBLIC_API_URL: https://${API_HOST}
+      ADMIN_JWT_SECRET: ${ADMIN_JWT_SECRET}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      WORKER_CONCURRENCY: 10
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:3000/healthz || exit 1']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+      placement:
+        constraints:
+          - node.role == manager
+      labels:
+        - "traefik.enable=true"
+        - "traefik.docker.network=${TRAEFIK_NETWORK}"
+        - "traefik.http.routers.dm-api.rule=Host(`${API_HOST}`)"
+        - "traefik.http.routers.dm-api.entrypoints=websecure"
+        - "traefik.http.routers.dm-api.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.dm-api.service=dm-api-svc"
+        - "traefik.http.services.dm-api-svc.loadbalancer.server.port=3000"
+        - "traefik.http.routers.dm-api-http.rule=Host(`${API_HOST}`)"
+        - "traefik.http.routers.dm-api-http.entrypoints=web"
+        - "traefik.http.routers.dm-api-http.middlewares=dm-api-https-redirect"
+        - "traefik.http.middlewares.dm-api-https-redirect.redirectscheme.scheme=https"
+        - "traefik.http.middlewares.dm-api-https-redirect.redirectscheme.permanent=true"
+
+  # ==========================================================
+  # API WORKER — BullMQ worker (debounce + dispatch a n8n)
+  # ==========================================================
+  api-worker:
+    image: ${API_IMAGE:-dm-api:local}
+    command: ["node", "/app/apps/api/dist/worker.js"]
+    networks:
+      - n8n_internal
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: info
+      PORT: 3000
+      DATABASE_URL: postgres://n8n:${POSTGRES_PASSWORD}@postgres:5432/n8n
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      MC_WEBHOOK_TOKEN: ${MC_WEBHOOK_TOKEN}
+      N8N_CALLBACK_TOKEN: ${N8N_CALLBACK_TOKEN}
+      N8N_BASE_URL: http://n8n-webhook:5678
+      PUBLIC_API_URL: https://${API_HOST}
+      ADMIN_JWT_SECRET: ${ADMIN_JWT_SECRET}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      WORKER_CONCURRENCY: 10
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+      placement:
+        constraints:
+          - node.role == manager
+
+  # ==========================================================
+  # API MIGRATE — one-shot: aplica drizzle migrations
+  # Crea schema 'api' + extension pgcrypto antes de migrar
+  # ==========================================================
+  api-migrate:
+    image: ${API_IMAGE:-dm-api:local}
+    command: ["node", "/app/packages/db/dist/migrate.js"]
+    networks:
+      - n8n_internal
+    environment:
+      DATABASE_URL: postgres://n8n:${POSTGRES_PASSWORD}@postgres:5432/n8n
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: none
+      placement:
+        constraints:
+          - node.role == manager

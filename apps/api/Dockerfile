@@ -38,6 +38,7 @@ RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
 
 COPY --from=build /repo/apps/api/dist ./apps/api/dist
 COPY --from=build /repo/packages/db/dist ./packages/db/dist
+COPY --from=build /repo/packages/db/drizzle ./packages/db/drizzle
 COPY --from=build /repo/packages/shared/dist ./packages/shared/dist
 
 WORKDIR /app/apps/api

@@ -41,10 +41,12 @@ echo ""
 read -rp "  Panel n8n        (ej: n8n.tudominio.com):           " N8N_HOST
 read -rp "  MinIO S3         (ej: minio.tudominio.com):         " MINIO_DOMAIN
 read -rp "  MinIO Consola    (ej: minio-console.tudominio.com): " MINIO_CONSOLE_DOMAIN
+read -rp "  API DM Setter    (ej: api.tudominio.com):           " API_HOST
 
 [[ -z "$N8N_HOST" ]]             && error "Panel n8n es obligatorio."
 [[ -z "$MINIO_DOMAIN" ]]         && error "MinIO S3 es obligatorio."
 [[ -z "$MINIO_CONSOLE_DOMAIN" ]] && error "MinIO Consola es obligatorio."
+[[ -z "$API_HOST" ]]             && error "API host es obligatorio."
 
 TRAEFIK_NETWORK="traefik-public"
 
@@ -55,6 +57,12 @@ REDIS_PASSWORD=$(openssl rand -base64 32 | tr -d '/+=\n' | head -c 32)
 N8N_ENCRYPTION_KEY=$(openssl rand -hex 32)
 MINIO_ROOT_PASSWORD=$(openssl rand -base64 32 | tr -d '/+=\n' | head -c 32)
 MINIO_ROOT_USER="minio_admin"
+
+# Tokens de la API DM Setter
+MC_WEBHOOK_TOKEN=$(openssl rand -hex 32)
+N8N_CALLBACK_TOKEN=$(openssl rand -hex 32)
+ADMIN_JWT_SECRET=$(openssl rand -hex 64)
+ADMIN_PASSWORD=$(openssl rand -base64 24 | tr -d '/+=\n' | head -c 24)
 
 # ── 4. Escribir .env ─────────────────────────────────────────
 cat > "$ENV_FILE" <<ENVEOF
@@ -75,6 +83,13 @@ N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
 # ---- MinIO --------------------------------------------------
 MINIO_ROOT_USER=${MINIO_ROOT_USER}
 MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+# ---- API DM Setter ------------------------------------------
+API_HOST=${API_HOST}
+API_IMAGE=dm-api:local
+MC_WEBHOOK_TOKEN=${MC_WEBHOOK_TOKEN}
+N8N_CALLBACK_TOKEN=${N8N_CALLBACK_TOKEN}
+ADMIN_JWT_SECRET=${ADMIN_JWT_SECRET}
+ADMIN_PASSWORD=${ADMIN_PASSWORD}
 ENVEOF
 info ".env generado."
 
@@ -177,7 +192,15 @@ else
   info "Traefik ya está corriendo."
 fi
 
-# ── 8. Desplegar stack n8n ───────────────────────────────────
+# ── 8. Construir imagen de la API DM Setter ──────────────────
+section "Construyendo imagen dm-api:local (puede tardar 1-2 min)..."
+docker build \
+  -t dm-api:local \
+  -f "$ROOT_DIR/apps/api/Dockerfile" \
+  "$ROOT_DIR"
+info "Imagen dm-api:local construida."
+
+# ── 9. Desplegar stack n8n ───────────────────────────────────
 section "Desplegando stack n8n..."
 set -a
 # shellcheck disable=SC1090
@@ -198,16 +221,35 @@ echo ""
 echo -e "  Panel n8n:      ${GREEN}https://${N8N_HOST}${NC}"
 echo -e "  MinIO S3:       ${GREEN}https://${MINIO_DOMAIN}${NC}"
 echo -e "  MinIO Consola:  ${GREEN}https://${MINIO_CONSOLE_DOMAIN}${NC}"
+echo -e "  API DM Setter:  ${GREEN}https://${API_HOST}${NC}"
 echo ""
 echo -e "  ${YELLOW}Credenciales guardadas en: ${ROOT_DIR}/.env${NC}"
 echo -e "  ${YELLOW}MinIO user: ${MINIO_ROOT_USER}${NC}"
 echo -e "  ${YELLOW}MinIO pass: ${MINIO_ROOT_PASSWORD}${NC}"
 echo ""
+echo -e "  ${YELLOW}MC_WEBHOOK_TOKEN (config en ManyChat header X-MC-Token):${NC}"
+echo -e "  ${YELLOW}  ${MC_WEBHOOK_TOKEN}${NC}"
+echo ""
+info "Próximos pasos:"
+echo "  1. Crear el primer tenant:"
+echo "       make seed-tenant SLUG=dev N8N_WORKFLOW_URL=https://${N8N_HOST}/webhook/agent-run"
+echo "  2. Verificar que la API responde:"
+echo "       curl https://${API_HOST}/healthz"
+echo "  3. Crear workflow 'agent-run' en n8n con webhook trigger"
+echo "  4. Configurar External Request en ManyChat:"
+echo "       URL:    https://${API_HOST}/webhook/manychat"
+echo "       Header: X-MC-Token: <ver arriba>"
+echo ""
 info "Comandos útiles:"
 echo "  make status             — estado de servicios"
 echo "  make logs-main          — logs del panel n8n"
-echo "  make logs-worker        — logs de los workers"
-echo "  make scale-workers N=5  — escalar workers a 5"
+echo "  make logs-worker        — logs de los workers n8n"
+echo "  make logs-api           — logs de la API"
+echo "  make logs-api-worker    — logs del worker BullMQ"
+echo "  make scale-workers N=5  — escalar workers n8n a 5"
+echo "  make scale-api N=2      — escalar API a 2 réplicas"
+echo "  make migrate            — re-aplicar migraciones drizzle"
+echo "  make rebuild-api        — reconstruir imagen dm-api:local"
 echo ""
 warn "Los certificados SSL pueden tardar 1-2 minutos en generarse."
 warn "Si los dominios no apuntaban al servidor, reiniciar Traefik: docker service update --force traefik"
