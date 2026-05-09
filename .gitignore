@@ -25,3 +25,15 @@ logs/
 
 # Backups locales
 backups/
+
+# ─── Monorepo (apps/api, packages/*) ────────────────────────
+node_modules/
+**/node_modules
+.pnpm-store/
+dist/
+**/dist
+build/
+*.tsbuildinfo
+coverage/
+.vitest/
+.turbo/

@@ -14,13 +14,22 @@ VPS (Ubuntu 22.04 LTS)
 │   ├── acme.json            ← certificados Let's Encrypt
 │   └── dynamic/             ← middlewares opcionales
 │
-├── /root/n8n-production/    ← repo clonado
+├── /root/n8n-production/    ← repo único (stack + monorepo API)
 │   ├── docker-stack.yml     ← definición completa del stack
 │   ├── .env                 ← secretos (NO en git)
 │   ├── scripts/
 │   │   ├── setup.sh         ← instalación desde cero
 │   │   ├── deploy.sh        ← actualización del stack
 │   │   └── backup.sh        ← backup diario
+│   ├── apps/api/            ← Fastify + BullMQ worker (Sprint 1+)
+│   ├── packages/db/         ← drizzle schema + migrations
+│   ├── packages/shared/     ← Zod schemas compartidos
+│   ├── pnpm-workspace.yaml  ← workspaces pnpm
+│   ├── package.json         ← scripts root (lint, typecheck, build, test)
+│   ├── biome.json           ← lint + format
+│   ├── tsconfig.base.json   ← TS estricto
+│   ├── .github/workflows/   ← CI GitHub Actions
+│   ├── docs/adr/            ← ADRs del stack
 │   └── docs-dm-settings/    ← esta documentación
 │
 └── Docker Swarm (single-node manager)
@@ -295,10 +304,13 @@ make deploy
 # equivale a: docker stack deploy --with-registry-auth -c docker-stack.yml n8n
 ```
 
-Para la API específicamente:
+Para la API específicamente (build desde la raíz del monorepo):
 ```bash
-# Construir nueva imagen y pushear (desde el repo de la API)
-docker build -t ghcr.io/revolicord/dm-api:latest apps/api/
+cd /root/n8n-production
+docker build \
+  -t ghcr.io/revolicord/dm-api:latest \
+  -f apps/api/Dockerfile \
+  .
 docker push ghcr.io/revolicord/dm-api:latest
 
 # En el servidor: forzar pull de nueva imagen

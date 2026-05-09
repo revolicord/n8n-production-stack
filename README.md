@@ -143,6 +143,41 @@ make logs-worker   # buscar errores de conexión a Redis o Postgres
 make status        # verificar que los 3 workers están Running
 ```
 
+## API DM Setter (Sprint 1+)
+
+Este repo también contiene el monorepo de la API que recibe los webhooks de ManyChat, hace debounce de mensajes consecutivos y los despacha a n8n para análisis con IA.
+
+```
+apps/api/         ← Fastify HTTP + BullMQ worker
+packages/db/      ← drizzle schema + migrations (schema 'api' en Postgres)
+packages/shared/  ← Zod schemas compartidos
+```
+
+Documentación completa en [`docs-dm-settings/`](docs-dm-settings/) (empezar por `00 readme.md`).
+
+```bash
+# Desarrollo local (Sprint 1+)
+pnpm install
+pnpm dev:api          # arranca Fastify con tsx watch
+pnpm dev:worker       # arranca BullMQ worker
+
+# Calidad
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+
+# DB (drizzle)
+pnpm db:generate      # genera migración desde schema.ts
+pnpm db:migrate       # aplica migraciones
+pnpm db:studio        # drizzle studio
+
+# Build imagen producción
+docker build -t ghcr.io/revolicord/dm-api:latest -f apps/api/Dockerfile .
+```
+
+CI corre lint + typecheck + build + test en cada push (ver `.github/workflows/ci.yml`).
+
 ## ADRs (Decisiones arquitecturales)
 
 - [ADR-0001](docs/adr/0001-arquitectura-general.md) — Arquitectura general

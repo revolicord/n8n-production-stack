@@ -1,0 +1,21 @@
+title = "dm-api gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Permitir placeholders en .env.example y docs"
+paths = [
+  '''.env.example''',
+  '''README.md''',
+  '''docs-dm-settings/.*\.md''',
+]
+regexes = [
+  '''CHANGE_ME''',
+  '''<32 bytes hex>''',
+  '''<64 bytes hex>''',
+  '''<password>''',
+  '''<email>''',
+  '''<generar.*?>''',
+  '''CAMBIAR_EN_PRODUCCION''',
+]
