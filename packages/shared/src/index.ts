@@ -1,3 +1,4 @@
-// Sprint 1: Zod schemas compartidos (ManyChatWebhookSchema, TurnCompletedSchema, etc.).
-// Documentación: docs-dm-settings/05-fastify-endpoints.md
-export {};
+export * from './schemas/manychat.js';
+export * from './schemas/turn-completed.js';
+export * from './schemas/tenant-config.js';
+export * from './schemas/n8n-dispatch.js';
