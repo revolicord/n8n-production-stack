@@ -34,7 +34,7 @@ COPY --from=build /repo/packages/db/package.json ./packages/db/
 COPY --from=build /repo/packages/shared/package.json ./packages/shared/
 
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
-    pnpm install --frozen-lockfile --prod
+    pnpm install --frozen-lockfile --prod --ignore-scripts
 
 COPY --from=build /repo/apps/api/dist ./apps/api/dist
 COPY --from=build /repo/packages/db/dist ./packages/db/dist
