@@ -16,7 +16,7 @@
     },
     {
       "parameters": {
-        "url": "https://api.revolicord.com/tenants/{{ $json.body.tenant.slug }}/tools",
+        "url": "={{ 'https://api.revolicord.com/tenants/' + ($json.body?.tenant?.slug ?? $json.tenant?.slug) + '/tools' }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -36,7 +36,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const body = $('Webhook').first().json.body;\nconst tools = $('Get Tools').first().json.tools || [];\n\nconst messages = body.messages\n  .map(m => {\n    if (m.reply_type === 'thumbs_up') return '👍 [el contacto envió pulgar arriba]';\n    if (m.media_urls && m.media_urls.length > 0 && !m.text) return `[${m.reply_type ?? 'media'} recibido]`;\n    return m.text ?? '[mensaje sin texto]';\n  })\n  .filter(Boolean)\n  .join('\\n');\n\nconst subscriberName = body.subscriber.display_name\n  || body.subscriber.ig_username || 'Usuario';\n\nconst stage = body.subscriber.metadata?.stage ?? 'nuevo';\n\nconst toolsList = tools.length > 0\n  ? '\\n\\nContenido disponible (usa activar_flow con el flow_id exacto):\\n'\n    + tools.map(t => `- flow_id: \"${t.flow_id}\" — cuándo usarlo: ${t.description}`).join('\\n')\n  : '';\n\nreturn [{\n  json: {\n    chatInput: messages,\n    systemPrompt: `Eres un asistente de ventas amable de Revolicord. Responde siempre en el idioma del usuario. Sé conciso y cálido, máximo 2-3 oraciones. Sin markdown. El usuario se llama ${subscriberName}. Etapa actual del lead: ${stage}.${toolsList}`,\n    subscriberId: body.subscriber.manychat_subscriber_id,\n    mcApiKey: body.tenant?.config?.manychat_api_key || '',\n    conversationId: body.conversation.id,\n    turnId: body.turn_id,\n    callbackUrl: body.callback_url,\n    callbackToken: body.callback_token\n  }\n}];"
+        "jsCode": "const raw = $('Webhook').first().json;\nconst body = raw.body ?? raw;\nconst tools = $('Get Tools').first().json.tools || [];\n\nconst messages = body.messages\n  .map(m => {\n    if (m.reply_type === 'thumbs_up') return '👍 [el contacto envió pulgar arriba]';\n    if (m.media_urls && m.media_urls.length > 0 && !m.text) return `[${m.reply_type ?? 'media'} recibido]`;\n    return m.text ?? '[mensaje sin texto]';\n  })\n  .filter(Boolean)\n  .join('\\n');\n\nconst subscriberName = body.subscriber.display_name\n  || body.subscriber.ig_username || 'Usuario';\n\nconst stage = body.subscriber.metadata?.stage ?? 'nuevo';\n\nconst toolsList = tools.length > 0\n  ? '\\n\\nContenido disponible (usa activar_flow con el flow_id exacto):\\n'\n    + tools.map(t => `- flow_id: \"${t.flow_id}\" — cuándo usarlo: ${t.description}`).join('\\n')\n  : '';\n\nreturn [{\n  json: {\n    chatInput: messages,\n    systemPrompt: `Eres un asistente de ventas amable de Revolicord. Responde siempre en el idioma del usuario. Sé conciso y cálido, máximo 2-3 oraciones. Sin markdown. El usuario se llama ${subscriberName}. Etapa actual del lead: ${stage}.${toolsList}`,\n    subscriberId: body.subscriber.manychat_subscriber_id,\n    mcApiKey: body.tenant?.config?.manychat_api_key || '',\n    conversationId: body.conversation.id,\n    turnId: body.turn_id,\n    callbackUrl: body.callback_url,\n    callbackToken: body.callback_token\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
