@@ -8,6 +8,7 @@ export const TenantConfigSchema = z
     rate_per_minute: z.number().int().positive().optional(),
     buffer_hard_limit: z.number().int().positive().optional(),
     n8n_workflow_url: z.string().url().optional(),
+    manychat_api_key: z.string().optional(),
     model: z.string().optional(),
     prompt_version: z.string().optional(),
   })
