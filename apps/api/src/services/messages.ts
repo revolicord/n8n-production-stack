@@ -6,7 +6,7 @@ export async function insertMessageRaw(
     tenantId: string;
     subscriberId: string;
     channel?: string;
-    externalMessageId: string;
+    externalMessageId: string | null;
     idempotencyHash: string;
     direction: 'in' | 'out';
     payload: unknown;

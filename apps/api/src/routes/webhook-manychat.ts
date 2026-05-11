@@ -52,7 +52,7 @@ export default async function webhookManyChatRoute(app: FastifyInstance): Promis
       manychatSubscriberId: event.subscriber.manychat_id,
       igUserId: event.subscriber.ig_user_id,
       igUsername: event.subscriber.ig_username,
-      displayName: event.subscriber.name,
+      displayName: event.subscriber.full_name ?? event.subscriber.name,
       locale: event.subscriber.locale,
       currentChannel: event.trigger?.channel,
     });
@@ -67,10 +67,14 @@ export default async function webhookManyChatRoute(app: FastifyInstance): Promis
     }
 
     // 6. Idempotency
+    // If ManyChat doesn't send a message ID, generate one from subscriber + tenant + arrival ms
+    const receivedAt = Date.now();
+    const externalMessageId =
+      event.message.id ?? `${event.subscriber.manychat_id}_${event.tenant_slug}_${receivedAt}`;
     const idempotencyHash = buildIdempotencyHash({
       tenantId: tenant.id,
       subscriberId: subscriber.id,
-      externalMessageId: event.message.id,
+      externalMessageId,
     });
     const fresh = await tryClaimIdempotency(getRedis(), idempotencyHash, IDEMPOTENCY_TTL_MS);
     if (!fresh) {
@@ -83,7 +87,7 @@ export default async function webhookManyChatRoute(app: FastifyInstance): Promis
     const messageRow = await insertMessageRaw(getDb(), {
       tenantId: tenant.id,
       subscriberId: subscriber.id,
-      externalMessageId: event.message.id,
+      externalMessageId,
       idempotencyHash,
       direction: 'in',
       payload: event,
