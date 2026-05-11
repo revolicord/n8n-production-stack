@@ -5,14 +5,13 @@ import { getRedis } from '../lib/redis.js';
 import { getTenantBySlug, parseTenantConfig } from '../services/tenants.js';
 
 interface ManyChatFlow {
-  id: string;
+  ns: string;
   name: string;
-  status: string;
 }
 
 interface ManyChatFlowsResponse {
   status: string;
-  data: ManyChatFlow[];
+  data: { flows: ManyChatFlow[] };
 }
 
 export interface TenantTool {
@@ -44,7 +43,7 @@ export default async function toolsRoutes(app: FastifyInstance): Promise<void> {
       return reply.send({ tools: JSON.parse(cached) as TenantTool[] });
     }
 
-    const res = await fetch('https://api.manychat.com/fb/flows/getFlows', {
+    const res = await fetch('https://api.manychat.com/fb/page/getFlows', {
       headers: { Authorization: `Bearer ${mcApiKey}` },
       signal: AbortSignal.timeout(8000),
     });
@@ -57,12 +56,12 @@ export default async function toolsRoutes(app: FastifyInstance): Promise<void> {
     const data = (await res.json()) as ManyChatFlowsResponse;
     if (data.status !== 'success') return reply.send({ tools: [] });
 
-    const tools: TenantTool[] = data.data
+    const tools: TenantTool[] = data.data.flows
       .filter((f) => f.name.toLowerCase().startsWith('bot_'))
       .map((f) => ({
         name: f.name,
         description: f.name.replace(/^bot_/i, '').trim(),
-        flow_id: f.id,
+        flow_id: f.ns,
       }));
 
     await getRedis().set(cacheKey, JSON.stringify(tools), 'EX', 300);
