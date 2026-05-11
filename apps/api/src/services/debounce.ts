@@ -5,6 +5,7 @@ export interface BufferMessage {
   id: string;
   external_message_id: string | null;
   text: string | null;
+  reply_type: string | null;
   ts: number;
   media_urls: string[];
 }

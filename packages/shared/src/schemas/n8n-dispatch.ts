@@ -4,6 +4,7 @@ export const N8nDispatchMessageSchema = z.object({
   id: z.string().uuid(),
   external_message_id: z.string().nullable(),
   text: z.string().nullable(),
+  reply_type: z.string().nullable(),
   ts: z.number(),
   media_urls: z.array(z.string()).default([]),
 });
@@ -25,6 +26,7 @@ export const N8nDispatchPayloadSchema = z.object({
     ig_username: z.string().nullable(),
     display_name: z.string().nullable(),
     locale: z.string().nullable(),
+    metadata: z.record(z.string(), z.unknown()).default({}),
   }),
   conversation: z.object({
     id: z.string().uuid(),

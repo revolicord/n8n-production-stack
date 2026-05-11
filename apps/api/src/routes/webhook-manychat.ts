@@ -105,6 +105,7 @@ export default async function webhookManyChatRoute(app: FastifyInstance): Promis
       id: messageRow.id,
       external_message_id: messageRow.externalMessageId,
       text: messageRow.text,
+      reply_type: event.message.reply_type ?? null,
       ts: now,
       media_urls: mediaUrls,
     };

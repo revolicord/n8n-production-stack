@@ -100,8 +100,11 @@ export async function processBatchJob(job: Job<ProcessBatchJobData>): Promise<Pr
 
     // 5. Insertar turn pending
     const batchText = messages
-      .map((m) => m.text)
-      .filter((t): t is string => Boolean(t))
+      .map((m) => {
+        if (m.reply_type === 'thumbs_up') return '👍 [pulgar arriba]';
+        if (m.media_urls.length > 0 && !m.text) return `[${m.reply_type ?? 'media'} recibido]`;
+        return m.text ?? '[mensaje sin texto]';
+      })
       .join('\n');
     const firstMsg = messages[0];
 
@@ -137,6 +140,7 @@ export async function processBatchJob(job: Job<ProcessBatchJobData>): Promise<Pr
         ig_username: subscriber.igUsername,
         display_name: subscriber.displayName,
         locale: subscriber.locale,
+        metadata: (subscriber.metadata as Record<string, unknown>) ?? {},
       },
       conversation: {
         id: conversation.id,
@@ -146,6 +150,7 @@ export async function processBatchJob(job: Job<ProcessBatchJobData>): Promise<Pr
         id: m.id,
         external_message_id: m.external_message_id,
         text: m.text,
+        reply_type: m.reply_type,
         ts: m.ts,
         media_urls: m.media_urls,
       })),
