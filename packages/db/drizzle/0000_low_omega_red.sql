@@ -1,4 +1,4 @@
-CREATE SCHEMA "api";
+CREATE SCHEMA IF NOT EXISTS "api";
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "api"."conversations" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
