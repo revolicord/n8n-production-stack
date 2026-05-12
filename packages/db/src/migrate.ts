@@ -20,13 +20,14 @@ const __dirname = dirname(__filename);
 const migrationsFolder = resolve(__dirname, '..', 'drizzle');
 
 async function main() {
-  const client = postgres(DATABASE_URL, { max: 1, prepare: false });
+  // onnotice suprime los NOTICEs del driver (ej. "schema already exists")
+  // que postgres.js v3 convierte en excepciones con códigos 42P06/42P07
+  const client = postgres(DATABASE_URL, { max: 1, prepare: false, onnotice: () => {} });
   const db = drizzle(client);
 
   // biome-ignore lint/suspicious/noConsoleLog: CLI script, intentional output
   console.log(`[migrate] applying migrations from ${migrationsFolder}`);
 
-  // Ensure schema 'api' exists before applying migrations
   await client.unsafe('CREATE SCHEMA IF NOT EXISTS api');
   await client.unsafe('CREATE EXTENSION IF NOT EXISTS pgcrypto');
 
