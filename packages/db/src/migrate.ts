@@ -99,7 +99,9 @@ async function main() {
   await client.end();
 }
 
-main().catch((err) => {
-  console.error('[migrate] failed', err);
-  process.exit(1);
-});
+main()
+  .then(() => process.exit(0))
+  .catch((err) => {
+    console.error('[migrate] failed', err);
+    process.exit(1);
+  });
