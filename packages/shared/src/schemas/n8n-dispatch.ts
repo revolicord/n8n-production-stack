@@ -27,6 +27,7 @@ export const N8nDispatchPayloadSchema = z.object({
     display_name: z.string().nullable(),
     locale: z.string().nullable(),
     metadata: z.record(z.string(), z.unknown()).default({}),
+    lead_stage: z.string().default('nuevo'),
   }),
   conversation: z.object({
     id: z.string().uuid(),

@@ -14,6 +14,7 @@ import {
   getFirstMsgTs,
 } from '../services/debounce.js';
 import { N8nDispatchError, dispatchToN8n } from '../services/dispatch-n8n.js';
+import { getLeadStage } from '../services/lead-stages.js';
 import { releaseTurnLock, tryAcquireTurnLock } from '../services/lock.js';
 import { getSubscriberById } from '../services/subscribers.js';
 import { getTenantById, parseTenantConfig } from '../services/tenants.js';
@@ -123,6 +124,8 @@ export async function processBatchJob(job: Job<ProcessBatchJobData>): Promise<Pr
     await touchUserMsg(getDb(), conversation.id);
 
     // 6. Dispatch a n8n
+    const leadStage = await getLeadStage(getDb(), { tenantId, subscriberId });
+
     const dispatchPayload: N8nDispatchPayload = {
       schema_version: 'v1',
       turn_id: turn.id,
@@ -141,6 +144,7 @@ export async function processBatchJob(job: Job<ProcessBatchJobData>): Promise<Pr
         display_name: subscriber.displayName,
         locale: subscriber.locale,
         metadata: (subscriber.metadata as Record<string, unknown>) ?? {},
+        lead_stage: leadStage,
       },
       conversation: {
         id: conversation.id,

@@ -32,9 +32,10 @@ const currentStage = body.lead_stage ?? body.subscriber.metadata?.stage ?? 'nuev
 const flowsByStage = body.tenant?.config?.flows_by_stage ?? {};
 const allowedFlows = flowsByStage[currentStage] ?? [];
 
+// flow_name = ns de ManyChat (el LLM usa el ns directamente, evita lookups en n8n)
 const flowsSection = allowedFlows.length > 0
   ? '\n\nContenido disponible para esta etapa. Usa trigger_manychat_flow con el flow_name exacto:\n'
-    + allowedFlows.map(f => `- flow_name: "${f.name}" — ${f.description}`).join('\n')
+    + allowedFlows.map(f => `- flow_name: "${f.ns}" — ${f.description}`).join('\n')
   : '';
 
 return [{
@@ -42,6 +43,8 @@ return [{
     chatInput: messages,
     systemPrompt: `Eres un asistente de ventas amable de Revolicord. Responde siempre en el idioma del usuario. Sé conciso y cálido, máximo 2-3 oraciones. Sin markdown. El usuario se llama ${subscriberName}. Etapa actual: ${currentStage}.${flowsSection}`,
     subscriberId: body.subscriber.manychat_subscriber_id,
+    subscriberDbId: body.subscriber.id,
+    currentStage: body.subscriber.lead_stage ?? 'nuevo',
     mcApiKey: body.tenant?.config?.manychat_api_key || '',
     conversationId: body.conversation.id,
     turnId: body.turn_id,

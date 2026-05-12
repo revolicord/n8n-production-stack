@@ -173,6 +173,55 @@ export const turns = apiSchema.table(
 );
 
 // ───────────────────────────────────────────────────────────────
+// lead_stages — etapa actual del lead por subscriber
+// ───────────────────────────────────────────────────────────────
+export const leadStages = apiSchema.table(
+  'lead_stages',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    subscriberId: uuid('subscriber_id')
+      .notNull()
+      .references(() => subscribers.id, { onDelete: 'cascade' }),
+    currentStage: text('current_stage').notNull().default('nuevo'),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    tenantSubscriberUnique: uniqueIndex('lead_stages_tenant_subscriber_unique').on(
+      t.tenantId,
+      t.subscriberId,
+    ),
+  }),
+);
+
+// ───────────────────────────────────────────────────────────────
+// stage_transitions — log inmutable de cambios de etapa
+// ───────────────────────────────────────────────────────────────
+export const stageTransitions = apiSchema.table(
+  'stage_transitions',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: uuid('tenant_id').notNull(),
+    subscriberId: uuid('subscriber_id').notNull(),
+    turnId: uuid('turn_id').references(() => turns.id),
+    fromStage: text('from_stage').notNull(),
+    toStage: text('to_stage').notNull(),
+    reason: text('reason'),
+    agentEvidence: text('agent_evidence'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    tenantSubscriberIdx: index('stage_transitions_tenant_sub_idx').on(
+      t.tenantId,
+      t.subscriberId,
+      t.createdAt,
+    ),
+  }),
+);
+
+// ───────────────────────────────────────────────────────────────
 // dead_letter_queue — fallos persistentes (Sprint 2 lo explota)
 // ───────────────────────────────────────────────────────────────
 export const deadLetterQueue = apiSchema.table(
@@ -208,3 +257,7 @@ export type NewConversation = typeof conversations.$inferInsert;
 export type Turn = typeof turns.$inferSelect;
 export type NewTurn = typeof turns.$inferInsert;
 export type DLQItem = typeof deadLetterQueue.$inferSelect;
+export type LeadStage = typeof leadStages.$inferSelect;
+export type NewLeadStage = typeof leadStages.$inferInsert;
+export type StageTransition = typeof stageTransitions.$inferSelect;
+export type NewStageTransition = typeof stageTransitions.$inferInsert;

@@ -56,6 +56,14 @@ export async function getSubscriberById(
   return rows[0] ?? null;
 }
 
+export async function getSubscriberByUuid(
+  db: DbClient,
+  subscriberId: string,
+): Promise<Subscriber | null> {
+  const rows = await db.select().from(subscribers).where(eq(subscribers.id, subscriberId)).limit(1);
+  return rows[0] ?? null;
+}
+
 export function isSubscriberActive(s: Subscriber, now: Date = new Date()): boolean {
   if (s.status === 'blocked') return false;
   if (s.status === 'paused') {

@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import setStageRoute from './admin/set-stage.js';
 import turnCompletedRoute from './admin/turn-completed.js';
 import healthRoutes from './health.js';
 import toolsRoutes from './tools.js';
@@ -8,5 +9,6 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(healthRoutes);
   await app.register(webhookManyChatRoute);
   await app.register(turnCompletedRoute);
+  await app.register(setStageRoute);
   await app.register(toolsRoutes);
 }
