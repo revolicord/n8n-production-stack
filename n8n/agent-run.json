@@ -118,8 +118,18 @@
     },
     {
       "parameters": {
+        "jsCode": "const output = $('AI Agent').first().json.output || '';\nconst subscriberId = $('Build Context').first().json.subscriberId;\n\n// Partir respuesta en fragmentos de hasta 900 caracteres en límite de palabra\nconst maxLen = 900;\nconst parts = [];\nlet remaining = output.trim();\n\nwhile (remaining.length > 0 && parts.length < 3) {\n  if (remaining.length <= maxLen) {\n    parts.push(remaining);\n    break;\n  }\n  let splitAt = remaining.lastIndexOf(' ', maxLen);\n  if (splitAt <= 0) splitAt = maxLen;\n  parts.push(remaining.substring(0, splitAt).trim());\n  remaining = remaining.substring(splitAt).trim();\n}\n\n// Garantizar siempre 3 campos (vacíos si no hay contenido)\nwhile (parts.length < 3) parts.push('');\n\nreturn [{\n  json: {\n    subscriber_id: subscriberId,\n    fields: [\n      { field_name: 'response part1', field_value: parts[0] },\n      { field_name: 'response part2', field_value: parts[1] },\n      { field_name: 'response part3', field_value: parts[2] }\n    ]\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, -48],
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "name": "Format Response"
+    },
+    {
+      "parameters": {
         "method": "POST",
-        "url": "https://api.manychat.com/fb/sending/sendContent",
+        "url": "https://api.manychat.com/fb/subscriber/setCustomFields",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -131,14 +141,14 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "{\n  \"subscriber_id\": \"{{ $('Build Context').first().json.subscriberId }}\",\n  \"data\": {\n    \"version\": \"v2\",\n    \"content\": {\n      \"messages\": [{ \"type\": \"text\", \"text\": \"{{ $json.output }}\" }]\n    }\n  },\n  \"message_tag\": \"HUMAN_AGENT\"\n}",
+        "jsonBody": "={{ JSON.stringify($json) }}",
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
-      "position": [528, -48],
+      "position": [600, -48],
       "id": "92a1d672-7887-4f3b-96d3-400426de1db8",
-      "name": "enviar texto"
+      "name": "Set Fields ManyChat"
     },
     {
       "parameters": {
@@ -160,7 +170,7 @@
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
-      "position": [736, -48],
+      "position": [800, -48],
       "id": "8cf7b0b6-6a32-45cf-9dac-6811be7987e2",
       "name": "Callback"
     }
@@ -186,9 +196,12 @@
       "ai_tool": [[{ "node": "AI Agent", "type": "ai_tool", "index": 0 }]]
     },
     "AI Agent": {
-      "main": [[{ "node": "enviar texto", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Format Response", "type": "main", "index": 0 }]]
     },
-    "enviar texto": {
+    "Format Response": {
+      "main": [[{ "node": "Set Fields ManyChat", "type": "main", "index": 0 }]]
+    },
+    "Set Fields ManyChat": {
       "main": [[{ "node": "Callback", "type": "main", "index": 0 }]]
     }
   },
