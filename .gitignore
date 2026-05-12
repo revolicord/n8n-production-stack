@@ -26,6 +26,9 @@ logs/
 # Backups locales
 backups/
 
+# n8n workflows (contienen tokens hardcodeados)
+n8n/*.json
+
 # ─── Monorepo (apps/api, packages/*) ────────────────────────
 node_modules/
 **/node_modules
