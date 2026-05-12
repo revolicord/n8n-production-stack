@@ -45,7 +45,7 @@ rebuild-api: ## Reconstruir imagen dm-api:local y refrescar servicios
 	docker service update --force --image dm-api:local $(STACK)_api-worker
 
 migrate: ## Re-aplicar migraciones drizzle (one-shot)
-	docker service update --force --image dm-api:local $(STACK)_api-migrate
+	docker service update --force --detach=true --image dm-api:local $(STACK)_api-migrate
 
 seed-tenant: ## Crea tenant inicial: make seed-tenant SLUG=dev N8N_WORKFLOW_URL=https://...
 	@test -n "$(SLUG)" || (echo "Falta SLUG=..." && exit 1)
