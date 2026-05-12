@@ -78,7 +78,7 @@ export async function debouncePush(
     redisKeys.firstmsg(args.tenantId, args.subscriberId),
     JSON.stringify(args.message),
     args.token,
-    String(args.maxWaitMs),
+    String(args.debounceMs),
     String(args.maxWaitMs),
     String(args.now),
   )) as [string, number, string];

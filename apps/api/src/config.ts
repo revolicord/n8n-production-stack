@@ -18,7 +18,7 @@ const ConfigSchema = z.object({
 
   WORKER_CONCURRENCY: z.coerce.number().int().positive().default(10),
 
-  DEBOUNCE_MS: z.coerce.number().int().positive().default(8000),
+  DEBOUNCE_MS: z.coerce.number().int().positive().default(15000),
   MAX_WAIT_MS: z.coerce.number().int().positive().default(30000),
   LOCK_TTL_MS: z.coerce.number().int().positive().default(90000),
   RATE_PER_MINUTE: z.coerce.number().int().positive().default(20),
