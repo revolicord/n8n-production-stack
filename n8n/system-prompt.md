@@ -95,4 +95,4 @@ Reglas:
 - El modelo soporta tool calling vía la API de Groq cuando las tools están correctamente conectadas en n8n como `ai_tool`.
 - Si el modelo emite `<function=name>{...}` como texto plano, el problema es que n8n no está pasando las tools al modelo correctamente. Verificar que `trigger_manychat_flow` y `set_stage` están conectados al nodo AI Agent con tipo `ai_tool`.
 - El prompt explícito sobre cómo usar las tools mejora significativamente la tasa de éxito.
-- El modelo NO debe ver los `ns` de ManyChat — solo los `flow_name` legibles. El mapeo `name → ns` ocurre en n8n (ver `flows-catalog.md`).
+- El LLM recibe el `ns` de ManyChat directamente como `flow_name` en el system prompt. Esto evita un paso de lookup en n8n y el modelo lo usa como string exacto. El `ns` no se adivina — se inyecta desde `flows_by_stage` en la DB (ver `01-build-context.md`).

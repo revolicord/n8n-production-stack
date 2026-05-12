@@ -1,8 +1,8 @@
 # Catálogo de Flows de ManyChat
 
-Mapeo entre el `flow_name` que recibe el agente IA (nombre legible) y el `ns` real de ManyChat, con la etapa del embudo en que aplica cada flow.
+Catálogo de flows por etapa. El campo `ns` es lo que se inyecta directamente en el system prompt como `flow_name` y lo que el LLM pasa a `trigger_manychat_flow`. No hay paso de lookup en n8n — el LLM usa el `ns` como string exacto.
 
-El agente debe usar el `flow_name` (columna izquierda) al llamar `trigger_manychat_flow`. n8n hace el lookup al `ns` antes de llamar a ManyChat. **Nunca exponer el `ns` directamente al LLM** — es opaco y el modelo lo alucina con facilidad.
+El campo `name` es solo para referencia humana (logs, documentación). El campo `description` es lo que ve el LLM junto al `ns` en el system prompt.
 
 ---
 

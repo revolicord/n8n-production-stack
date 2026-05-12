@@ -46,7 +46,7 @@
 ### set_stage
 **Tipo:** HTTP Request Tool  
 **Method:** POST  
-**URL:** `={{ 'https://api.revolicord.com/leads/' + $('Build Context').first().json.subscriberDbId + '/stage' }}`  
+**URL:** `={{ 'https://api.revolicord.com/admin/leads/' + $('Build Context').first().json.subscriberDbId + '/stage' }}`  
 **Header:** `Authorization: Bearer <TOKEN_REVOLICORD_API>`  
 **Body:**
 ```json
