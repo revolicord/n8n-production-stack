@@ -15,6 +15,16 @@ export default async function turnCompletedRoute(app: FastifyInstance): Promise<
 
   app.post('/admin/turn-completed', async (req, reply) => {
     if (!verifyBearerToken(req.headers.authorization, config.N8N_CALLBACK_TOKEN)) {
+      const authHeader = req.headers.authorization;
+      const receivedToken = typeof authHeader === 'string' ? authHeader.split(/\s+/)[1] : undefined;
+      req.log.error(
+        {
+          received_length: receivedToken?.length,
+          expected_length: config.N8N_CALLBACK_TOKEN.length,
+          has_auth_header: !!authHeader,
+        },
+        'turn-completed auth failed',
+      );
       return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });
     }
 

@@ -10,8 +10,14 @@ export function verifyMcToken(headerValue: unknown, expected: string): boolean {
 }
 
 export function verifyBearerToken(headerValue: unknown, expected: string): boolean {
-  if (typeof headerValue !== 'string' || !headerValue.startsWith('Bearer ')) {
+  if (typeof headerValue !== 'string') {
     return false;
   }
-  return safeCompare(headerValue.slice(7).trim(), expected);
+  const parts = headerValue.split(/\s+/);
+  if (parts.length !== 2 || parts[0]?.toLowerCase() !== 'bearer') {
+    return false;
+  }
+  const token = parts[1];
+  if (!token) return false;
+  return safeCompare(token.trim(), expected.trim());
 }
