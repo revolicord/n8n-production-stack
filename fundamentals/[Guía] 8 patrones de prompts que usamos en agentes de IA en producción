@@ -1,0 +1,164 @@
+````md
+# [Guía] 8 patrones de prompts que usamos en agentes de IA en producción  
+## Lecciones de sacar adelante 22+ proyectos en 2025
+
+**TL;DR:** después de poner en producción 22+ agentes de IA en los últimos 18 meses (agentes de WhatsApp, agentes de “podcast a redes”, automatización de facturas, agentes de trading, flujos de trabajo de ERP), los prompts que de verdad aguantan cuando los usa gente real se ven muchísimo más diferentes a los que ganan en Twitter.
+
+Aquí van 8 patrones que se mantuvieron consistentes.
+
+La mayoría de estos son aburridos. Justo por eso funcionan.
+
+---
+
+## 1. Siempre fija el rol + la restricción, por separado
+
+### Mal
+```txt
+Eres un asistente útil para extraer facturas
+````
+
+### Bien
+
+```txt
+ROL: extrae datos estructurados del texto de la factura.
+
+CONSTRAINT: no inventes campos que no estén en la fuente.
+Si falta un campo, devuelve null, no una suposición.
+```
+
+Separar el rol (lo que eres) de la restricción (lo que no puedes hacer) reduce los campos inventados (alucinaciones) en ~60% en nuestro agente de facturas.
+
+---
+
+## 2. Usa ramas explícitas de “no sé”
+
+Todos los prompts de producción tienen una rama escrita para que el modelo se retire.
+
+```txt
+Si no puedes responder con alta confianza, responde con:
+NEEDS_REVIEW: <reason>
+```
+
+Sin esa rama, el modelo llena el vacío con basura “segura”.
+
+---
+
+## 3. Esquemas antes del contenido
+
+Declaramos el esquema JSON en el prompt antes de pedir la salida.
+
+Luego le pedimos al modelo que devuelva un JSON que cumpla ese esquema.
+
+Después validamos con un parser.
+
+Chequeo en tres etapas.
+
+La tasa de fallos de parseo bajó de ~8% a <1%.
+
+---
+
+## 4. Pocos ejemplos con casos límite, no con los fáciles
+
+La mayoría de los ejemplos *few-shot* le enseñan al modelo el caso fácil.
+
+El modelo ya se sabe el caso fácil. Desperdicio de tokens.
+
+Enséñale 2 o 3 entradas raras y el manejo correcto.
+
+El clasificador de intención de nuestro agente de WhatsApp mejoró 14% cuando reemplazamos ejemplos normales por entradas como:
+
+```txt
+"lol remind me bout the thing later"
+
+"yo can u ping me when game starts"
+```
+
+---
+
+## 5. Separa el razonamiento de la salida
+
+Usamos un patrón de dos bloques.
+
+### Primer bloque
+
+```xml
+<reasoning>
+```
+
+Aquí el modelo piensa libremente.
+
+### Segundo bloque
+
+```xml
+<output>
+```
+
+Con formato estrictamente definido.
+
+El primer bloque es para el modelo.
+El segundo bloque es lo que parseamos.
+
+Si parseas el bloque de razonamiento por accidente, tu sistema de abajo se va de aventura.
+
+---
+
+## 6. Di en voz alta cómo falla
+
+Ejemplo:
+
+```txt
+Error común:
+confundir el nombre del cliente con el del vendedor cuando ambos aparecen en el correo.
+
+El cliente siempre está en el campo From:.
+```
+
+Mencionar el modo de fallo en el prompt evita ese fallo ~70% de las veces.
+
+El modelo ya leyó suficiente internet como para reconocer el patrón:
+
+> “error común: X”
+
+como una señal fuerte.
+
+---
+
+## 7. Pon un límite de tokens con un “cliff”, no con una pendiente
+
+No digas:
+
+```txt
+Sé conciso
+```
+
+Di:
+
+```txt
+Responde en máximo 3 frases.
+Si no puedes, responde con TOO_LONG y corta.
+```
+
+Las instrucciones suaves reciben cumplimiento suave.
+
+Los “cliffs” duros con tokens de falla explícitos reciben cumplimiento duro.
+
+---
+
+## 8. Siempre enmarca que estás observando X por el usuario
+
+Los agentes que actúan en nombre de un usuario se benefician del marco explícito:
+
+```txt
+Estás leyendo [DATA] por cuenta del usuario para ayudarlo con [GOAL].
+
+Tú no eres el usuario.
+No puedes hablar como si fueras ellos.
+
+Tú resumes y propones.
+El usuario decide.
+```
+
+Esta sola línea eliminó una clase de problemas donde el agente hacía cosas que el usuario no quería en nuestro trabajo de automatización de contenido.
+
+```
+```
