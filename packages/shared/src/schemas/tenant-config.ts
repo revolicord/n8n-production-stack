@@ -1,10 +1,5 @@
 import { z } from 'zod';
 
-export const FlowEntrySchema = z.object({
-  ns: z.string(),
-  description: z.string(),
-});
-
 export const TenantConfigSchema = z
   .object({
     debounce_ms: z.number().int().positive().optional(),
@@ -16,9 +11,9 @@ export const TenantConfigSchema = z
     manychat_api_key: z.string().optional(),
     model: z.string().optional(),
     prompt_version: z.string().optional(),
-    flows_by_stage: z.record(z.string(), z.array(FlowEntrySchema)).optional(),
+    system_prompt: z.string().optional(),
+    calendly_url: z.string().optional(),
   })
   .passthrough();
 
 export type TenantConfig = z.infer<typeof TenantConfigSchema>;
-export type FlowEntry = z.infer<typeof FlowEntrySchema>;

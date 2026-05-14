@@ -126,6 +126,10 @@ export async function processBatchJob(job: Job<ProcessBatchJobData>): Promise<Pr
     // 6. Dispatch a n8n
     const leadStage = await getLeadStage(getDb(), { tenantId, subscriberId });
 
+    // El mapa flows_by_stage ya no viaja al agente — vive hardcodeado en el Build Context de n8n.
+    // Solo se envían los campos de infraestructura que n8n necesita.
+    const { flows_by_stage: _removed, ...configForN8n } = tenantConfig as Record<string, unknown>;
+
     const dispatchPayload: N8nDispatchPayload = {
       schema_version: 'v1',
       turn_id: turn.id,
@@ -134,7 +138,7 @@ export async function processBatchJob(job: Job<ProcessBatchJobData>): Promise<Pr
       tenant: {
         id: tenant.id,
         slug: tenant.slug,
-        config: tenantConfig,
+        config: configForN8n,
       },
       subscriber: {
         id: subscriber.id,
