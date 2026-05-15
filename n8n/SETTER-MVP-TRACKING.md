@@ -18,7 +18,7 @@ priorizado: **P0 bloquea el MVP**, P1 lo completa, P2 es robustez/escala.
 ## Lo que YA funciona — no tocar
 
 - Workflow `agent-run` cableado: `Webhook → Build Context → AI Agent → enviar texto → Prepare Callback → Callback`.
-- Modelo Groq `llama-3.3-70b` + Postgres Chat Memory.
+- Modelo Claude `sonnet 4.6` + Postgres Chat Memory.
 - 2 tools conectadas: `trigger_manychat_flow`, `set_stage`.
 - Capa de debounce/turnos en Fastify (ManyChat → Fastify → n8n).
 
