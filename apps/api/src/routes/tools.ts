@@ -17,8 +17,10 @@ interface ManyChatFlowsResponse {
 }
 
 // Patrón: QC_{STAGE}_{MEDIA_TYPE}_{DESC}_{VARIANT}
-// Ej: QC_A_video_hook_v1  QC_MS_audio_vsl  QC_B_img_resultados
-const FLOW_NAME_RE = /^([A-Z0-9]+)_([A-Z]+)_(video|audio|img|txt|sticker)_(.+?)(?:_(v\d+))?$/i;
+// Ej: QC_A_VIDEO_video de enganche inicial v1  QC_MS_AUDIO_se envia antes de la vsl
+const FLOW_NAME_RE = /^([A-Z0-9]+)_([A-Z]+)_(video|audio|img|imagen|txt|sticker)_(.+?)(?:_(v\d+))?$/i;
+
+const MEDIA_TYPE_MAP: Record<string, string> = { imagen: 'img' };
 
 interface ParsedFlowName {
   prefix: string;
@@ -32,7 +34,8 @@ interface ParsedFlowName {
 function parseFlowName(name: string): ParsedFlowName | null {
   const m = FLOW_NAME_RE.exec(name);
   if (!m) return null;
-  const [, prefix, stage, mediaType, description, variant = null] = m;
+  const [, prefix, stage, rawMedia, description, variant = null] = m;
+  const mediaType = MEDIA_TYPE_MAP[(rawMedia ?? '').toLowerCase()] ?? (rawMedia ?? '').toLowerCase();
   return {
     prefix: prefix ?? '',
     stage: (stage ?? '').toUpperCase(),
