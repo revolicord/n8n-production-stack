@@ -74,8 +74,16 @@ const stageDesc   = stageConfig.description ?? '';
 const maxFollowups = stageConfig.max_followups ?? 3;
 
 const selectedFlow = pickFlowWeighted(flows);
+
+function buildFlowLine(f: { flow_ns: string; usage_condition?: string; content_description?: string; description?: string; media_type?: string }) {
+  const condition = f.usage_condition ?? f.description ?? '';
+  const content   = f.content_description ? `\n  Contenido: ${f.content_description}` : '';
+  const mediaTag  = f.media_type ? `[${f.media_type}] ` : '';
+  return `- flow_name: "${f.flow_ns}" — ${mediaTag}${condition}${content}`;
+}
+
 const flowsSection = selectedFlow
-  ? `- flow_name: "${selectedFlow.flow_ns}" — ${selectedFlow.description ?? ''}`
+  ? buildFlowLine(selectedFlow)
   : '(no hay contenido multimedia para esta etapa — responde solo con texto)';
 
 // ─── Contexto CRM desde DB (Get Subscriber CRM Context) ──────────────────────

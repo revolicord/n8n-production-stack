@@ -19,11 +19,15 @@ SELECT
   COALESCE(
     json_agg(
       json_build_object(
-        'flow_ns',     sf.flow_ns,
-        'description', sf.description,
-        'weight',      sf.weight
+        'flow_ns',             sf.flow_ns,
+        'human_name',          sf.human_name,
+        'media_type',          sf.media_type,
+        'content_description', sf.content_description,
+        'usage_condition',     COALESCE(sf.usage_condition, sf.description),
+        'weight',              sf.weight,
+        'variant_group',       sf.variant_group
       )
-    ) FILTER (WHERE sf.id IS NOT NULL AND sf.is_active = TRUE),
+    ) FILTER (WHERE sf.id IS NOT NULL AND sf.is_active = TRUE AND sf.flow_ns NOT LIKE 'PENDIENTE%'),
     '[]'::json
   ) AS flows
 FROM api.funnel_stages fs
@@ -33,6 +37,9 @@ WHERE fs.tenant_id = '{{ $json.body.tenant.id }}'
   AND fs.is_active = TRUE
 GROUP BY fs.id;
 ```
+
+> El filtro `sf.flow_ns NOT LIKE 'PENDIENTE%'` excluye flows con ns pendiente de configurar.
+> Así el agente nunca recibe un flow roto aunque esté marcado como activo en DB.
 
 ## Parámetros
 
