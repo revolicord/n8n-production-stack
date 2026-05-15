@@ -29,6 +29,9 @@ backups/
 # n8n workflows (contienen tokens hardcodeados)
 n8n/*.json
 
+# graphify cache (generado automáticamente)
+graphify-out/
+
 # ─── Monorepo (apps/api, packages/*) ────────────────────────
 node_modules/
 **/node_modules
