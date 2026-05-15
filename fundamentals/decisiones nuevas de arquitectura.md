@@ -17,7 +17,7 @@ Construir un agente de IA que conversa por DM de Instagram, aplica una máquina 
 | Componente | Tecnología | Rol |
 |---|---|---|
 | Canal | **ManyChat** | Conexión con Instagram, biblioteca de flujos multimedia |
-| Orquestación | **API intermedia** (Node/Python) | Debounce, registry de flujos, router, scheduler de follow-ups |
+| Orquestación | **API intermedia** Fastify | Debounce, registry de flujos, router, scheduler de follow-ups |
 | Cerebro | **n8n + LLM** | Agente con tools dinámicos |
 | Estado | **Postgres** | Lead state, flow_registry, audit trail, follow-ups programados |
 | Cache/Buffer | **Redis** | Debounce de mensajes |
