@@ -3,10 +3,19 @@
 **Tipo:** Code (JavaScript)  
 **Posición en cadena:** 1 — después de `Get Stage Config` y `Get Subscriber CRM Context`  
 **ADR:** ADR-0010, ADR-0013  
-**Propósito:** Normalizar el payload entrante, seleccionar el flow de ManyChat con selección ponderada (A/B), construir el bloque CRM, y producir el system prompt final.
+**Propósito:** Normalizar el payload entrante, seleccionar el flow de ManyChat con selección ponderada, construir el bloque CRM, y producir el system prompt final.
 
 > El mapa de flows ya NO vive aquí — está en `funnel_stages` + `stage_flows` en Postgres.  
 > `Get Stage Config` (nodo 00) lee la configuración antes de llegar a este nodo.
+
+## Decisión de diseño: el round-robin lo hace Build Context, NO el agente
+
+`pickFlowWeighted()` elige el flow **antes** de que el agente reciba el prompt. Al agente le llega **un único flow** ya seleccionado — no la lista completa. Esto es deliberado:
+
+- El agente no decide qué contenido enviar: Build Context ya lo decidió.
+- El agente solo decide **cuándo** usar ese flow dentro de la conversación.
+- La selección es determinista desde el punto de vista del LLM: no hay "creatividad" ni variabilidad en la elección de multimedia.
+- Los pesos (`weight` en `stage_flows`) controlan la distribución A/B sin tocar el prompt.
 
 ---
 
