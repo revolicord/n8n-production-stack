@@ -1,61 +1,54 @@
 # Nodo: Build Context
 
-**Tipo:** Code (JavaScript)
-**Posición en cadena:** 1 (después de Webhook, sin nodo "Get Tools")
-**Propósito:** Normalizar el payload entrante, seleccionar el flow de ManyChat que corresponde a la etapa actual (un único flow, elegido aquí), y construir el system prompt final con el bloque `# CONTEXTO` dinámico.
+**Tipo:** Code (JavaScript)  
+**Posición en cadena:** 1 — después de `Get Stage Config` y `Get Subscriber CRM Context`  
+**ADR:** ADR-0010, ADR-0013  
+**Propósito:** Normalizar el payload entrante, seleccionar el flow de ManyChat con selección ponderada (A/B), construir el bloque CRM, y producir el system prompt final.
 
-> El mapa de flows vive aquí, en este nodo — no en Postgres ni en el payload del API.
-> Para cambiar qué flow se envía en cada etapa, editar la constante `FLOW_MAP` de abajo.
+> El mapa de flows ya NO vive aquí — está en `funnel_stages` + `stage_flows` en Postgres.  
+> `Get Stage Config` (nodo 00) lee la configuración antes de llegar a este nodo.
 
 ---
 
 ## Código completo (copy-paste)
 
 ```javascript
-// ─── MAPA DE FLOWS POR ETAPA ─────────────────────────────────────────────────
-// Cada etapa tiene una lista de variantes. Si hay más de una se elige al azar
-// (A/B automático). El agente solo ve UN flow_name por turno.
-// Para desactivar una variante: comentarla o borrarla del array.
-// Para cambiar el flow activo: actualizar el ns aquí.
-const FLOW_MAP = {
-  // Funnel revolicord (etapas legacy)
-  nuevo: [
-    'content20260511152354_558165',  // video hook v1
-    'content20260511155655_840313',  // video hook v2
-    'content20260511160051_518775',  // video hook v3
-    'content20260511160458_294557',  // video hook cpchel
-  ],
-  interesado: [
-    'content20260511153207_699341',  // audio intro VSL
-  ],
-  prospecto: [
-    'content20260506163913_313256',  // audio presentación
-  ],
-
-  // Funnel Quantum Creators (etapas A/MS/B/C/D) — reemplazar ns cuando estén confirmados
-  A:  ['PENDIENTE_ns_video_hook'],   // video de enganche 25 s
-  MS: ['PENDIENTE_ns_video_vsl'],    // VSL 1:58
-  B:  [],  // el agente manda el link de Calendly por texto, no hay flow
-  C:  [],
-  D:  [],
-};
-
-// Descripción legible para el agente según la etapa (qué debe decirle al lead)
-const FLOW_DESC = {
-  nuevo:     'Video de enganche de 25 s — envíalo como primer contacto y pide pulgar arriba',
-  interesado:'Audio de introducción antes de la VSL — cuando el lead muestra interés real',
-  prospecto: 'Audio de presentación completa del producto',
-  A:         'Video de enganche de 25 s — primer contacto, pide pulgar arriba',
-  MS:        'VSL de 1:58 que explica el sistema completo — enviar cuando confirmó ver el Vídeo 1',
-};
-
-function pickFlow(stage) {
-  const variants = FLOW_MAP[stage] ?? [];
-  if (variants.length === 0) return null;
-  return variants[Math.floor(Math.random() * variants.length)];
+// ─── Selección ponderada de flow (reemplaza Math.random() puro) ──────────────
+function pickFlowWeighted(flows) {
+  if (!flows || flows.length === 0) return null;
+  const total = flows.reduce((s, f) => s + (f.weight ?? 1), 0);
+  let r = Math.random() * total;
+  for (const f of flows) {
+    r -= (f.weight ?? 1);
+    if (r <= 0) return f;
+  }
+  return flows[flows.length - 1];
 }
-// ─────────────────────────────────────────────────────────────────────────────
 
+// ─── Construcción del bloque CRM (ADR-0013) ───────────────────────────────────
+function buildCrmBlock(followupsSent, maxFollowups, history, stageName, stageObjective) {
+  const lines = ['# ESTADO CRM DEL LEAD'];
+  lines.push(`Etapa: ${stageName}${stageObjective ? ` — ${stageObjective}` : ''}`);
+
+  if (followupsSent === 0) {
+    lines.push('Seguimientos enviados: ninguno. Es el primer contacto o acaba de responder.');
+  } else {
+    lines.push(`Seguimientos enviados sin respuesta: ${followupsSent} de ${maxFollowups} máximo.`);
+    (history ?? []).forEach(h => {
+      const daysAgo = Math.round((Date.now() - new Date(h.sent_at)) / 86400000);
+      const responded = h.responded_at ? ' ← respondió' : ' (sin respuesta)';
+      lines.push(`  - #${h.seq} hace ${daysAgo} día(s)${responded}`);
+    });
+    if (followupsSent >= maxFollowups) {
+      lines.push('⚠️ Límite de seguimientos alcanzado. Si no hay interés real en este turno, usa archive_conversation.');
+    } else {
+      lines.push('Está respondiendo tras un silencio. Sé cálido; no menciones los seguimientos.');
+    }
+  }
+  return lines.join('\n');
+}
+
+// ─── Datos del webhook ────────────────────────────────────────────────────────
 const raw = $('Webhook').first().json;
 const body = raw.body ?? raw;
 
@@ -72,9 +65,29 @@ const messages = body.messages
 // --- Datos del lead ---
 const sub = body.subscriber;
 const subscriberName = sub.display_name || sub.ig_username || 'la persona';
-const currentStage = sub.lead_stage ?? sub.metadata?.stage ?? 'nuevo';
+const currentStage = sub.lead_stage ?? sub.metadata?.stage ?? 'A';
 
-// --- Presencia (heurística Media Seen — pendiente: API aún no envía esto, ver SETTER-MVP-TRACKING P1) ---
+// ─── Config de etapa desde DB (Get Stage Config) ─────────────────────────────
+const stageConfig = $('Get Stage Config').first()?.json ?? {};
+const flows       = stageConfig.flows ?? [];
+const stageDesc   = stageConfig.description ?? '';
+const maxFollowups = stageConfig.max_followups ?? 3;
+
+const selectedFlow = pickFlowWeighted(flows);
+const flowsSection = selectedFlow
+  ? `- flow_name: "${selectedFlow.flow_ns}" — ${selectedFlow.description ?? ''}`
+  : '(no hay contenido multimedia para esta etapa — responde solo con texto)';
+
+// ─── Contexto CRM desde DB (Get Subscriber CRM Context) ──────────────────────
+const crm            = $('Get Subscriber CRM Context').first()?.json ?? {};
+const followupsSent  = crm.followups_sent  ?? 0;
+const history        = crm.followup_history ?? [];
+const stageName      = crm.stage_name      ?? stageConfig.display_name ?? currentStage;
+const stageObjective = crm.stage_objective ?? stageDesc;
+
+const crmBlock = buildCrmBlock(followupsSent, maxFollowups, history, stageName, stageObjective);
+
+// --- Presencia (heurística Media Seen — pendiente: API aún no envía esto) ---
 const igCtx = body.instagram_context ?? {};
 const lastSeen = igCtx.last_seen ?? null;
 const lastInteraction = igCtx.last_interaction ?? null;
@@ -85,20 +98,13 @@ const signals = sub.metadata?.signals ?? body.lead_state?.signals ?? null;
 // --- Link de Calendly (para etapa B→C) ---
 const calendlyUrl = body.tenant?.config?.calendly_url ?? '';
 
-// --- Flow seleccionado para esta etapa (único, ya elegido — el agente no decide cuál) ---
-const selectedNs = pickFlow(currentStage);
-const flowDesc   = FLOW_DESC[currentStage] ?? '';
-const flowsSection = selectedNs
-  ? `- flow_name: "${selectedNs}" — ${flowDesc}`
-  : '(no hay contenido multimedia para esta etapa — responde solo con texto)';
-
-// --- Prompt estático (vive en tenants.config.system_prompt; fuente: n8n/prompts/setter-v1.md) ---
+// --- Prompt estático (vive en tenants.config.system_prompt) ---
 const staticPrompt = body.tenant?.config?.system_prompt ?? '';
 
 // --- Bloque de contexto dinámico ---
 const contextLines = [
   `La persona se llama: ${subscriberName}`,
-  `Etapa actual del lead: ${currentStage}`,
+  `Etapa actual del lead: ${currentStage}${stageDesc ? ` — ${stageDesc}` : ''}`,
 ];
 if (lastSeen)        contextLines.push(`Última vez activa en Instagram: ${lastSeen}`);
 if (lastInteraction) contextLines.push(`Última interacción contigo: ${lastInteraction}`);
@@ -107,6 +113,11 @@ if (calendlyUrl)     contextLines.push(`Link de Calendly para enviar en etapa B�
 contextLines.push('');
 contextLines.push('CONTENIDO DISPONIBLE para esta etapa (usa trigger_manychat_flow con el flow_name exacto):');
 contextLines.push(flowsSection);
+
+// Añadir bloque CRM al final del contexto
+contextLines.push('');
+contextLines.push(crmBlock);
+
 const dynamicContext = contextLines.join('\n');
 
 // --- Prompt final ---
@@ -132,11 +143,18 @@ return [{
 
 ---
 
+## Cambios respecto a la versión anterior
+
+| Antes | Ahora |
+|---|---|
+| `FLOW_MAP` hardcodeado con slugs de flows | Lee flows desde `Get Stage Config` (DB) |
+| `Math.random() * variants.length` (50/50) | `pickFlowWeighted(flows)` (pesos configurables) |
+| Sin bloque CRM | `buildCrmBlock()` inyectado al final del system prompt |
+| `FLOW_DESC` hardcodeado | `description` viene del campo `funnel_stages.description` en DB |
+
 ## Notas
 
-- **No hay nodo "Get Tools"** en la cadena. El mapa de flows está en este nodo, no en una llamada HTTP.
-- **El agente ve UN solo `flow_name`** por turno, ya pre-seleccionado. No tiene que elegir entre variantes.
-- **Las variantes A/B** se resuelven aquí con `Math.random()`. Para desactivar una variante, borrarla del array en `FLOW_MAP`.
-- **`system_prompt`** se lee de `tenants.config.system_prompt`. Ver `n8n/prompts/setter-v1.md` para la fuente versionada.
-- **`calendly_url`** se lee de `tenants.config.calendly_url`. Añadirlo al config del tenant cuando esté disponible.
-- **Variables pendientes** (`instagram_context`, `signals`): el código las consume pero el API aún no las envía — ver `SETTER-MVP-TRACKING.md P1`.
+- Si `Get Stage Config` no retorna filas (etapa desconocida), el agente opera sin flow multimedia. Loguear el caso.
+- Si `Get Subscriber CRM Context` no retorna filas (primera vez), el bloque CRM muestra "ningún seguimiento" — comportamiento correcto.
+- El bloque CRM es determinista (viene de la DB, no del LLM): no hay alucinaciones en el estado del lead.
+- `calendly_url` se lee de `tenants.config.calendly_url`. Configurarlo en el tenant cuando esté disponible.

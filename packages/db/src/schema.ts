@@ -174,6 +174,7 @@ export const turns = apiSchema.table(
 
 // ───────────────────────────────────────────────────────────────
 // lead_stages — etapa actual del lead por subscriber
+// current_stage_id agrega FK a funnel_stages (ADR-0014 Path B)
 // ───────────────────────────────────────────────────────────────
 export const leadStages = apiSchema.table(
   'lead_stages',
@@ -186,6 +187,7 @@ export const leadStages = apiSchema.table(
       .notNull()
       .references(() => subscribers.id, { onDelete: 'cascade' }),
     currentStage: text('current_stage').notNull().default('nuevo'),
+    currentStageId: uuid('current_stage_id').references(() => funnelStages.id),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
@@ -244,6 +246,135 @@ export const deadLetterQueue = apiSchema.table(
 );
 
 // ───────────────────────────────────────────────────────────────
+// funnel_stages — etapas del funnel por tenant (ADR-0010)
+// ───────────────────────────────────────────────────────────────
+export const funnelStages = apiSchema.table(
+  'funnel_stages',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: uuid('tenant_id').notNull(),
+    slug: text('slug').notNull(),
+    displayName: text('display_name').notNull(),
+    position: integer('position').notNull(),
+    description: text('description'),
+    maxFollowups: integer('max_followups').default(3),
+    isActive: boolean('is_active').default(true),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+  },
+  (t) => ({
+    tenantSlugUnique: uniqueIndex('funnel_stages_tenant_slug_unique').on(t.tenantId, t.slug),
+    tenantActiveIdx: index('funnel_stages_tenant_active_idx').on(t.tenantId, t.isActive),
+  }),
+);
+
+// ───────────────────────────────────────────────────────────────
+// stage_flows — variantes A/B de flows ManyChat por etapa (ADR-0010)
+// ───────────────────────────────────────────────────────────────
+export const stageFlows = apiSchema.table(
+  'stage_flows',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    stageId: uuid('stage_id')
+      .notNull()
+      .references(() => funnelStages.id, { onDelete: 'cascade' }),
+    tenantId: uuid('tenant_id').notNull(),
+    flowNs: text('flow_ns').notNull(),
+    description: text('description'),
+    weight: integer('weight').default(1),
+    isActive: boolean('is_active').default(true),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  },
+  (t) => ({
+    stageActiveIdx: index('stage_flows_stage_active_idx').on(t.stageId, t.isActive),
+  }),
+);
+
+// ───────────────────────────────────────────────────────────────
+// followup_templates — secuencias de follow-up por etapa (ADR-0015)
+// ───────────────────────────────────────────────────────────────
+export const followupTemplates = apiSchema.table(
+  'followup_templates',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    stageId: uuid('stage_id')
+      .notNull()
+      .references(() => funnelStages.id, { onDelete: 'cascade' }),
+    tenantId: uuid('tenant_id').notNull(),
+    sequenceNumber: integer('sequence_number').notNull(),
+    delayHours: integer('delay_hours').notNull(),
+    type: text('type').notNull(),
+    textTemplate: text('text_template'),
+    flowNs: text('flow_ns'),
+    description: text('description'),
+    isActive: boolean('is_active').default(true),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  },
+  (t) => ({
+    stageSeqUnique: uniqueIndex('followup_templates_stage_seq_unique').on(
+      t.stageId,
+      t.sequenceNumber,
+    ),
+  }),
+);
+
+// ───────────────────────────────────────────────────────────────
+// lead_followup_log — registro inmutable de follow-ups enviados (ADR-0015)
+// ───────────────────────────────────────────────────────────────
+export const leadFollowupLog = apiSchema.table(
+  'lead_followup_log',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: uuid('tenant_id').notNull(),
+    subscriberId: uuid('subscriber_id').notNull(),
+    conversationId: uuid('conversation_id').notNull(),
+    stageId: uuid('stage_id').references(() => funnelStages.id),
+    templateId: uuid('template_id').references(() => followupTemplates.id),
+    sequenceNumber: integer('sequence_number').notNull(),
+    textSent: text('text_sent'),
+    sentAt: timestamp('sent_at', { withTimezone: true }).defaultNow(),
+    status: text('status').default('sent'),
+    respondedAt: timestamp('responded_at', { withTimezone: true }),
+  },
+  (t) => ({
+    subConvIdx: index('lead_followup_log_sub_conv_idx').on(
+      t.subscriberId,
+      t.conversationId,
+      t.sentAt,
+    ),
+  }),
+);
+
+// ───────────────────────────────────────────────────────────────
+// lead_crons — detector de inactividad y programador de follow-ups (ADR-0011)
+// ───────────────────────────────────────────────────────────────
+export const leadCrons = apiSchema.table(
+  'lead_crons',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: uuid('tenant_id').notNull(),
+    subscriberId: uuid('subscriber_id').notNull(),
+    conversationId: uuid('conversation_id').notNull(),
+    currentStageId: uuid('current_stage_id').references(() => funnelStages.id),
+    nextFollowupAt: timestamp('next_followup_at', { withTimezone: true }),
+    nextSequenceNumber: integer('next_sequence_number').default(1),
+    isActive: boolean('is_active').default(true),
+    archivedAt: timestamp('archived_at', { withTimezone: true }),
+    archiveReason: text('archive_reason'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+  },
+  (t) => ({
+    tenantSubConvUnique: uniqueIndex('lead_crons_tenant_sub_conv_unique').on(
+      t.tenantId,
+      t.subscriberId,
+      t.conversationId,
+    ),
+    dueIdx: index('lead_crons_due_idx').on(t.nextFollowupAt),
+  }),
+);
+
+// ───────────────────────────────────────────────────────────────
 // Inferred types
 // ───────────────────────────────────────────────────────────────
 export type Tenant = typeof tenants.$inferSelect;
@@ -261,3 +392,13 @@ export type LeadStage = typeof leadStages.$inferSelect;
 export type NewLeadStage = typeof leadStages.$inferInsert;
 export type StageTransition = typeof stageTransitions.$inferSelect;
 export type NewStageTransition = typeof stageTransitions.$inferInsert;
+export type FunnelStage = typeof funnelStages.$inferSelect;
+export type NewFunnelStage = typeof funnelStages.$inferInsert;
+export type StageFlow = typeof stageFlows.$inferSelect;
+export type NewStageFlow = typeof stageFlows.$inferInsert;
+export type FollowupTemplate = typeof followupTemplates.$inferSelect;
+export type NewFollowupTemplate = typeof followupTemplates.$inferInsert;
+export type LeadFollowupLog = typeof leadFollowupLog.$inferSelect;
+export type NewLeadFollowupLog = typeof leadFollowupLog.$inferInsert;
+export type LeadCron = typeof leadCrons.$inferSelect;
+export type NewLeadCron = typeof leadCrons.$inferInsert;

@@ -1,19 +1,17 @@
 # Quantum Creators · Setter MVP — Seguimiento de implementación
 
-> Documento vivo. Estado del gap entre lo que está cableado hoy en n8n y el funnel objetivo de
-> `docs-dm-settings/13-funnel-y-agente.md`. Creado el 2026-05-14.
+> Documento vivo. Actualizado el 2026-05-15 tras implementación de ADRs 0010–0015.
 
 ## Estado en una frase
 
-El prompt del setter (`n8n/prompts/setter-v1.md`) está listo. Para que sea **ejecutable end-to-end**
-falta cerrar el gap entre lo cableado hoy y el funnel de doc 13. Este documento lista ese gap,
-priorizado: **P0 bloquea el MVP**, P1 lo completa, P2 es robustez/escala.
+El schema de BD está completo (ADRs 0010–0015 migrados). La migración **no ha sido aplicada a producción** — falta `DATABASE_URL` + seed + cablear nodos en n8n. El prompt del setter y el workflow `agent-run` básico ya funcionan; los nuevos nodos están especificados listos para copiar.
 
 ## Decisiones tomadas
 
 - **Funnel canónico:** Quantum Creators, 5 etapas `A/MS/B/C/D` + terminales (`disqualified`, `lost`, `escalated_human_call`). Confirmado con el founder el 2026-05-14. La documentación previa con etapas `nuevo/interesado/prospecto/cliente` (tenant "revolicord") queda **obsoleta**.
 - **Persona del agente:** "Alex" (ver decisión abierta #1, sin cerrar).
 - **El prompt vive** en `tenants.config.system_prompt`; la fuente versionada es `n8n/prompts/setter-v1.md`.
+- **ADR-0014 Path B:** `current_stage_id UUID FK` se agrega a `lead_stages` (no a `subscribers`), preservando el schema existente. Ver `docs/adr/IMPLEMENTATION-REPORT.md`.
 
 ## Lo que YA funciona — no tocar
 
@@ -21,6 +19,7 @@ priorizado: **P0 bloquea el MVP**, P1 lo completa, P2 es robustez/escala.
 - Modelo Claude `sonnet 4.6` + Postgres Chat Memory.
 - 2 tools conectadas: `trigger_manychat_flow`, `set_stage`.
 - Capa de debounce/turnos en Fastify (ManyChat → Fastify → n8n).
+- **Schema de BD**: migración `0002_polite_groot.sql` generada y validada (typecheck ✅). Tablas nuevas: `funnel_stages`, `stage_flows`, `followup_templates`, `lead_followup_log`, `lead_crons`. Columna `current_stage_id FK` añadida a `lead_stages`.
 
 ---
 
@@ -28,27 +27,33 @@ priorizado: **P0 bloquea el MVP**, P1 lo completa, P2 es robustez/escala.
 
 Sin esto el prompt no corre bien end-to-end.
 
+- [ ] **Aplicar migración 0002** a la BD de producción: `DATABASE_URL="postgres://..." pnpm db:migrate` desde `packages/db/`. Crea las 5 tablas nuevas y agrega `current_stage_id` a `lead_stages`.
+- [ ] **Ejecutar seed QC** (`packages/db/drizzle/seed_qc_funnel.sql`): reemplazar `<TENANT_ID>` con el UUID real del tenant → crea etapas A/MS/B/C/D + stage_flows + followup_templates.
+- [ ] **Ejecutar backfill**: después del seed, correr el UPDATE comentado en `seed_qc_funnel.sql` para llenar `lead_stages.current_stage_id` en filas existentes.
 - [ ] **Cargar el prompt** en `tenants.config.system_prompt` del tenant Quantum Creators (copiar el bloque de `n8n/prompts/setter-v1.md`).
 - [ ] **Completar el copy del producto** en `setter-v1.md`: `{{QC_PRODUCT_ONELINER}}` y `{{QC_PRODUCT_NOTAS}}`. Solo lo sabe Alex. Sin esto el agente habla del producto con placeholders.
-- [ ] **`set_stage`: ampliar los valores válidos** de `new_stage` a `A | MS | B | C | disqualified`. Hoy el prompt los usa, pero el endpoint `POST /admin/leads/:id/stage` fue diseñado para `nuevo/interesado/...`. El endpoint debe: aceptar los valores nuevos, validar transiciones (rechazar saltos A→C con 400), y guardar `reason` + `evidence`.
-- [ ] **Build Context: actualizar el JS** — ya reflejado en `n8n/nodes/01-build-context.md`. Nuevo modelo de etapas + lectura de `tenant.config.system_prompt` + bloque de contexto dinámico. Copiar a n8n.
-- [ ] **`flows_by_stage` en `tenants.config`**: configurar para `A/MS/B/C` con los `ns` reales de ManyChat de Quantum Creators. ⚠️ Verificar si los `ns` de `n8n/flows-catalog.md` (etiquetados "revolicord") corresponden a los flows reales de QC o son de otro proyecto.
-- [ ] **Tabla `lead_stages`**: confirmar que existe en `schema api` y que `current_stage` soporta los valores nuevos. `docs-dm-settings/13` tiene el schema completo; el viejo `stages.md` tenía uno más simple — ahora `stages.md` apunta a doc 13.
-- [ ] **`calendly_url` en `tenants.config`**: link único de discovery (`quantumcreators.es/llamada-de-discovery`) para que Build Context lo inyecte y el agente lo envíe en B→C. (El round-robin de closers es P1.)
-- [ ] **Activar los flows en ManyChat**: doc 13 dice que están como STOPPED. Hay que activarlos y anotar cada `flow_ns`.
+- [ ] **`set_stage`: ampliar los valores válidos** de `new_stage` a `A | MS | B | C | disqualified`. El endpoint `POST /admin/leads/:id/stage` fue diseñado para `nuevo/interesado/...`. Debe: aceptar valores nuevos, validar transiciones, guardar `reason` + `evidence`.
+- [ ] **Cablear nodos nuevos en `agent-run`** (n8n UI): agregar `Get Stage Config` y `Get Subscriber CRM Context` antes de `Build Context`; reemplazar JS de `Build Context` con el de `n8n/nodes/01-build-context.md`; agregar `Upsert Lead Cron` después de `enviar texto`.
+- [ ] **Confirmar `flow_ns` reales de ManyChat QC**: el seed usa `PENDIENTE_ns_video_hook` y `PENDIENTE_ns_video_vsl`. Verificar en la cuenta de ManyChat y actualizar `stage_flows` en la BD.
+- [ ] **`calendly_url` en `tenants.config`**: link único de discovery para que Build Context lo inyecte. (El round-robin de closers es P1.)
+- [ ] **Activar los flows en ManyChat**: están como STOPPED. Activarlos y anotar cada `flow_ns`.
 
 ## P1 — completa el setter
 
 El happy path va sin esto, pero el setter no está "completo".
 
-- [ ] **Follow-ups**: tabla `follow_up_templates` + cron n8n cada 5 min + tools `schedule_follow_up` / `cancel_follow_ups`. Cadencia propuesta días 1,2,3,5,7,9,11,13 (doc 13). El prompt actual NO gestiona follow-ups todavía.
-- [ ] **Escalado a humano**: tabla `notifications` + tool `notify_human` + lógica de escalado tras follow-up #5 (`escalated_human_call`). Añadir al prompt la rama de escalado cuando la tool exista.
+- [x] **Schema follow-ups**: tablas `followup_templates` y `lead_followup_log` diseñadas, migración generada, seed con templates para A/MS/B/C. Pendiente solo la aplicación en producción (ver P0).
+- [x] **Spec `followup-runner`**: workflow completamente especificado en `n8n/workflows/followup-runner.md` (6 nodos, queries SQL, lógica de avance/archivado, INSERT en `n8n_chat_histories`). Pendiente: crear el workflow en la UI de n8n.
+- [x] **Contexto dual agente**: bloque CRM (`Get Subscriber CRM Context` + `buildCrmBlock()`) especificado e integrado en `Build Context`. Pendiente: cablear en n8n.
+- [ ] **Crear workflow `followup-runner` en n8n**: Schedule Trigger cada 5 min siguiendo `n8n/workflows/followup-runner.md`. Sin esto, el sistema no envía seguimientos automáticos.
+- [ ] **Actualizar system prompt** (`setter-v1.md`): agregar instrucción sobre `[SEGUIMIENTO AUTOMÁTICO #N]` para que el agente use los seguimientos como contexto sin mencionarlos explícitamente.
+- [ ] **Escalado a humano**: tabla `notifications` + tool `notify_human` + lógica tras follow-up #5 (`escalated_human_call`). Añadir al prompt cuando la tool exista.
 - [ ] **Round-robin de closers**: tabla `closers` + endpoint Fastify con lock atómico + tool `send_calendly_link`. Hasta entonces: link único en config (P0).
 - [ ] **Calendly webhook**: endpoint Fastify dedicado que verifica firma → marca etapa `D` → dispara notificación. Es lo único que mueve C→D.
-- [ ] **Inyección de presencia**: el payload del API hacia n8n debe incluir `instagram_context.{last_seen, last_interaction}`. El prompt ya los consume; el payload aún no los manda. Habilita la heurística adaptativa de "Media Seen" de doc 13.
-- [ ] **Persistencia de señales del agente**: que el agente guarde notas/señales en `lead_stages.metadata` y Build Context las reinyecte. Hoy no hay este loop.
-- [ ] **Banco de objeciones**: tabla `objection_bank` (poblada por Alex) + tool `get_objection_bank`. Mejora el manejo de objeciones más allá de lo que trae el prompt.
-- [ ] **`mark_disqualified`**: doc 13 lo lista como tool aparte, pero `set_stage("disqualified", reason, evidence)` ya cubre el caso. Decidir si se construye o se deja en `set_stage` (recomendado: dejarlo en `set_stage`, una tool menos).
+- [ ] **Inyección de presencia**: el payload del API hacia n8n debe incluir `instagram_context.{last_seen, last_interaction}`. El prompt ya los consume; el payload aún no los manda.
+- [ ] **Persistencia de señales del agente**: que el agente guarde notas/señales en `lead_stages.metadata` y Build Context las reinyecte.
+- [ ] **Banco de objeciones**: tabla `objection_bank` + tool `get_objection_bank`.
+- [ ] **`mark_disqualified`**: `set_stage("disqualified", reason, evidence)` ya cubre el caso — no construir tool aparte.
 
 ## P2 — robustez y escala
 
@@ -63,21 +68,29 @@ El happy path va sin esto, pero el setter no está "completo".
 
 ---
 
-## Documentación a reconciliar — está "regado"
+## Documentación a reconciliar
 
 | Archivo | Estado |
 |---------|--------|
-| `n8n/prompts/setter-v1.md` | ✅ Creado en este pase — el prompt de producción. |
-| `n8n/SETTER-MVP-TRACKING.md` | ✅ Este documento. |
+| `n8n/prompts/setter-v1.md` | ✅ Prompt de producción. Pendiente: agregar instrucción `[SEGUIMIENTO AUTOMÁTICO #N]`. |
+| `n8n/SETTER-MVP-TRACKING.md` | ✅ Este documento — actualizado 2026-05-15. |
 | `n8n/stages.md` | ✅ Actualizado a `A/MS/B/C/D` + terminales. |
-| `n8n/system-prompt.md` | ✅ Actualizado — apunta a `setter-v1.md` y documenta el contrato de inyección. |
-| `n8n/nodes/01-build-context.md` | ✅ Actualizado — nuevo JS con modelo de etapas y contexto dinámico. |
-| `n8n/nodes/02-ai-agent.md` | ⏳ Pendiente: sigue listando solo 2 tools. Actualizar cuando se construyan las tools de P1. |
-| `n8n/flows-catalog.md` | ⏳ Pendiente: nombres y `ns` etiquetados "revolicord". Reconciliar con los nombres semánticos de doc 13 (`video_hook`, `video_vsl`, `audio_did_you_see_video`…) y confirmar los `ns` reales de QC. |
-| `n8n/README.md` | ⏳ Pendiente: actualizar el diagrama de nodos cuando exista el cron de follow-ups. |
-| `n8n/agent-run.json` | ⚠️ Archivo vacío (0 bytes). El JSON del workflow no se versiona (tiene tokens). Confirmar que es intencional o borrarlo. |
+| `n8n/system-prompt.md` | ✅ Apunta a `setter-v1.md`. |
+| `n8n/nodes/01-build-context.md` | ✅ Actualizado — selección ponderada + bloque CRM + elimina FLOW_MAP hardcodeado. |
+| `n8n/nodes/00-get-stage-config.md` | ✅ Creado — query para leer funnel_stages + stage_flows. |
+| `n8n/nodes/00b-get-crm-context.md` | ✅ Creado — query para bloque CRM del agente. |
+| `n8n/nodes/99-upsert-lead-cron.md` | ✅ Creado — UPSERT post-respuesta + marca followups respondidos. |
+| `n8n/workflows/followup-runner.md` | ✅ Creado — spec completo del workflow (6 nodos, queries SQL). |
+| `docs/adr/IMPLEMENTATION-REPORT.md` | ✅ Creado — reporte de implementación ADRs 0010–0015. |
+| `packages/db/src/schema.ts` | ✅ Actualizado — 5 tablas nuevas + `current_stage_id` en `lead_stages`. |
+| `packages/db/drizzle/0002_polite_groot.sql` | ✅ Creado — migración lista para aplicar en producción. |
+| `packages/db/drizzle/seed_qc_funnel.sql` | ✅ Creado — seed QC, requiere `<TENANT_ID>` real. |
+| `n8n/nodes/02-ai-agent.md` | ⏳ Pendiente: sigue listando solo 2 tools. Actualizar cuando existan las tools de P1. |
+| `n8n/flows-catalog.md` | ⏳ Pendiente: `ns` etiquetados "revolicord". Confirmar los `ns` reales de QC y actualizar `stage_flows` en BD. |
+| `n8n/README.md` | ⏳ Pendiente: actualizar el diagrama de nodos con el nuevo chain y el cron de follow-ups. |
+| `n8n/agent-run.json` | ⚠️ Vacío (0 bytes) — el JSON del workflow no se versiona (tiene tokens). Intencional. |
 | `docs-dm-settings/00 readme.md` | ⚠️ Menor: referencia `07-docker-compose-y-deploy.md` pero el archivo real es `07-docker-swarm-y-deploy.md`. |
-| Nombre del negocio | ⚠️ El repo es `revolicord/n8n-production-stack`, `.env` y flows hablan de "revolicord", pero el funnel es Quantum Creators. Confirmar el modelo: ¿Revolicord = agencia/plataforma, Quantum Creators = primer tenant? Alinear `flows-catalog.md` y el `slug` del tenant. |
+| Nombre del negocio | ⚠️ Repo `revolicord/n8n-production-stack` vs. tenant Quantum Creators. Confirmar modelo: Revolicord = agencia, QC = primer tenant. Alinear `flows-catalog.md` y `slug` del tenant. |
 
 ---
 
