@@ -16,9 +16,11 @@ interface ManyChatFlowsResponse {
   data: { flows: ManyChatFlow[] };
 }
 
-// Patrón: QC_{STAGE}_{MEDIA_TYPE}_{DESC}_{VARIANT}
-// Ej: QC_A_VIDEO_video de enganche inicial v1  QC_MS_AUDIO_se envia antes de la vsl
-const FLOW_NAME_RE = /^([A-Z0-9]+)_([A-Z]+)_(video|audio|img|imagen|txt|sticker)_(.+?)(?:_(v\d+))?$/i;
+// Patrón: QC_{STAGE}_{MEDIA_TYPE}_{DESC}[__{USAGE}][_{vN}]
+// DESC  = qué ES el contenido  (ej: video_gancho_25s)
+// USAGE = cuándo usarlo        (ej: primer_contacto_pedir_pulgar, separado por __)
+// Ej: QC_A_VIDEO_video_gancho_25s__primer_contacto_pedir_pulgar_v1
+const FLOW_NAME_TOP_RE = /^([A-Z0-9]+)_([A-Z]+)_(video|audio|img|imagen|txt|sticker)_(.+)$/i;
 
 const MEDIA_TYPE_MAP: Record<string, string> = { imagen: 'img' };
 
@@ -26,23 +28,40 @@ interface ParsedFlowName {
   prefix: string;
   stage: string;
   mediaType: string;
-  description: string;
+  contentDescription: string;
+  usageCondition: string | null;
   variant: string | null;
   variantGroup: string;
 }
 
 function parseFlowName(name: string): ParsedFlowName | null {
-  const m = FLOW_NAME_RE.exec(name);
+  const m = FLOW_NAME_TOP_RE.exec(name);
   if (!m) return null;
-  const [, prefix, stage, rawMedia, description, variant = null] = m;
-  const mediaType = MEDIA_TYPE_MAP[(rawMedia ?? '').toLowerCase()] ?? (rawMedia ?? '').toLowerCase();
+  const [, prefix, stage, rawMedia, rest] = m as [string, string, string, string, string];
+  const mediaType = MEDIA_TYPE_MAP[rawMedia.toLowerCase()] ?? rawMedia.toLowerCase();
+
+  // Strip optional variant suffix _vN
+  let body = rest;
+  let variant: string | null = null;
+  const variantM = /_(v\d+)$/i.exec(body);
+  if (variantM) {
+    variant = variantM[1] ?? null;
+    body = body.slice(0, -variantM[0].length);
+  }
+
+  // Split on __ to get content description and optional usage condition
+  const dblIdx = body.indexOf('__');
+  const descRaw = dblIdx !== -1 ? body.slice(0, dblIdx) : body;
+  const usageRaw = dblIdx !== -1 ? body.slice(dblIdx + 2) : null;
+
   return {
-    prefix: prefix ?? '',
-    stage: (stage ?? '').toUpperCase(),
-    mediaType: (mediaType ?? '').toLowerCase(),
-    description: description ?? '',
+    prefix,
+    stage: stage.toUpperCase(),
+    mediaType,
+    contentDescription: descRaw.replace(/_/g, ' '),
+    usageCondition: usageRaw ? usageRaw.replace(/_/g, ' ') : null,
     variant,
-    variantGroup: description ?? '',
+    variantGroup: descRaw,
   };
 }
 
@@ -53,6 +72,7 @@ export interface TenantTool {
   stage: string;
   media_type: string;
   variant_group: string;
+  usage_condition: string | null;
 }
 
 export default async function toolsRoutes(app: FastifyInstance): Promise<void> {
@@ -96,11 +116,12 @@ export default async function toolsRoutes(app: FastifyInstance): Promise<void> {
         }
         return [{
           name: f.name,
-          description: `[${parsed.stage}/${parsed.mediaType}] ${parsed.description.replace(/_/g, ' ')}${parsed.variant ? ` (${parsed.variant})` : ''}`,
+          description: `[${parsed.stage}/${parsed.mediaType}] ${parsed.contentDescription}${parsed.variant ? ` (${parsed.variant})` : ''}`,
           flow_id: f.ns,
           stage: parsed.stage,
           media_type: parsed.mediaType,
           variant_group: parsed.variantGroup,
+          usage_condition: parsed.usageCondition,
         }];
       });
 
@@ -180,7 +201,10 @@ export default async function toolsRoutes(app: FastifyInstance): Promise<void> {
         if (row.flow_ns !== f.ns) {
           await db.execute(sql`
             UPDATE api.stage_flows
-            SET pending_ns = ${f.ns}, synced_at = NOW()
+            SET pending_ns = ${f.ns}, synced_at = NOW(),
+                description = ${parsed.contentDescription},
+                content_description = ${parsed.contentDescription},
+                usage_condition = ${parsed.usageCondition}
             WHERE id = ${row.id}
           `);
           req.log.info({ name: f.name, oldNs: row.flow_ns, newNs: f.ns }, 'ns change pending approval');
@@ -191,10 +215,12 @@ export default async function toolsRoutes(app: FastifyInstance): Promise<void> {
         await db.execute(sql`
           INSERT INTO api.stage_flows
             (stage_id, tenant_id, flow_ns, human_name, media_type, variant_group,
+             description, content_description, usage_condition,
              weight, is_active, pending_ns, synced_at)
           VALUES (
             ${stageId}, ${tenant.id}, ${activeNs}, ${f.name},
             ${parsed.mediaType}, ${parsed.variantGroup},
+            ${parsed.contentDescription}, ${parsed.contentDescription}, ${parsed.usageCondition},
             1, ${force}, ${pendingNs}, NOW()
           )
           ON CONFLICT DO NOTHING
