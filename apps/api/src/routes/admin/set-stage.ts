@@ -10,12 +10,42 @@ import {
 } from '../../services/lead-stages.js';
 import { getSubscriberByUuid } from '../../services/subscribers.js';
 
-const SetStageBodySchema = z.object({
-  new_stage: z.string().min(1),
-  reason: z.string().optional(),
-  evidence: z.string().optional(),
-  turn_id: z.string().uuid().optional(),
-});
+const STAGE = ['A', 'MS', 'B', 'C', 'D', 'disqualified'] as const;
+type Stage = (typeof STAGE)[number];
+
+const DISQUALIFIED_REASONS = [
+  'no_money',
+  'not_interested',
+  'geographic',
+  'no_quality',
+  'fake_account',
+] as const;
+
+const VALID_TRANSITIONS: Record<Stage, readonly Stage[]> = {
+  A: ['MS', 'disqualified'],
+  MS: ['B', 'disqualified'],
+  B: ['C', 'disqualified'],
+  C: ['D', 'disqualified'],
+  D: [],
+  disqualified: [],
+};
+
+const SetStageBodySchema = z
+  .object({
+    new_stage: z.enum(STAGE),
+    reason: z.string().min(1),
+    evidence: z.string().min(1),
+    turn_id: z.string().uuid().optional(),
+  })
+  .refine(
+    (data) =>
+      data.new_stage !== 'disqualified' ||
+      (DISQUALIFIED_REASONS as readonly string[]).includes(data.reason),
+    {
+      path: ['reason'],
+      message: `When new_stage is 'disqualified', reason must be one of: ${DISQUALIFIED_REASONS.join(', ')}`,
+    },
+  );
 
 export default async function setStageRoute(app: FastifyInstance): Promise<void> {
   const config = getConfig();
@@ -51,6 +81,17 @@ export default async function setStageRoute(app: FastifyInstance): Promise<void>
         return reply.code(200).send({ stage: new_stage, changed: false });
       }
 
+      const allowed = VALID_TRANSITIONS[fromStage as Stage] ?? [];
+      if (!allowed.includes(new_stage)) {
+        return reply.code(400).send({
+          error: {
+            code: 'INVALID_TRANSITION',
+            message: `Transition ${fromStage} → ${new_stage} is not allowed`,
+            allowed,
+          },
+        });
+      }
+
       await upsertLeadStage(getDb(), {
         tenantId: subscriber.tenantId,
         subscriberId: subscriber.id,
@@ -63,8 +104,8 @@ export default async function setStageRoute(app: FastifyInstance): Promise<void>
         turnId: turn_id ?? null,
         fromStage,
         toStage: new_stage,
-        reason: reason ?? null,
-        agentEvidence: evidence ?? null,
+        reason,
+        agentEvidence: evidence,
       });
 
       req.log.info(

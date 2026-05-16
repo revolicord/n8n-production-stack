@@ -37,7 +37,7 @@ El agente avanza **una etapa por vez**. El endpoint `set_stage` debe rechazar sa
 A  → MS | disqualified
 MS → B  | disqualified
 B  → C  | disqualified
-C  → D  (solo vía webhook de Calendly, NO el agente)
+C  → D  | disqualified   (D vía webhook de Calendly O confirmación verbal del lead)
 cualquiera → escalated_human_call | lost  (solo vía cron de follow-ups)
 ```
 
@@ -46,7 +46,9 @@ cualquiera → escalated_human_call | lost  (solo vía cron de follow-ups)
 - **A → MS**: el lead confirma haber visto el Vídeo 1 — verbal ("ya lo vi", "interesante", "vale" tras la pregunta del agente) o emoji 👍/✅ **después** de que el agente preguntó.
 - **MS → B**: tras enviar el Vídeo 2 (VSL), el lead reacciona positivo (👍 explícito a la VSL, "me encanta", "quiero saber más", "cómo funciona").
 - **B → C**: tras un mensaje positivo claro, el agente envía el link de Calendly.
-- **C → D**: lo dispara el webhook de Calendly, no el agente.
+- **C → D**: dos caminos válidos:
+  - webhook de Calendly cuando el lead reserva en la página de agendamiento, o
+  - el agente lo marca cuando el lead confirma verbalmente la reserva en el DM (ej. "listo, ya agendé", "agendado para el martes").
 
 ### Criterios de descalificación
 
@@ -93,14 +95,15 @@ ManyChat — **pendientes de confirmar** (ver `n8n/SETTER-MVP-TRACKING.md` P0 y 
 
 ## Valores que acepta `set_stage`
 
-El endpoint `POST /admin/leads/:subscriberId/stage` debe aceptar en `new_stage`:
+El endpoint `POST /admin/leads/:subscriberId/stage` acepta en `new_stage`:
 
 ```
-A | MS | B | C | disqualified
+A | MS | B | C | D | disqualified
 ```
 
-`D`, `lost` y `escalated_human_call` **no** los marca el agente: los marca el sistema
-(webhook de Calendly y cron de follow-ups respectivamente).
+`D` lo puede marcar tanto el webhook de Calendly como el agente (cuando el lead confirma la reserva
+verbalmente en el DM). `lost` y `escalated_human_call` **no** los marca el agente: los gestiona
+el cron de follow-ups.
 
 Body de ejemplo:
 
