@@ -32,13 +32,13 @@ async function main() {
 
   const existing = await db.select().from(tenants).where(eq(tenants.slug, TENANT_SLUG)).limit(1);
   if (existing[0]) {
-    console.log(`[seed] tenant '${TENANT_SLUG}' already exists (id=${existing[0].id})`);
+    console.info(`[seed] tenant '${TENANT_SLUG}' already exists (id=${existing[0].id})`);
     if (N8N_WORKFLOW_URL) {
       await db
         .update(tenants)
         .set({ config: drizzleSql`${JSON.stringify(config)}::jsonb`, updatedAt: drizzleSql`now()` })
         .where(eq(tenants.id, existing[0].id));
-      console.log('[seed] config updated with provided n8n_workflow_url');
+      console.info('[seed] config updated with provided n8n_workflow_url');
     }
     await client.end();
     return;
@@ -49,7 +49,7 @@ async function main() {
     .values({ slug: TENANT_SLUG, name: TENANT_NAME, config })
     .returning();
 
-  console.log(`[seed] tenant created: id=${created?.id} slug=${TENANT_SLUG}`);
+  console.info(`[seed] tenant created: id=${created?.id} slug=${TENANT_SLUG}`);
   await client.end();
 }
 

@@ -1,10 +1,10 @@
+import { funnelStages } from '@dm-api/db';
+import { and, eq, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
-import { eq, and, sql } from 'drizzle-orm';
 import { getConfig } from '../config.js';
 import { getDb } from '../lib/db.js';
 import { getRedis } from '../lib/redis.js';
 import { getTenantBySlug, parseTenantConfig } from '../services/tenants.js';
-import { funnelStages } from '@dm-api/db';
 
 interface ManyChatFlow {
   ns: string;
@@ -37,7 +37,13 @@ interface ParsedFlowName {
 function parseFlowName(name: string): ParsedFlowName | null {
   const m = FLOW_NAME_TOP_RE.exec(name);
   if (!m) return null;
-  const [, prefix, stage, rawMedia, rest] = m as unknown as [string, string, string, string, string];
+  const [, prefix, stage, rawMedia, rest] = m as unknown as [
+    string,
+    string,
+    string,
+    string,
+    string,
+  ];
   const mediaType = MEDIA_TYPE_MAP[rawMedia.toLowerCase()] ?? rawMedia.toLowerCase();
 
   // Strip optional variant suffix _vN
@@ -114,15 +120,17 @@ export default async function toolsRoutes(app: FastifyInstance): Promise<void> {
           req.log.warn({ name: f.name, slug }, 'flow name does not match convention — skipped');
           return [];
         }
-        return [{
-          name: f.name,
-          description: `[${parsed.stage}/${parsed.mediaType}] ${parsed.contentDescription}${parsed.variant ? ` (${parsed.variant})` : ''}`,
-          flow_id: f.ns,
-          stage: parsed.stage,
-          media_type: parsed.mediaType,
-          variant_group: parsed.variantGroup,
-          usage_condition: parsed.usageCondition,
-        }];
+        return [
+          {
+            name: f.name,
+            description: `[${parsed.stage}/${parsed.mediaType}] ${parsed.contentDescription}${parsed.variant ? ` (${parsed.variant})` : ''}`,
+            flow_id: f.ns,
+            stage: parsed.stage,
+            media_type: parsed.mediaType,
+            variant_group: parsed.variantGroup,
+            usage_condition: parsed.usageCondition,
+          },
+        ];
       });
 
     await getRedis().set(cacheKey, JSON.stringify(tools), 'EX', 300);
@@ -154,7 +162,8 @@ export default async function toolsRoutes(app: FastifyInstance): Promise<void> {
 
     const tenantConfig = parseTenantConfig(tenant.config);
     const mcApiKey = tenantConfig.manychat_api_key;
-    if (!mcApiKey) return reply.code(400).send({ error: 'No manychat_api_key configured for tenant' });
+    if (!mcApiKey)
+      return reply.code(400).send({ error: 'No manychat_api_key configured for tenant' });
 
     const mcFlows = await fetchManyChatFlows(mcApiKey, req.log);
     if (!mcFlows) return reply.code(502).send({ error: 'ManyChat API unavailable' });
@@ -182,7 +191,10 @@ export default async function toolsRoutes(app: FastifyInstance): Promise<void> {
         .limit(1);
 
       if (!stageRows[0]) {
-        req.log.warn({ name: f.name, stage: parsed.stage, slug }, 'flow skipped — stage not found in DB');
+        req.log.warn(
+          { name: f.name, stage: parsed.stage, slug },
+          'flow skipped — stage not found in DB',
+        );
         skipped.push(f.name);
         continue;
       }
@@ -207,7 +219,10 @@ export default async function toolsRoutes(app: FastifyInstance): Promise<void> {
                 usage_condition = ${parsed.usageCondition}
             WHERE id = ${row.id}
           `);
-          req.log.info({ name: f.name, oldNs: row.flow_ns, newNs: f.ns }, 'ns change pending approval');
+          req.log.info(
+            { name: f.name, oldNs: row.flow_ns, newNs: f.ns },
+            'ns change pending approval',
+          );
         }
       } else {
         const activeNs = force ? f.ns : 'PENDING';
@@ -246,7 +261,7 @@ export default async function toolsRoutes(app: FastifyInstance): Promise<void> {
 
 function getFlowPrefix(tenantConfig: ReturnType<typeof parseTenantConfig>): string {
   const cfg = tenantConfig as Record<string, unknown>;
-  return typeof cfg['flow_prefix'] === 'string' ? cfg['flow_prefix'] : 'QC_';
+  return typeof cfg.flow_prefix === 'string' ? cfg.flow_prefix : 'QC_';
 }
 
 async function fetchManyChatFlows(
