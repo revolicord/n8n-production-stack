@@ -13,7 +13,7 @@ export async function getLeadStage(
       and(eq(leadStages.tenantId, args.tenantId), eq(leadStages.subscriberId, args.subscriberId)),
     )
     .limit(1);
-  return rows[0]?.currentStage ?? 'nuevo';
+  return rows[0]?.currentStage ?? 'A';
 }
 
 export async function upsertLeadStage(

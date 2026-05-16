@@ -186,7 +186,7 @@ export const leadStages = apiSchema.table(
     subscriberId: uuid('subscriber_id')
       .notNull()
       .references(() => subscribers.id, { onDelete: 'cascade' }),
-    currentStage: text('current_stage').notNull().default('nuevo'),
+    currentStage: text('current_stage').notNull().default('A'),
     currentStageId: uuid('current_stage_id').references(() => funnelStages.id),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },

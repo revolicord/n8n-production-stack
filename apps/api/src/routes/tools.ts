@@ -37,7 +37,7 @@ interface ParsedFlowName {
 function parseFlowName(name: string): ParsedFlowName | null {
   const m = FLOW_NAME_TOP_RE.exec(name);
   if (!m) return null;
-  const [, prefix, stage, rawMedia, rest] = m as [string, string, string, string, string];
+  const [, prefix, stage, rawMedia, rest] = m as unknown as [string, string, string, string, string];
   const mediaType = MEDIA_TYPE_MAP[rawMedia.toLowerCase()] ?? rawMedia.toLowerCase();
 
   // Strip optional variant suffix _vN
