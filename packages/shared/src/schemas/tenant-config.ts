@@ -11,7 +11,6 @@ export const TenantConfigSchema = z
     manychat_api_key: z.string().optional(),
     model: z.string().optional(),
     prompt_version: z.string().optional(),
-    system_prompt: z.string().optional(),
     calendly_url: z.string().optional(),
   })
   .passthrough();

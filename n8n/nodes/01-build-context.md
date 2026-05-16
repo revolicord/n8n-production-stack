@@ -84,11 +84,22 @@ const maxFollowups = stageConfig.max_followups ?? 3;
 
 const selectedFlow = pickFlowWeighted(flows);
 
-function buildFlowLine(f: { flow_ns: string; usage_condition?: string; content_description?: string; description?: string; media_type?: string }) {
+function buildFlowLine(f) {
+  const lines = [];
+  lines.push('→ flow_name (cópialo EXACTO, carácter por carácter, no lo traduzcas ni lo parafrasees):');
+  lines.push(`  ${f.flow_ns}`);
+  lines.push('');
+  if (f.media_type) {
+    lines.push(`  Tipo: [${f.media_type}]`);
+  }
   const condition = f.usage_condition ?? f.description ?? '';
-  const content   = f.content_description ? `\n  Contenido: ${f.content_description}` : '';
-  const mediaTag  = f.media_type ? `[${f.media_type}] ` : '';
-  return `- flow_name: "${f.flow_ns}" — ${mediaTag}${condition}${content}`;
+  if (condition) {
+    lines.push(`  Cuándo: ${condition}`);
+  }
+  if (f.content_description) {
+    lines.push(`  Contenido: ${f.content_description}`);
+  }
+  return lines.join('\n');
 }
 
 const flowsSection = selectedFlow
@@ -115,8 +126,8 @@ const signals = sub.metadata?.signals ?? body.lead_state?.signals ?? null;
 // --- Link de Calendly (para etapa B→C) ---
 const calendlyUrl = body.tenant?.config?.calendly_url ?? '';
 
-// --- Prompt estático (vive en tenants.config.system_prompt) ---
-const staticPrompt = body.tenant?.config?.system_prompt ?? '';
+// --- Prompt estático (vive en el Set node "System Prompt" del workflow) ---
+const staticPrompt = $('System Prompt').first()?.json?.staticPrompt ?? '';
 
 // --- Bloque de contexto dinámico ---
 const contextLines = [

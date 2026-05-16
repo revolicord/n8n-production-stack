@@ -10,7 +10,7 @@ El schema de BD está completo (ADRs 0010–0015 migrados). La migración **no h
 
 - **Funnel canónico:** Quantum Creators, 5 etapas `A/MS/B/C/D` + terminales (`disqualified`, `lost`, `escalated_human_call`). Confirmado con el founder el 2026-05-14. La documentación previa con etapas `nuevo/interesado/prospecto/cliente` (tenant "revolicord") queda **obsoleta**.
 - **Persona del agente:** "Alex" (ver decisión abierta #1, sin cerrar).
-- **El prompt vive** en `tenants.config.system_prompt`; la fuente versionada es `n8n/prompts/setter-v1.md`.
+- **El prompt vive** en el Set node `System Prompt` del workflow de n8n (ver `n8n/nodes/00c-system-prompt.md`); la fuente versionada es `n8n/prompts/setter-v1.md`. (Hasta v4 vivía en `tenants.config.system_prompt`; cambiado en v5 — 2026-05-16 — para iterar sin SQL.)
 - **ADR-0014 Path B:** `current_stage_id UUID FK` se agrega a `lead_stages` (no a `subscribers`), preservando el schema existente. Ver `docs/adr/IMPLEMENTATION-REPORT.md`.
 
 ## Lo que YA funciona — no tocar
@@ -30,7 +30,7 @@ Sin esto el prompt no corre bien end-to-end.
 - [ ] **Aplicar migración 0002** a la BD de producción: `DATABASE_URL="postgres://..." pnpm db:migrate` desde `packages/db/`. Crea las 5 tablas nuevas y agrega `current_stage_id` a `lead_stages`.
 - [ ] **Ejecutar seed QC** (`packages/db/drizzle/seed_qc_funnel.sql`): reemplazar `<TENANT_ID>` con el UUID real del tenant → crea etapas A/MS/B/C/D + stage_flows + followup_templates.
 - [ ] **Ejecutar backfill**: después del seed, correr el UPDATE comentado en `seed_qc_funnel.sql` para llenar `lead_stages.current_stage_id` en filas existentes.
-- [ ] **Cargar el prompt** en `tenants.config.system_prompt` del tenant Quantum Creators (copiar el bloque de `n8n/prompts/setter-v1.md`).
+- [ ] **Cargar el prompt** en el Set node `System Prompt` del workflow `agent-run` (copiar el bloque de `n8n/prompts/setter-v1.md` al campo `staticPrompt` del Set node).
 - [ ] **Completar el copy del producto** en `setter-v1.md`: `{{QC_PRODUCT_ONELINER}}` y `{{QC_PRODUCT_NOTAS}}`. Solo lo sabe Alex. Sin esto el agente habla del producto con placeholders.
 - [ ] **`set_stage`: ampliar los valores válidos** de `new_stage` a `A | MS | B | C | disqualified`. El endpoint `POST /admin/leads/:id/stage` fue diseñado para `nuevo/interesado/...`. Debe: aceptar valores nuevos, validar transiciones, guardar `reason` + `evidence`.
 - [ ] **Cablear nodos nuevos en `agent-run`** (n8n UI): agregar `Get Stage Config` y `Get Subscriber CRM Context` antes de `Build Context`; reemplazar JS de `Build Context` con el de `n8n/nodes/01-build-context.md`; agregar `Upsert Lead Cron` después de `enviar texto`.

@@ -239,7 +239,7 @@ WHERE conversation_id = $1;
 
 ## Instrucción para el system prompt (ADR-0012)
 
-Agregar en `setter-v1.md` / `system_prompt`:
+Agregar en `setter-v1.md` y luego copiar al Set node `System Prompt` (campo `staticPrompt`) del workflow `agent-run`:
 
 > *"Si ves en tu historial mensajes con el prefijo `[SEGUIMIENTO AUTOMÁTICO #N]`, significa que el sistema envió esos mensajes de forma automática mientras el lead no respondía. No los menciones explícitamente; úsalos como contexto para calibrar tu tono."*
 

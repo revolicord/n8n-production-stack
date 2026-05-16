@@ -138,7 +138,7 @@ Botón que abre Grafana en nueva pestaña con el dashboard "DM Setter Quantum".
 
 ### 8. Configuración
 
-- Editor de `tenants.config` (debounce_ms, max_wait_ms, model LLM, system_prompt path).
+- Editor de `tenants.config` (debounce_ms, max_wait_ms, model LLM). (Nota: el `system_prompt` vive en el Set node `System Prompt` del workflow `agent-run` en n8n desde v5, no en DB.)
 - Editor de `tenants.config.flows` (mapeo flow_name → flow_ns de ManyChat).
 - Botón "Test webhook" que dispara un payload sintético al webhook para validar.
 

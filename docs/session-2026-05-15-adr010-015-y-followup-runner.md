@@ -4,6 +4,8 @@ Documento de sesión. Registra el estado de implementación de los ADRs 0010–0
 lo que falta para el MVP, los comandos MCP usados, y cómo están modeladas las
 etapas y follow-ups en la base de datos.
 
+> **Aviso de obsolescencia parcial (2026-05-16, v5):** los pasos que mencionan cargar el `system_prompt` en `tenants.config` reflejan la arquitectura de ese día. A partir de v5 el system_prompt vive en el Set node `System Prompt` del workflow `agent-run` en n8n (ver `n8n/nodes/00c-system-prompt.md`), no en DB. Los demás pasos siguen siendo válidos.
+
 ---
 
 ## 1. Contexto de la sesión

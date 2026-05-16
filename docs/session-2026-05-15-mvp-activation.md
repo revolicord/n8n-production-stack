@@ -2,6 +2,8 @@
 
 Documento de sesión. Registra todo lo ejecutado en producción para activar el MVP del setter de Instagram DM de Quantum Creators, y las instrucciones exactas para continuar.
 
+> **Aviso de obsolescencia parcial (2026-05-16, v5):** las secciones que mencionan `tenants.config.system_prompt` reflejan la arquitectura de ese día. A partir de v5 el system_prompt vive en el Set node `System Prompt` del workflow `agent-run` (ver `n8n/nodes/00c-system-prompt.md`), no en DB. Las queries SQL `UPDATE tenants SET config = jsonb_set(...)` de este doc ya no aplican para el prompt; sí siguen aplicando para los otros campos de `tenants.config` (calendly_url, manychat_api_key, etc.).
+
 ---
 
 ## 1. Qué se hizo en esta sesión

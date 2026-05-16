@@ -149,7 +149,7 @@ Workflow nuevo con Schedule Trigger cada 5 minutos. Implementar siguiendo `n8n/w
 
 ### 7. Actualizar el system prompt
 
-En `n8n/prompts/setter-v1.md` y en `tenants.config.system_prompt`, agregar:
+En `n8n/prompts/setter-v1.md` y en el Set node `System Prompt` del workflow `agent-run` (campo `staticPrompt`, ver `n8n/nodes/00c-system-prompt.md`), agregar:
 
 > *"Si ves en tu historial mensajes con el prefijo `[SEGUIMIENTO AUTOMÁTICO #N]`, significa que el sistema envió esos mensajes de forma automática mientras el lead no respondía. No los menciones explícitamente; úsalos como contexto para calibrar tu tono."*
 

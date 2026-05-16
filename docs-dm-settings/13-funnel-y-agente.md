@@ -266,7 +266,7 @@ Devuelves SIEMPRE JSON estructurado con:
 - internal_notes: notas para ti mismo en futuros turnos (se guardan en metadata)
 ```
 
-Este prompt vivirá en `tenants.config.system_prompt` o en un archivo del repo (`/n8n/prompts/setter-v1.md`) versionado. **No vive en código TypeScript**.
+Este prompt vive en el Set node `System Prompt` del workflow `agent-run` en n8n (campo `staticPrompt`), con fuente versionada en `n8n/prompts/setter-v1.md`. **No vive en código TypeScript ni en DB**. Ver `n8n/nodes/00c-system-prompt.md`.
 
 ## Flujo end-to-end con ejemplo concreto
 

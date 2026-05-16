@@ -1,8 +1,8 @@
 # Setter Prompt · Quantum Creators · v3
 
 **Qué es:** el system prompt de producción del agente setter de Instagram DM de Quantum Creators.
-**Dónde vive en ejecución:** `tenants.config.system_prompt` del tenant `revolicord`. El nodo `Build Context` lo lee y le anexa el bloque `# CONTEXTO` dinámico en cada turno (ver `n8n/nodes/01-build-context.md`).
-**Este archivo es la fuente de verdad versionada.** Cuando edites el prompt, edítalo aquí, súbelo a git, y luego actualiza `tenants.config.system_prompt` en la DB.
+**Dónde vive en ejecución:** Set node `System Prompt` dentro del workflow de n8n (ver `n8n/nodes/00c-system-prompt.md`). El nodo `Build Context` lo lee de ahí y le anexa el bloque `# CONTEXTO` dinámico en cada turno (ver `n8n/nodes/01-build-context.md`).
+**Este archivo es la fuente de verdad versionada.** Cuando edites el prompt, edítalo aquí, súbelo a git, y luego copia el bloque al Set node `System Prompt` en n8n (UI).
 
 ---
 
@@ -13,10 +13,12 @@
 | v1 | 2026-05-14 | Primera versión. Funnel A/MS/B/C/D, NEPQ + Gap Selling, manejo de objeciones, 5 ejemplos de borde. |
 | v2 | 2026-05-15 | Reescritura radical. Elimina explicación de 5 etapas y sección de tools del prompt. El LLM solo lee el bloque # CONTEXTO inyectado por Build Context. Prompt mucho más corto y natural. |
 | v3 | 2026-05-15 | Cambio de personalidad completo. Cero emojis, estilo seco desde móvil. Prohibido explicar en texto. Descalificación inmediata sin rebotar objeciones. Acción principal: disparar flow, acompañar con 1 frase binaria. |
+| v4 | 2026-05-16 | Cambio de modelo: llama-3.3-70b (Groq) → Claude Sonnet 4.6 (Anthropic). Refuerzo de disciplina con `flow_name`: el JSON Schema de `trigger_manychat_flow` añade `pattern: "^content[0-9]{14}_[0-9]+$"` para rechazar nombres inventados, y `Build Context` reformatea el bloque "CONTENIDO DISPONIBLE" para aislar el `ns` en su propia línea (evita que el modelo lo parafrasee). |
+| v5 | 2026-05-16 | El prompt deja de vivir en `tenants.config.system_prompt` y pasa a un Set node `System Prompt` en n8n. Motivo: iterar el prompt en producción sin SQL ni re-deploy. La fuente versionada sigue siendo este `.md`; se copia al Set node manualmente desde la UI. Eliminado `system_prompt` del schema Zod `TenantConfigSchema`. |
 
 ---
 
-## El prompt (copiar a `tenants.config.system_prompt`)
+## El prompt (copiar al Set node `System Prompt` en n8n, campo `staticPrompt`)
 
 ```
 # ROL
@@ -33,7 +35,7 @@ Te comunicas principalmente enviando contenido (videos o audios pregrabados). No
 # TU BRÚJULA (CÓMO ACTUAR)
 Al final de este prompt verás el "# CONTEXTO". Ahí tienes el "CONTENIDO DISPONIBLE" para enviar.
 
-1. DISPARAR CONTENIDO: Tu principal acción es usar SIEMPRE la herramienta `trigger_manychat_flow` con el flow exacto que te marca el contexto.
+1. DISPARAR CONTENIDO: Tu principal acción es usar SIEMPRE la herramienta `trigger_manychat_flow` con el flow_name exacto que te marca el contexto.
 2. TEXTO MÍNIMO BINARIO: Acompaña el flow con UNA sola frase en texto exigiendo confirmación. Ejemplos: "Mírate esto y dame un pulgar arriba si resuena", o "Dime si o no y avanzamos".
 3. ANTE LA DUDA O EL "NO": Si el usuario dice que no le interesa, que es muy caro, o da vueltas ambiguas, USA INMEDIATAMENTE la herramienta `set_stage` con el valor "disqualified" y despídete con 1 sola frase (Ej: "Vale, no es tu momento. Éxitos."). NO rebatas la objeción.
 4. CALENDLY: Si el contexto te muestra el link de Calendly, mándalo seco: "Aquí tienes, elige horario: [link]".
@@ -41,8 +43,8 @@ Al final de este prompt verás el "# CONTEXTO". Ahí tienes el "CONTENIDO DISPON
 ```
 
 > **Nota:** el bloque de arriba —de `# ROL` hasta el final— es exactamente lo que se
-> copia a `tenants.config.system_prompt`. No incluyas un `# CONTEXTO` aquí: lo añade `Build Context`
-> en cada turno (ver más abajo).
+> copia al campo `staticPrompt` del Set node `System Prompt` en n8n. No incluyas un `# CONTEXTO`
+> aquí: lo añade `Build Context` en cada turno (ver más abajo).
 
 ---
 
@@ -69,9 +71,9 @@ El agente degrada con elegancia: si una variable falta, el bloque simplemente no
 
 ---
 
-## Notas sobre tool calling con llama-3.3-70b en Groq
+## Notas sobre tool calling con Claude Sonnet 4.6
 
-- El modelo soporta tool calling vía la API de Groq cuando las tools están conectadas en n8n como `ai_tool`.
+- El modelo soporta tool calling nativo vía la API de Anthropic cuando las tools están conectadas en n8n como `ai_tool`.
 - Si el modelo emite `<function=name>{...}` como texto plano, n8n no está pasando las tools al modelo.
-- `flow_name` es el `ns` de ManyChat directamente. Se inyecta desde `flows_by_stage`; el modelo lo usa como string exacto, sin adivinar.
-- llama-3.3-70b es un modelo de gama media para tool calling multi-etapa. Si la adherencia falla en pruebas, evaluar Claude / GPT-4o.
+- `flow_name` es el `ns` de ManyChat directamente. Se inyecta desde `flows_by_stage`; el modelo lo usa como string exacto, sin adivinar. El JSON Schema de la tool refuerza esto con `pattern: "^content[0-9]{14}_[0-9]+$"`.
+- Claude Sonnet 4.6 tiene adherencia alta a tool calling multi-etapa y a copiar strings literales. Si en pruebas un modelo de gama media (llama, gpt-4o-mini) falla en copiar el `ns`, Sonnet 4.6 es el fallback por defecto.
