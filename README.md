@@ -153,7 +153,7 @@ packages/db/      ← drizzle schema + migrations (schema 'api' en Postgres)
 packages/shared/  ← Zod schemas compartidos
 ```
 
-Documentación completa en [`docs-dm-settings/`](docs-dm-settings/) (empezar por `00 readme.md`).
+Documentación completa en [`docs/`](docs/) (empezar por [`docs/00_README.md`](docs/00_README.md)).
 
 ```bash
 # Desarrollo local (Sprint 1+)

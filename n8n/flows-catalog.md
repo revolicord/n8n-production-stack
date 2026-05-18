@@ -3,7 +3,7 @@
 Fuente de verdad del mapeo entre flows de ManyChat y el sistema del agente.
 
 > **El sistema vivo está en `stage_flows` (Postgres), no aquí.** Este documento es referencia humana.
-> Para cambios operativos, ver `docs-dm-settings/15-flow-registry-manychat.md`.
+> Para cambios operativos, ver `docs/_archive/docs-dm-settings/15-flow-registry-manychat.md`.
 > Para la decisión arquitectónica, ver `docs/adr/0016-flow-registry-naming.md`.
 
 ---
@@ -75,7 +75,7 @@ WHERE tenant_id = '9d338f06-59c6-47bd-b3d7-4e3631ff4e75'
   AND flow_ns IN ('PENDIENTE_ns_video_hook', 'content20260511152354_558165');
 
 -- Para las variantes v2/v3/v4 necesitas insertar nuevas filas:
--- Ver docs-dm-settings/15-flow-registry-manychat.md → Cómo añadir un flow nuevo
+-- Ver docs/_archive/docs-dm-settings/15-flow-registry-manychat.md → Cómo añadir un flow nuevo
 
 -- Etapa MS — audio VSL
 UPDATE api.stage_flows SET

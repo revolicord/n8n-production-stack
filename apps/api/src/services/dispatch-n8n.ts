@@ -22,7 +22,7 @@ export class N8nDispatchError extends Error {
  * 2xx inmediatamente (modo "respond immediately") y procesar async,
  * llamando luego a /admin/turn-completed.
  *
- * Documentación: docs-dm-settings/06-n8n-integracion.md.
+ * Documentación: docs/_archive/docs-dm-settings/06-n8n-integracion.md.
  */
 export async function dispatchToN8n(opts: {
   workflowUrl: string;

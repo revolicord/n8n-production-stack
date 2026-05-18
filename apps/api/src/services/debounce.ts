@@ -18,7 +18,7 @@ export interface DebouncePushResult {
 
 /**
  * Lua atómico: RPUSH al buffer + SET token debounce + SET first_msg si nuevo.
- * Documentación: docs-dm-settings/03-modelo-de-datos.md sección "Patrón Lua".
+ * Documentación: docs/_archive/docs-dm-settings/03-modelo-de-datos.md sección "Patrón Lua".
  *
  * KEYS[1] = buffer key
  * KEYS[2] = debounce key

@@ -60,7 +60,7 @@ El happy path va sin esto, pero el setter no está "completo".
 - [ ] **Memoria multinivel**: hoy solo Postgres Chat Memory (cronológico, sin recall semántico). Falta la capa episódica/semántica (pgvector / Zep / Mem0) + resumen "frío" de la conversación cada 5 turnos (doc 13). Sin esto, un lead que vuelve tras semanas se trata sin contexto profundo.
 - [ ] **Restricciones de la API de Meta/ManyChat**: límite ~200 DMs/hora por cuenta, ventana de mensajería de 24 h, variación semántica del texto (evitar texto idéntico a >25 destinatarios/hora), encolado + backoff exponencial. Verificar qué cubre ManyChat por nosotros y qué hay que gestionar en la capa Fastify.
 - [ ] **Formato de salida estructurado**: doc 13 propone que el agente devuelva JSON (`actions`, `response_to_user`, `stage_change`, `internal_notes`). Hoy la salida es texto plano que va directo a "enviar texto". Migrar a JSON requiere un nodo parser en n8n — decidir si compensa.
-- [ ] **Telemetría / KPIs**: Open Rate, Reply Rate, CTR, Qualification Rate, Call-to-Appointment Rate, Show Rate, Speed-to-Lead, MSR/PRR/CSR/ABR. Benchmarks en `fundamentals/Informe ... Appointment Setting en Instagram`. Queries y dashboard en `docs-dm-settings/14`.
+- [ ] **Telemetría / KPIs**: Open Rate, Reply Rate, CTR, Qualification Rate, Call-to-Appointment Rate, Show Rate, Speed-to-Lead, MSR/PRR/CSR/ABR. Benchmarks en `fundamentals/Informe ... Appointment Setting en Instagram`. Queries y dashboard en `docs/_archive/docs-dm-settings/14`.
 - [ ] **HITL por confianza**: cuando la incertidumbre del modelo supera un umbral o detecta sentimiento muy negativo / tema legal → escalar a humano con resumen + borrador sugerido, en vez de actuar.
 - [ ] **PII / GDPR**: DPA con Groq (y cualquier proveedor de modelo), garantía de zero-data-retention, auditabilidad de qué contexto exacto recibió el modelo en cada turno.
 - [ ] **Versionado de prompts**: disciplina de git en `n8n/prompts/` (v1 → v2…) o tabla `prompt_versions`. Para no perder iteraciones del setter y poder hacer A/B.
@@ -89,14 +89,14 @@ El happy path va sin esto, pero el setter no está "completo".
 | `n8n/flows-catalog.md` | ⏳ Pendiente: `ns` etiquetados "revolicord". Confirmar los `ns` reales de QC y actualizar `stage_flows` en BD. |
 | `n8n/README.md` | ⏳ Pendiente: actualizar el diagrama de nodos con el nuevo chain y el cron de follow-ups. |
 | `n8n/agent-run.json` | ⚠️ Vacío (0 bytes) — el JSON del workflow no se versiona (tiene tokens). Intencional. |
-| `docs-dm-settings/00 readme.md` | ⚠️ Menor: referencia `07-docker-compose-y-deploy.md` pero el archivo real es `07-docker-swarm-y-deploy.md`. |
+| `docs/_archive/docs-dm-settings/00 readme.md` | ⚠️ Menor: referencia `07-docker-compose-y-deploy.md` pero el archivo real es `07-docker-swarm-y-deploy.md`. |
 | Nombre del negocio | ⚠️ Repo `revolicord/n8n-production-stack` vs. tenant Quantum Creators. Confirmar modelo: Revolicord = agencia, QC = primer tenant. Alinear `flows-catalog.md` y `slug` del tenant. |
 
 ---
 
 ## Decisiones de negocio abiertas — las necesita Alex
 
-1. **Persona del agente.** ¿El agente *es* "Alex" (se hace pasar por el founder) o es "del equipo de Alex"? La segunda opción es más sostenible: explica la latencia entre mensajes y reduce el riesgo si un lead descubre que es automatizado. `docs-dm-settings/13` dice que es "Alex" — el prompt sigue eso de momento.
+1. **Persona del agente.** ¿El agente *es* "Alex" (se hace pasar por el founder) o es "del equipo de Alex"? La segunda opción es más sostenible: explica la latencia entre mensajes y reduce el riesgo si un lead descubre que es automatizado. `docs/_archive/docs-dm-settings/13` dice que es "Alex" — el prompt sigue eso de momento.
 2. **Copy del producto.** One-liner de Quantum Creators, qué incluye el programa, para quién es y para quién NO. Bloquea P0.
 3. **Timing de la primera respuesta.** Los dos informes de `fundamentals/` se contradicen: uno recomienda 5-20 min de retraso deliberado (no parecer bot), el otro dice que 0-1 min convierte 21× más. El sistema tiene un debounce de 8 s. Esto NO es del prompt — es política de la capa de debounce/scheduling. Decidir.
 4. **Criterios finos de descalificación.** Umbral de "cuenta de baja calidad" (nº de seguidores, antigüedad), lista exacta de países válidos.
@@ -106,7 +106,7 @@ El happy path va sin esto, pero el setter no está "completo".
 
 ## Cómo probar el MVP — cuando P0 esté cerrado
 
-Prueba manual end-to-end (basada en el Ejemplo 1 de `docs-dm-settings/13`):
+Prueba manual end-to-end (basada en el Ejemplo 1 de `docs/_archive/docs-dm-settings/13`):
 
 1. Enviar "hola" como DM a la cuenta de Instagram conectada.
 2. Verificar: el agente responde cálido + breve, dispara `video_hook`, hace `set_stage("A", ...)`.
