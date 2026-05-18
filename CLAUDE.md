@@ -122,7 +122,7 @@ ManyChat → POST /webhook/manychat
 ## Critical rules
 
 ### Code vs. n8n boundary
-The most important design decision. See `docs-dm-settings/02-frontera-codigo-vs-n8n.md`.
+The most important design decision. See `docs/04_SYSTEM_MAP.md` (archived original: `docs/_archive/docs-dm-settings/02-frontera-codigo-vs-n8n.md`).
 - **Fastify code**: auth, idempotency, rate-limit, debounce, lock, BullMQ, DB mutations
 - **n8n**: prompts, LLM selection, tools, memory, ManyChat API calls, business routing
 

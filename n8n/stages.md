@@ -2,7 +2,7 @@
 
 Define las 5 etapas del lead, las transiciones válidas, los criterios de avance y los flows por etapa.
 
-> **Modelo canónico:** este es el funnel de `docs-dm-settings/13-funnel-y-agente.md`.
+> **Modelo canónico:** este es el funnel de `docs/_archive/docs-dm-settings/13-funnel-y-agente.md`.
 > El modelo de datos completo (`lead_stages`, `stage_transitions`, `closers`, `follow_up_templates`,
 > `notifications`) vive en doc 13. Aquí solo van las definiciones de etapa y la config de flows.
 > La versión anterior con etapas `nuevo/interesado/prospecto/cliente` queda **obsoleta**.
