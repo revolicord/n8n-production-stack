@@ -41,55 +41,80 @@ Las dos tools son **Code Tool** (`@n8n/n8n-nodes-langchain.toolCode`) con **sche
 
 **Description:**
 ```
-Envía un flow de ManyChat al lead (vídeo, audio, imagen). Úsala SOLO con el flow_ns exacto que aparece en la sección "CONTENIDO DISPONIBLE" del contexto — no inventes ns, no uses nombres semánticos. Build Context ya seleccionó el flow correcto para esta etapa; tu trabajo es decidir el momento conversacional para dispararlo. Una sola llamada por turno.
+Envía un flow de ManyChat al lead (vídeo, audio, imagen). Úsala SOLO con el flow_name EXACTO que aparece en la sección "CONTENIDO DISPONIBLE" del contexto — cópialo carácter por carácter. Nunca lo traduzcas, parafrasees ni inventes. Build Context ya seleccionó el flow correcto para esta etapa; tu trabajo es decidir el momento conversacional para dispararlo. Una sola llamada por turno.
 ```
 
 **Input Schema:**
 ```json
 {
   "type": "object",
-  "required": ["flow_ns"],
+  "required": ["flow_name"],
   "properties": {
-    "flow_ns": {
+    "flow_name": {
       "type": "string",
-      "pattern": "^content\\d+_\\d+$",
-      "description": "El ns exacto del flow de ManyChat (formato content<digits>_<digits>). Cópialo tal cual de la sección CONTENIDO DISPONIBLE del system prompt — no inventes este valor."
+      "pattern": "^content[0-9]+_[0-9]+$",
+      "description": "EXACT ns string from CONTENIDO DISPONIBLE. Must be copied character-for-character from the context block. Never paraphrase, never translate, never invent. Format: 'content' followed by digits, underscore, then digits (e.g., content20260511155655_840313)."
     }
-  },
-  "additionalProperties": false
+  }
 }
 ```
 
+> **NO usar `additionalProperties: false`:** en n8n 2.20.6 las Code Tools reciben el item completo del flujo (todos los campos de Build Context + `toolCallId`), no solo los argumentos del LLM. Con `additionalProperties: false` la validación zod rechaza todo con "Unrecognized key(s)". Dejarlo abierto (default) permite que el schema valide solo `flow_name` e ignore el resto.
+
+> **Sobre el naming:** la IA emite `flow_name` (intuitivo para el modelo); el código lo mapea a `flow_ns` al hablar con la API de ManyChat (que conserva el nombre técnico). Build Context inyecta el `ns` directamente en la sección CONTENIDO DISPONIBLE; el LLM lo copia tal cual.
+
 **JS Code:**
 ```javascript
-const { flow_ns } = query;
+const { flow_name } = query;
 
-const subscriberId = $('Build Context').first().json.subscriberId;
-const mcApiKey     = $('Build Context').first().json.mcApiKey;
+// 1) Validación defensiva del parámetro del LLM
+//    (el JSON Schema con pattern debería filtrar, pero blindamos por si acaso)
+if (!flow_name || typeof flow_name !== 'string') {
+  return `error: parámetro flow_name ausente o no es string. Recibido: ${JSON.stringify(flow_name)}`;
+}
+if (!/^content[0-9]{14}_[0-9]+$/.test(flow_name)) {
+  return `error: flow_name "${flow_name}" no cumple el formato (content + 14 dígitos + _ + dígitos). Copia el ns EXACTO del bloque CONTENIDO DISPONIBLE del prompt — no inventes ni traduzcas.`;
+}
 
+// 2) Lee contexto dinámico desde Build Context
+let subscriberId, mcApiKey;
+try {
+  const ctx = $('Build Context').first().json;
+  subscriberId = ctx.subscriberId;
+  mcApiKey     = ctx.mcApiKey;
+} catch (err) {
+  return `error interno: no se pudo leer Build Context (${err.message ?? err})`;
+}
+if (!subscriberId) return `error interno: subscriberId ausente en Build Context`;
+if (!mcApiKey)     return `error interno: mcApiKey ausente en Build Context`;
+
+// 3) Llamada a ManyChat
+const url = 'https://api.manychat.com/fb/sending/sendFlow';
 try {
   const res = await this.helpers.httpRequest({
     method: 'POST',
-    url: 'https://api.manychat.com/fb/sending/sendFlow',
+    url: url,
     headers: {
       Authorization: `Bearer ${mcApiKey}`,
       'Content-Type': 'application/json',
     },
-    body: { subscriber_id: subscriberId, flow_ns },
+    body: { subscriber_id: subscriberId, flow_ns: flow_name },
     json: true,
     returnFullResponse: true,
   });
 
-  if (res.statusCode === 200 && res.body?.status === 'success') {
-    return `ok: flow ${flow_ns} sent to subscriber ${subscriberId}`;
+  if (res.statusCode === 200 && res.body && res.body.status === 'success') {
+    return `ok: flow ${flow_name} enviado a subscriber ${subscriberId}`;
   }
-  return `error: ManyChat ${res.statusCode} — ${JSON.stringify(res.body)}`;
+  return `error: ManyChat respondió ${res.statusCode} — ${JSON.stringify(res.body)}`;
 } catch (err) {
-  return `error: ${err.message ?? 'sendFlow request failed'}`;
+  const status = err.statusCode || err.httpCode || 'unknown';
+  const body   = err.response?.body || err.body || err.message || String(err);
+  return `error: ManyChat ${status} — ${typeof body === 'string' ? body : JSON.stringify(body)}`;
 }
 ```
 
-> **Nota sobre `flow_ns`:** ManyChat usa el campo `ns` del flow (ej. `content20260511160051_518775`). Build Context inyecta el `ns` directamente en la sección CONTENIDO DISPONIBLE; el LLM lo copia tal cual. Ver `flows-catalog.md`.
+> **Por qué este código devuelve strings y no lanza:** las AI Tools en n8n LangChain devuelven el `return` al modelo como observación. Si tiramos excepción, el modelo recibe un error de runtime; si devolvemos string "error: ...", el modelo lo lee y puede corregir (por ejemplo, reintentar con el `flow_name` correcto del contexto). Misma razón para validar el regex en el código además de en el schema: aunque el schema rechazaría el call inválido, si en el futuro lo aflojamos el JS sigue siendo barrera.
 
 ### set_stage
 
@@ -121,10 +146,11 @@ Avanza la etapa del lead en el funnel cuando hay evidencia textual clara de que 
       "minLength": 1,
       "description": "Cita textual del último mensaje del lead que justifica el cambio. Copia las palabras del lead tal cual, sin parafrasear."
     }
-  },
-  "additionalProperties": false
+  }
 }
 ```
+
+> **NO usar `additionalProperties: false`** aquí tampoco — mismo motivo que en `trigger_manychat_flow`: las Code Tools reciben el item completo del flujo, y zod rechazaría todo con "Unrecognized key(s)".
 
 **JS Code:**
 ```javascript

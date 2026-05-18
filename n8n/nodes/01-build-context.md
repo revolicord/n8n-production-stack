@@ -149,9 +149,13 @@ contextLines.push(crmBlock);
 const dynamicContext = contextLines.join('\n');
 
 // --- Prompt final ---
+// Importante: usar template literals (backticks). El fallback es una línea
+// larga; si se pega como string con comillas simples y el editor lo wrappea,
+// rompe el parser con SyntaxError.
+const fallbackPrompt = `Eres Alex, el setter de Quantum Creators por Instagram DM. Sé cálido y breve, máximo 2 frases, tutea siempre. Nunca digas que eres un bot ni des precios.`;
 const systemPrompt = staticPrompt
   ? `${staticPrompt}\n\n# CONTEXTO\n${dynamicContext}`
-  : `Eres Alex, el setter de Quantum Creators por Instagram DM. Sé cálido y breve, máximo 2 frases, tutea siempre. Nunca digas que eres un bot ni des precios.\n\n# CONTEXTO\n${dynamicContext}`;
+  : `${fallbackPrompt}\n\n# CONTEXTO\n${dynamicContext}`;
 
 return [{
   json: {
