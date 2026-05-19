@@ -1,164 +1,180 @@
 # 10 — Conversation State Machine
-## Estados del Lead, Transiciones y Persistencia
+## Estados del Lead, Transiciones y Persistencia (Quantum Creators)
 
 ---
 
-> **Propósito:** Definir formalmente la máquina de estados del lead. El agente decide qué hacer en función del estado actual + el último input del lead.
+> **Propósito:** Definir formalmente la máquina de estados del lead operativa hoy. El agente decide qué hacer en función del estado actual + el último input del lead.
+>
+> **Funnel canónico:** Quantum Creators — 5 etapas activas `A / MS / B / C / D` + 3 estados terminales (`disqualified`, `lost`, `escalated_human_call`).
+>
+> **Implementación:** este modelo está implementado en `apps/api/src/routes/admin/set-stage.ts` (validación de transiciones), `packages/db/src/schema.ts` (tablas `lead_stages` + `funnel_stages` + `stage_transitions`) y `n8n/stages.md` (definiciones operativas). La fuente de verdad ejecutable son esas tres ubicaciones — este doc las explica.
 
 ---
 
-## 1. Diagrama de Estados
+## 1. Etapas Activas
+
+| Sigla | Nombre | Quién maneja | Qué significa |
+|-------|--------|--------------|---------------|
+| `A` | Initiated | bot | Lead recibió el primer mensaje + Vídeo 1 (enganche, 25 s) |
+| `MS` | Media Seen | bot | Lead confirmó (verbal o emoji, tras pregunta del agente) que vio el Vídeo 1 → se le envía el audio + VSL |
+| `B` | Engaged | bot | Lead reaccionó positivo a la VSL (o a contenido de B: audio presentación, imágenes de resultados, prueba social) |
+| `C` | Calendly'd | bot | Lead recibió el link de Calendly |
+| `D` | Booked | handoff a closer | Lead reservó en Calendly — el closer toma desde aquí |
+
+## 2. Estados Terminales
+
+| Estado | Quién lo marca | Significado |
+|--------|----------------|-------------|
+| `disqualified` | agente (vía `set_stage`) | Descalificado por el agente. `reason` ∈ `no_money`, `not_interested`, `geographic`, `no_quality`, `fake_account`. |
+| `lost` | `followup-runner` (no el agente) | 8 follow-ups agotados sin respuesta. |
+| `escalated_human_call` | `followup-runner` tras follow-up #5 | Notificación a Alex para llamada manual por IG. |
+
+> `lost` y `escalated_human_call` **nunca** los marca el agente — los gestiona el cron de follow-ups.
+
+---
+
+## 3. Diagrama de Estados
 
 ```
-                       ┌──────────────┐
-                       │     NEW      │
-                       └──────┬───────┘
-                              │ trigger (comentario / seguidor / DM)
-                              ▼
-                       ┌──────────────┐
-                       │ OPENED       │  ← Mensaje de apertura enviado
-                       └──────┬───────┘
-                              │ lead responde
-                              ▼
-                       ┌──────────────┐
-                       │ WARMING      │  ← Rapport en curso
-                       └──────┬───────┘
-                              │ rapport suficiente
-                              ▼
-                       ┌──────────────┐
-                       │ VIDEO_SENT   │  ← Video de 25s enviado
-                       └──┬─────────┬─┘
-                          │ 👍      │ texto / objeción / silencio
-                          ▼         ▼
-                  ┌──────────┐   ┌──────────────┐
-                  │AUDIO_SENT│   │  OBJECTION   │ ─→ resuelta → vuelve
-                  └────┬─────┘   └──────────────┘
-                       ▼
-                  ┌──────────┐
-                  │VSL_SENT  │
-                  └──┬─────┬─┘
-                     │ 👍  │ texto / objeción / silencio
-                     ▼     ▼
-              ┌─────────┐  ┌──────────────┐
-              │SCHEDULED│  │  OBJECTION   │
-              └────┬────┘  └──────────────┘
-                   │
-                   ▼
-              ┌─────────────┐
-              │ CALL_HELD   │ (capturado por integración Calendly + Close)
-              └─────────────┘
+                    ┌──────────────┐
+                    │      A       │  ← Lead nuevo: agente envía Vídeo 1 (enganche 25s)
+                    │  Initiated   │
+                    └──┬────────┬──┘
+       confirma ver V1 │        │ no_money / not_interested / etc
+                       ▼        ▼
+                ┌──────────┐   ┌────────────────┐
+                │    MS    │   │ disqualified   │  (terminal)
+                │Media Seen│   └────────────────┘
+                │ (Audio + │
+                │   VSL)   │
+                └──┬────┬──┘
+   reacción pos. a │    │ disq.
+   la VSL          ▼    ▼
+              ┌────────┐ ┌────────────────┐
+              │   B    │ │ disqualified   │
+              │Engaged │ └────────────────┘
+              │ (audio │
+              │ + img  │
+              │+ texto)│
+              └──┬──┬──┘
+   manda Calendly│  │ disq.
+                 ▼  ▼
+            ┌────────┐ ┌────────────────┐
+            │   C    │ │ disqualified   │
+            │Calendly│ └────────────────┘
+            └──┬──┬──┘
+  reserva en   │  │ disq.
+  Calendly o   ▼  ▼
+  confirma  ┌──────┐ ┌────────────────┐
+  verbal    │  D   │ │ disqualified   │
+            │Booked│ └────────────────┘
+            └──────┘
+            (handoff a closer)
 
-Estados terminales:
-- ARCHIVED_NO_RESPONSE  (después de N follow-ups sin respuesta)
-- ARCHIVED_NOT_FIT      (lead descalificado o sin interés)
-- ESCALATED             (transferido a humano)
-- WON / LOST            (estado post-llamada, lo maneja el closer)
+Estados terminales gestionados por cron, NO por el agente:
+─ lost                  (8 follow-ups sin respuesta)
+─ escalated_human_call  (tras follow-up #5 — Alex llama manualmente)
 ```
 
 ---
 
-## 2. Estados (Definición Detallada)
+## 4. Tabla de Transiciones Válidas
 
-### `NEW`
-- **Significado:** Lead recién entró al sistema, aún no se le ha enviado nada.
-- **Acción del agente:** enviar mensaje de apertura.
-- **Próximo estado:** `OPENED`.
+Implementado en `apps/api/src/routes/admin/set-stage.ts`:
 
-### `OPENED`
-- **Significado:** Mensaje de apertura enviado, esperando respuesta.
-- **Acción del agente:** esperar respuesta o ejecutar follow-up programado.
-- **Próximo estado:** `WARMING` (si responde) o `ARCHIVED_NO_RESPONSE` (tras N intentos).
+```typescript
+const VALID_TRANSITIONS: Record<Stage, readonly Stage[]> = {
+  A:            ['MS', 'disqualified'],
+  MS:           ['B',  'disqualified'],
+  B:            ['C',  'disqualified'],
+  C:            ['D',  'disqualified'],
+  D:            [],
+  disqualified: [],
+};
+```
 
-### `WARMING`
-- **Significado:** Conversación en curso, generando rapport.
-- **Acción del agente:** 1–3 intercambios, luego enviar video.
-- **Próximo estado:** `VIDEO_SENT`.
+| Desde | Evento | Hacia | Quién dispara |
+|---|---|---|---|
+| `A` | Lead confirma ver Vídeo 1 ("ya lo vi", "interesante", 👍 tras la pregunta) | `MS` | agente vía `set_stage` |
+| `A` | Sin respuesta tras N follow-ups (cadencia A) | sigue `A`, cron avanza secuencia hasta `lost` | `followup-runner` |
+| `A` → cualquiera | `no_money` / `not_interested` / `geographic` / `no_quality` / `fake_account` | `disqualified` | agente vía `set_stage` |
+| `MS` | Reacción positiva tras la VSL (👍, "me encanta", "quiero saber más", "cómo funciona") | `B` | agente vía `set_stage` |
+| `B` | Mensaje positivo claro → agente envía link Calendly | `C` | agente vía `set_stage` |
+| `C` | Lead reserva en Calendly (webhook) **o** confirma verbalmente ("listo, ya agendé", "reservé para el martes") | `D` | webhook Calendly **o** agente vía `set_stage` |
+| Cualquiera | Follow-up #5 sin respuesta | `escalated_human_call` | `followup-runner` |
+| Cualquiera | Follow-up #8 sin respuesta | `lost` | `followup-runner` |
 
-### `VIDEO_SENT`
-- **Significado:** Video de 25s enviado, esperando 👍.
-- **Acción del agente:** esperar respuesta.
-- **Próximo estado:** `AUDIO_SENT` (si 👍), `OBJECTION` (si objeción), follow-up (si silencio).
-
-### `AUDIO_SENT`
-- **Significado:** Audio pre-VSL enviado, transición a VSL.
-- **Acción del agente:** enviar VSL inmediatamente (no espera respuesta).
-- **Próximo estado:** `VSL_SENT`.
-
-### `VSL_SENT`
-- **Significado:** VSL enviada, esperando 👍.
-- **Acción del agente:** esperar respuesta.
-- **Próximo estado:** `SCHEDULED` (si 👍), `OBJECTION` (si objeción), follow-up (si silencio).
-
-### `OBJECTION`
-- **Significado:** Lead expresó una objeción manejable.
-- **Acción del agente:** responder según tabla de objeciones, volver al estado previo.
-- **Próximo estado:** estado del que vino, o `ESCALATED` si no se puede manejar.
-
-### `SCHEDULED`
-- **Significado:** Link de Calendly enviado y llamada agendada.
-- **Acción del agente:** programar recordatorios pre-llamada.
-
-### `CALL_HELD`, `WON`, `LOST`
-- **Significado:** Estados post-llamada, fuera del scope del agente IA.
-- **Owner:** closer humano + Close CRM.
-
-### `ARCHIVED_NO_RESPONSE`, `ARCHIVED_NOT_FIT`, `ESCALATED`
-- Estados terminales. Ver `11_HANDOFF_AND_ESCALATION.md`.
+**Reglas:**
+- El agente avanza **una etapa a la vez**. Saltos (`A → C`, `MS → D`) rechazados con HTTP 400 `INVALID_TRANSITION`.
+- Toda transición vía `set_stage` requiere `reason` + `evidence` (cita textual del lead).
+- Para `disqualified`, `reason` **debe** ser uno de: `no_money`, `not_interested`, `geographic`, `no_quality`, `fake_account` (otros valores → 400).
+- `D` solo es alcanzable desde `C`. Es estado terminal del lado del bot — el closer toma el control después.
 
 ---
 
-## 3. Tabla de Transiciones
+## 5. Contenido Asociado a Cada Etapa
 
-| Desde | Evento | Hacia |
-|---|---|---|
-| `NEW` | Apertura enviada | `OPENED` |
-| `OPENED` | Lead responde | `WARMING` |
-| `OPENED` | Sin respuesta tras 3 intentos | `ARCHIVED_NO_RESPONSE` |
-| `WARMING` | Rapport suficiente | `VIDEO_SENT` |
-| `VIDEO_SENT` | 👍 recibido | `AUDIO_SENT` |
-| `VIDEO_SENT` | Objeción | `OBJECTION` |
-| `VIDEO_SENT` | Sin respuesta tras 2 intentos | `ARCHIVED_NO_RESPONSE` |
-| `AUDIO_SENT` | VSL enviada | `VSL_SENT` |
-| `VSL_SENT` | 👍 recibido | `SCHEDULED` |
-| `VSL_SENT` | Objeción | `OBJECTION` |
-| `VSL_SENT` | Sin respuesta tras 2 intentos | `ARCHIVED_NO_RESPONSE` |
-| `OBJECTION` | Objeción resuelta | Estado previo |
-| `OBJECTION` | Objeción no manejable | `ESCALATED` |
-| Cualquiera | Lead pide hablar con humano | `ESCALATED` |
-| Cualquiera | Insulto / queja | `ESCALATED` |
+Definido en la tabla `api.stage_flows`. Ver `n8n/flows-catalog.md` para el catálogo vivo.
+
+| Etapa | Flow / Contenido | Tipo | Cuándo se dispara |
+|-------|------------------|------|-------------------|
+| `A` | `QC_A_video_hook_v1..v4` (4 variantes, weighted) | video 25s | Al recibir primer mensaje, agente dispara `trigger_manychat_flow` con uno de los 4 |
+| `MS` | `QC_MS_audio_vsl` | audio + VSL | Tras confirmar que vio V1; el audio prepara para la VSL |
+| `B` | `QC_B_audio_presentacion` / `QC_B_img_resultados` / `QC_B_txt_prueba_social` | audio / img / texto | Si el lead pide más info, escepticismo o testimonios antes del Calendly |
+| `B → C` | `tenant.config.calendly_url` (texto plano) | link | Tras señal positiva clara — sin flow multimedia, va por `send_text` |
+| `C` / `D` | — | — | No hay contenido automático del agente |
+
+**Selección entre variantes:** `Build Context` (n8n) hace selección **ponderada por `weight`** (no round-robin secuencial). Los pesos viven en `stage_flows.weight` y se ajustan en DB sin tocar código.
 
 ---
 
-## 4. Persistencia del Estado
+## 6. Persistencia del Estado
 
-### 4.1 Dónde se guarda
-- **Estado actual:** campo en Close CRM (`lead.stage`).
-- **Última transición:** timestamp + evento (campo personalizado en Close).
-- **Video enviado (round robin):** campo personalizado en Close (`lead.video_sent_id`).
-- **Contador de follow-ups:** campo personalizado en Close (`lead.followup_count`).
+### 6.1 Dónde se guarda
 
-> 🚧 Pendiente: confirmar nombres exactos de campos en Close.
+| Dato | Tabla / Ubicación | Notas |
+|------|-------------------|-------|
+| Etapa actual del lead | `api.lead_stages.current_stage` (TEXT) + `current_stage_id` (UUID FK → `funnel_stages.id`) | Trigger `trg_sync_lead_stage_id` mantiene ambas columnas sincronizadas |
+| Log de transiciones | `api.stage_transitions` | Inmutable: `from_stage`, `to_stage`, `reason`, `agent_evidence`, `turn_id`, `created_at` |
+| Cron de follow-ups | `api.lead_crons` | `next_followup_at`, `next_sequence_number`, `is_active`, `archived_at`, `archive_reason` |
+| Log de follow-ups enviados | `api.lead_followup_log` | Inmutable: cada envío del `followup-runner` deja una fila |
+| Memoria conversacional | `n8n_chat_histories` (schema público de n8n) | Postgres Chat Memory del workflow `agent-run`. `session_id = manychat_subscriber_id` (ADR-0009) |
 
-### 4.2 Cómo se recupera
-- Al inicio de cada turno, el agente llama a `get_lead_state` y carga el estado.
-- El historial conversacional se carga desde _[completar — ManyChat o Close]_.
+### 6.2 Cómo se recupera en cada turno
+
+El nodo `Get Subscriber CRM Context` (n8n) hace JOIN entre `lead_crons`, `lead_followup_log` y `funnel_stages` para construir el bloque CRM. `Get Stage Config` resuelve los flows válidos para la etapa actual. Ambos se inyectan en el `# CONTEXTO` del system prompt (ver `n8n/nodes/01-build-context.md`).
+
+> **Close CRM:** la integración con Close es **roadmap V1+** (post-MVP). Hoy Postgres es la única fuente de verdad — Close, cuando exista, se nutrirá de Postgres, no al revés.
 
 ---
 
-## 5. Casos Edge
+## 7. Casos Edge
 
 | Caso | Comportamiento |
 |---|---|
-| Lead responde 👍 antes de tiempo (ej: tras apertura) | Avanzar al siguiente estado lógico, no esperar a la etapa "correcta" |
-| Lead retrocede (ej: en VSL_SENT vuelve a preguntar algo de la apertura) | Responder en contexto pero mantener el estado de avance |
-| Lead pide la VSL directamente sin haber visto el video | _[completar política]_ |
-| Lead ya agendó y vuelve a escribir | Manejar como nueva conversación de soporte, no reiniciar funnel |
+| Lead responde 👍 antes de tiempo (ej. justo tras el primer mensaje, sin esperar la pregunta del agente) | El agente puede avanzar si la evidencia es clara — el LLM lo evalúa con la `evidence` que pasa a `set_stage`. |
+| Lead retrocede temáticamente (ej. en `B` vuelve a preguntar algo del Vídeo 1) | Responder en contexto pero **no** retroceder la etapa. Las transiciones son sólo hacia adelante o a `disqualified`. |
+| Lead pide la VSL directamente sin confirmar el Vídeo 1 | El agente sigue el guión: insiste con la confirmación. La etapa solo avanza con evidencia. |
+| Lead ya agendó y vuelve a escribir | Sigue en `D`. El agente trata como soporte conversacional — no reinicia funnel. |
+| El agente intenta una transición no válida (ej. `set_stage("D", ...)` desde `MS`) | Endpoint responde 400 `INVALID_TRANSITION` con la lista de transiciones permitidas. El LLM ve el string de error y puede corregir. |
+| `current_stage_id` queda NULL en `lead_stages` | El trigger `trg_sync_lead_stage_id` lo backfillea contra `funnel_stages` la próxima vez que se actualice `current_stage`. |
 
 ---
 
-## 6. Gaps y Preguntas Abiertas
+## 8. Cambios respecto a versión anterior
 
-- [ ] Confirmar nombres exactos de campos en Close CRM
-- [ ] Decidir política para leads que saltan etapas
-- [ ] Definir cuántos follow-ups por etapa (actualmente: 2-3)
-- [ ] Decidir si OBJECTION es un estado real o un flag temporal
+| Antes (modelo descriptivo) | Ahora (modelo operativo QC) |
+|---|---|
+| `NEW / OPENED / WARMING / VIDEO_SENT / AUDIO_SENT / VSL_SENT / SCHEDULED / CALL_HELD` | `A / MS / B / C / D` |
+| `OBJECTION` como estado | Las objeciones se manejan en el prompt; no son estado — son flujo conversacional dentro de la misma etapa |
+| `ARCHIVED_NO_RESPONSE` | `lost` (gestionado por `followup-runner` tras 8 intentos) |
+| `ESCALATED` (genérico) | `escalated_human_call` (gestionado por `followup-runner` tras follow-up #5) |
+| Estado en Close CRM | Estado en `api.lead_stages` (Postgres es fuente de verdad) |
+
+---
+
+## 9. Gaps y Preguntas Abiertas
+
+- [ ] Confirmar cadencia exacta de follow-ups por etapa (hoy seed propone 24h/48h/72h; SETTER-MVP marca como pendiente con Alex)
+- [ ] Confirmar webhook Calendly C→D (P1 — hoy `D` se marca verbalmente por el agente)
+- [ ] Confirmar si el agente debe persistir señales del lead en `lead_stages.metadata` para que `Build Context` las reinyecte (P1 — pendiente en SETTER-MVP)

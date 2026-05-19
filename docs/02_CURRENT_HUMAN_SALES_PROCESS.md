@@ -1,302 +1,173 @@
 # Current Human Sales Process
-## Proceso Actual del Setter Humano (Alex) — Referencia para el Agente IA
+## Proceso de Setter de Quantum Creators (referencia para el agente)
 
 ---
 
-> **Propósito de este documento:** Describir el proceso que el setter humano sigue hoy en día para que el agente de IA lo replique con fidelidad. Este es el "ground truth" del comportamiento esperado.
+> **Propósito:** Describir el proceso que el setter humano sigue para que el agente lo replique con fidelidad.
 >
-> **Nota MVP:** Estamos en fase de MVP. El objetivo principal es demostrar automatización corriendo. Los flujos se refinan en iteraciones posteriores. Donde hay ambigüedad, se documenta la asunción tomada.
+> **Funnel canónico:** Quantum Creators — etapas `A / MS / B / C / D` + terminales (`disqualified`, `lost`, `escalated_human_call`). Ver `docs/10_CONVERSATION_STATE_MACHINE.md` para la máquina de estados formal.
+>
+> **Nota MVP:** El agente ya está cableado y responde a DMs reales. La arquitectura está en evolución (ver doc 06 sobre el cambio a salida JSON estructurada planificado).
 
 ---
 
-## 1. Visión General del Proceso
+## 1. Visión General
 
-El proceso de Alex es un **funnel de micro-compromisos**: cada 👍 del lead es una validación de intención antes de recibir el siguiente contenido. Esto filtra pasivos de interesados reales sin gastar el contenido premium en todos.
+El proceso es un **funnel de micro-compromisos**: cada confirmación del lead (👍, "ya lo vi", "interesante") es una validación de intención antes de recibir el siguiente contenido. Filtra pasivos sin gastar el contenido premium en todos.
 
 ```
-TRIGGER
-  ├── Seguidor nuevo (Alex prospectó manualmente o trigger automático)
-  ├── Comentario en post / reel / historia / cualquier evento
-  └── DM inbound
-          │
-          ▼
-  [1] Apertura — Primer mensaje, romper el hielo
-          │
-          ▼
-  [2] Calentamiento — Rapport mínimo (1–3 intercambios)
-          │
-          ▼
-  [3] Video de 25s — Envío de uno de 4 videos (round robin)
-          │
-       Lead responde 👍 ?
-       ├── NO → Follow-up / objeciones / archivo
-       └── SÍ ▼
-  [4] Audio de pre-VSL — Preámbulo que prepara al lead para la VSL
-          │
-          ▼
-  [5] VSL — Envío del video de ventas principal
-          │
-       Lead responde 👍 ?
-       ├── NO → Follow-up / objeciones / archivo
-       └── SÍ ▼
-  [6] Link de Calendly — Agendado de la llamada de ventas
-          │
-          ▼
-  [7] Seguimiento Pre-Llamada — Recordatorios para reducir no-show
-          │
-          ▼
-  [ESCALACIÓN] — Casos complejos, VIP, objeciones de precio, leads muy calientes
-```
+TRIGGER (DM inbound, comentario, follower, etc.)
+   │
+   ▼
+ETAPA A — Initiated
+   • Agente envía Vídeo 1 (enganche 25s) + 1 frase binaria pidiendo confirmación
+   │   "Mírate esto y dame un pulgar arriba si resuena"
+   │
+   ├── Lead confirma haber visto (verbal o 👍 tras la pregunta) ▼
+   │
+ETAPA MS — Media Seen
+   • Agente envía Audio + VSL (`QC_MS_audio_vsl`) + frase binaria
+   │
+   ├── Lead reacciona positivo a la VSL ▼
+   │
+ETAPA B — Engaged
+   • Si el lead pide pruebas / más info, agente dispara audio presentación,
+   │   imágenes de resultados o testimonios de texto.
+   • Cuando hay señal positiva clara, agente envía link de Calendly ▼
+   │
+ETAPA C — Calendly'd
+   • Agente esperó respuesta. No envía contenido automático aquí.
+   │
+   ├── Lead reserva (webhook Calendly) o confirma verbalmente ▼
+   │
+ETAPA D — Booked
+   • Handoff a closer humano. Bot deja de operar este lead.
 
----
-
----
-
-## 2. Paso a Paso Detallado
-
----
-
-### Paso 1 — Apertura (Primer Contacto)
-
-**Objetivo:** Romper el hielo, generar curiosidad, provocar cualquier respuesta.
-
-**Cuándo ocurre según la fuente:**
-
-| Fuente | Quién inicia | Comportamiento |
-|---|---|---|
-| **Seguidor nuevo (automático)** | Agente / ManyChat | Mensaje de bienvenida con delay configurado |
-| **Seguidor nuevo (prospectado por Alex)** | Alex manualmente | Alex inicia el DM — el agente toma el relevo cuando el lead responde |
-| **Comentario en post/reel/historia** | Agente / ManyChat | Mensaje que referencia el post o el comentario específico |
-| **DM inbound** | El lead | Respuesta inmediata y directa a lo que dijo el lead |
-
-> **Nota MVP:** Alex sigue prospectando perfiles manualmente porque esa acción no puede automatizarse en ManyChat. El agente debe saber tomar el control de la conversación una vez que hay una primera respuesta del lead, independientemente de quién haya abierto.
-
-**Comportamiento general:**
-- Mensaje corto (1–3 líneas), conversacional, sin vender.
-- Termina con una pregunta abierta para provocar respuesta.
-
-**Señal de avance:** El lead responde cualquier cosa.
-**Señal de fracaso:** Sin respuesta → activar protocolo de follow-up (ver Sección 4).
-
----
-
-### Paso 2 — Calentamiento (Rapport)
-
-**Objetivo:** Crear conexión mínima antes de enviar el video. No es una calificación profunda — es suficiente para que el lead se sienta escuchado.
-
-**Comportamiento:**
-- 1–3 intercambios conversacionales sobre la situación del lead.
-- Tono amigable, casual, humano.
-- No se menciona el producto ni la llamada todavía.
-
-**Señal de avance:** El lead ha compartido algo de su situación o ha mostrado apertura.
-
----
-
-### Paso 3 — Video de 25 Segundos (Gancho)
-
-**Objetivo:** Entregar valor rápido en formato video y obtener la primera validación de intención (👍).
-
-**Mecánica:**
-- Alex tiene **4 videos de ~25 segundos** pregrabados.
-- Se selecciona uno en **round robin** (rotación equitativa) para evitar que el mismo lead reciba siempre el mismo y para distribuir la carga de contenido.
-- El video es corto, directo, y diseñado para generar curiosidad / deseo de saber más.
-- Después de enviarlo, Alex (o el agente) pregunta algo como: *"¿Esto resuena contigo? Mándame un 👍 si quieres que te comparta más."*
-
-**Estados posibles:**
-
-```
-Video enviado
-     │
-     ├── Lead envía 👍  → Avanzar al Paso 4
-     ├── Lead responde con texto/pregunta → Manejar respuesta, luego avanzar
-     └── Lead no responde → Protocolo de follow-up (ver Sección 4)
-```
-
-> **Para el agente:** Debe trackear cuál video se envió a cada lead para no repetir en futuros contactos. El estado de qué video corresponde por round robin debe persistir en Close CRM o en el servidor.
-
----
-
-### Paso 4 — Audio de Pre-VSL (Preámbulo)
-
-**Objetivo:** Preparar mentalmente al lead para la VSL. Crear expectativa y contexto antes de enviar el video largo.
-
-**Mecánica:**
-- Es un audio (mensaje de voz) grabado por Alex — suena personal y cercano.
-- Explica brevemente qué van a ver en la VSL y por qué vale la pena verla completa.
-- Dura aproximadamente [X segundos — completar con Alex].
-- Se envía **inmediatamente** después de recibir el 👍 del video.
-
-**Señal de avance:** El audio se entrega. No se espera confirmación de lectura — se procede directamente al Paso 5.
-
----
-
-### Paso 5 — VSL (Video de Ventas Principal)
-
-**Objetivo:** Presentar la oferta completa, generar deseo, y obtener la segunda validación de intención (👍) para agendar.
-
-**Mecánica:**
-- Se envía el link o el video de la VSL después del audio.
-- La VSL hace el trabajo de venta: problema, solución, prueba social, oferta.
-- Después de enviarla, se pregunta: *"¿La viste? Si te interesa dar el siguiente paso, mándame un 👍."*
-
-**Estados posibles:**
-
-```
-VSL enviada
-     │
-     ├── Lead envía 👍  → Avanzar al Paso 6 (Calendly)
-     ├── Lead responde con objeción → Manejar objeción (ver Sección 3)
-     ├── Lead pide más info → Responder y redirigir hacia el 👍
-     └── Lead no responde → Protocolo de follow-up (ver Sección 4)
+Salidas terminales en cualquier etapa:
+─ disqualified  (no_money / not_interested / geographic / no_quality / fake_account)
+─ escalated_human_call  (cron tras follow-up #5)
+─ lost  (cron tras follow-up #8)
 ```
 
 ---
 
-### Paso 6 — Link de Calendly (Agendado)
+## 2. Paso a Paso por Etapa
 
-**Objetivo:** El lead agenda su llamada de ventas con el closer.
+### Etapa A — Initiated (primer contacto)
 
-**Mecánica:**
-- Al recibir el segundo 👍, se envía el link de Calendly directamente.
-- Mensaje corto: *"Perfecto, aquí el link para que elijas el horario que mejor te acomode: [link]"*
-- No se piden más datos en este momento — Calendly captura lo necesario.
-- Una vez agendado, el lead se registra en **Close CRM** con estado: `Llamada agendada`.
+**Trigger:** lead entra al DM (inbound, comentario, follower nuevo, palabra clave).
 
-**Información que se captura en Close:**
-- Nombre del lead
-- Fuente (comentario / seguidor / inbound)
-- Fecha y hora de la llamada
-- Video de 25s que se usó (para análisis de conversión por video)
+**Acción del agente:**
+- Dispara `trigger_manychat_flow` con uno de los 4 vídeos de enganche (`QC_A_video_hook_v1..v4`). La selección es **ponderada** (no round-robin secuencial) en `Build Context` según `stage_flows.weight`.
+- Acompaña con UNA frase binaria que pide confirmación: *"Mírate esto y dame un pulgar arriba si resuena"* / *"Dime si o no y avanzamos"*.
+- No explica el producto en texto. El vídeo hace el trabajo.
 
----
+**Señal de avance a MS:** lead confirma verbal o con emoji **tras la pregunta del agente** (no antes).
+**Señal de descalificación:** "no me interesa", "es caro", "no tengo dinero", etc → `set_stage("disqualified", reason, evidence)`.
+**Sin respuesta:** `followup-runner` toma el caso según cadencia configurada en `followup_templates` (etapa A — 3 follow-ups).
 
-### Paso 7 — Seguimiento Pre-Llamada
+### Etapa MS — Media Seen (audio + VSL)
 
-**Objetivo:** Reducir el no-show. Mantener al lead comprometido.
+**Trigger:** `set_stage("MS", ...)` con evidence = la frase del lead.
 
-**Comportamiento:**
-- Recordatorio **24 horas antes** de la llamada.
-- Recordatorio **1–2 horas antes** de la llamada.
-- Si cancela → intentar reagendar inmediatamente.
-- Si hace ghosting → protocolo de reactivación (ver Sección 4).
+**Acción del agente:**
+- Dispara `QC_MS_audio_vsl` — audio corto + VSL.
+- Frase binaria: *"Dime si te encaja y seguimos"*.
 
----
+**Señal de avance a B:** reacción positiva clara a la VSL — 👍 explícito, "me encanta", "quiero saber más", "cómo funciona".
+**Sin respuesta:** `followup-runner` con cadencia MS.
 
----
+### Etapa B — Engaged (contenido de prueba social opcional)
 
-## 3. Manejo de Objeciones
+**Trigger:** `set_stage("B", ...)` con evidence.
 
-> Este es uno de los puntos donde el agente agrega más valor vs. el proceso manual. El agente debe tener respuestas entrenadas para cada objeción común en cada etapa del funnel.
+**Acción del agente:** depende de la conversación:
+- Si el lead pide pruebas / muestra escepticismo → `QC_B_img_resultados` o `QC_B_txt_prueba_social`.
+- Si pide más detalle del sistema → `QC_B_audio_presentacion`.
+- Si la señal es clara (quiere agendar) → envía link de Calendly por `send_text` con `tenant.config.calendly_url` y llama `set_stage("C", ...)`.
 
-| Etapa | Objeción | Respuesta típica |
-|---|---|---|
-| **Post-video** | "¿De qué trata esto?" | Dar contexto breve sin revelar todo, redirigir al audio |
-| **Post-video** | "No tengo tiempo ahora" | "El audio dura menos de un minuto, te lo dejo aquí para cuando puedas" |
-| **Post-VSL** | "¿Cuánto cuesta?" | "Eso depende de tu caso, por eso la llamada es el siguiente paso" |
-| **Post-VSL** | "Mándame más info" | "Todo está en la llamada porque se personaliza a tu situación" |
-| **Post-VSL** | "Ya trabajo con alguien" | Preguntar qué tal va, encontrar gap, no presionar |
-| **Agendado** | "¿Para qué es la llamada?" | "Es una sesión de diagnóstico sin compromiso para ver si podemos ayudarte" |
-| **Cualquier etapa** | No responde | Ver protocolo de follow-up (Sección 4) |
+### Etapa C — Calendly'd (link enviado)
 
-> **Nota MVP:** Los scripts exactos de objeciones deben ser provistos por Alex. La tabla anterior es un marco inicial a completar.
+**Trigger:** `set_stage("C", ...)` con evidence.
 
----
+**Acción del agente:** mensaje seco *"Aquí tienes, elige horario: [link]"*. No persigue activamente — espera.
 
-## 4. Protocolo de Follow-Up (Sin Respuesta)
+**Señal de avance a D:**
+- Webhook de Calendly cuando el lead reserva (P1 — pendiente de implementar).
+- Mientras tanto: confirmación verbal del lead ("listo, ya agendé", "reservé para el martes") → agente llama `set_stage("D", ...)`.
 
-> El agente mejora significativamente este proceso vs. el setter humano, que no siempre tiene capacidad de hacer seguimiento sistemático.
+### Etapa D — Booked (handoff)
 
-### 4.1 Follow-Up por Etapa
-
-Cada etapa del funnel tiene su propio protocolo cuando el lead no responde:
-
-```
-Sin respuesta después de mensaje de apertura:
-  → Intento 1: +24h — mensaje diferente, misma energía
-  → Intento 2: +48h — ángulo distinto (pregunta, dato, curiosidad)
-  → Intento 3: +72h — último intento ("no quiero molestarte, ¿sigue siendo relevante?")
-  → Sin respuesta → Archivar como "no respondió", marcar en Close
-
-Sin respuesta después de video de 25s:
-  → Intento 1: +24h — recordatorio suave del video
-  → Intento 2: +48h — nuevo ángulo ("¿pudiste verlo?")
-  → Sin respuesta → Archivar
-
-Sin respuesta después de VSL:
-  → Intento 1: +24h — "¿tuviste oportunidad de verlo?"
-  → Intento 2: +48h — objeción anticipada ("sé que puede surgir la duda de X...")
-  → Sin respuesta → Archivar
-```
-
-### 4.2 Follow-Up Post-Agendado (No-Show)
-
-```
-No aparece a la llamada:
-  → Inmediato: "Oye, ¿todo bien? Te esperamos en la llamada"
-  → +2h: intento de reagendado
-  → +24h: segundo intento de reagendado
-  → Sin respuesta → Marcar como no-show en Close, nurture a largo plazo
-```
-
-### 4.3 Reglas Generales de Follow-Up
-- Máximo **3 intentos por etapa** antes de archivar o mover a nurture.
-- Cada follow-up debe tener un **ángulo diferente** (no repetir el mismo mensaje).
-- Nunca mensajes agresivos ni de presión.
-- Siempre dejar una "puerta abierta" al archivar.
+El bot deja de operar este lead. El closer toma desde Calendly + notificación.
 
 ---
 
-## 5. Reglas de Escalación a Humano
+## 3. Personalidad del Agente
 
-El setter humano (Alex) interviene manualmente en los siguientes casos:
+Definido en `n8n/prompts/setter-v1.md` (v3+):
 
-| Situación | Acción |
+- **Persona:** Alex, de Quantum Creators. Tiempo limitado, cientos de mensajes que responder.
+- **Estilo:** seco, rápido, como un humano ocupado desde el móvil.
+- **Cero emojis.** Cero explicaciones en texto. El contenido multimedia explica.
+- **Una acción por turno:** disparar flow + 1 frase binaria.
+- **Disqualified inmediato** ante dudas, objeciones de dinero o ambigüedad sostenida — sin rebatir.
+- **Nunca:** decir el precio, rogar, mencionar que es IA, hablar de las herramientas.
+
+---
+
+## 4. Manejo de Objeciones
+
+La política actual es **descalificación inmediata**, no rebatir. Esto es deliberado (ver prompt v3):
+
+| Situación | Respuesta |
 |---|---|
-| Lead muy caliente que quiere comprar ya | Pasar directamente al closer, no pasar por el funnel completo |
-| Objeción de precio explícita | Escalar a Alex o al closer |
-| Lead enojado o con queja | Intervención humana inmediata |
-| Lead VIP / cuenta grande / referido importante | Alex toma el hilo para tratamiento personalizado |
-| Conversación sin avance después de todos los intentos | Marcar como "nurture" o archivar |
-| El lead pregunta directamente si es IA | Decisión de política pendiente — por ahora escalar a Alex |
+| "¿Cuánto cuesta?" | No responde precio. Avanza el funnel — el precio sale en la llamada. |
+| "Es muy caro" / "no tengo dinero" | `set_stage("disqualified", "no_money", evidence)` + frase de cierre seca: *"Vale, no es tu momento. Éxitos."* |
+| "No me interesa" / "déjame en paz" | `set_stage("disqualified", "not_interested", evidence)` |
+| "¿Eres una IA?" / "¿es un bot?" | El prompt prohíbe admitirlo. Mantiene la persona. |
+| Insulto / queja agresiva | Política pendiente — hoy el prompt no maneja escalación a humano de forma activa (P1 — falta tool `notify_human`). |
 
 ---
 
-## 6. Métricas Clave del Proceso
+## 5. Protocolo de Follow-Up (`followup-runner`)
 
-| Métrica | Qué mide |
-|---|---|
-| **Tasa de respuesta al primer mensaje** | Efectividad de la apertura |
-| **Tasa de 👍 al video de 25s** | Efectividad del gancho / calidad del video |
-| **Tasa de 👍 post-VSL** | Efectividad de la VSL |
-| **Tasa de agendado** | Conversión final del setter |
-| **Show rate** | Calidad del lead y efectividad del seguimiento pre-llamada |
-| **Conversiones por video** | Cuál de los 4 videos de 25s convierte mejor |
+> Workflow separado en n8n. Schedule Trigger cada 5 min. Ver `n8n/workflows/followup-runner.md`.
+
+**Reglas:**
+- Cada etapa tiene templates en `api.followup_templates` con `sequence_number` y `delay_hours`.
+- Al recibir un mensaje del lead, `Upsert Lead Cron` (post-respuesta del agente) **resetea** `next_sequence_number = 1` y reprograma — la secuencia vuelve a empezar.
+- Tras follow-up #5 sin respuesta → `escalated_human_call` (notificación a Alex para que llame manualmente por IG — P1, falta cablear la notificación).
+- Tras follow-up #8 sin respuesta → `lost` (terminal).
+
+**Cadencia inicial (seed):**
+
+| Etapa | # Templates | Cadencia (horas) |
+|-------|-------------|------------------|
+| A | 3 | 24 / 48 / 72 |
+| MS | 3 | 24 / 48 / 72 |
+| B | 2 | 24 / 48 |
+| C | 1 | 24 |
+
+> ❓ Cadencia y textos exactos pendientes de confirmar con Alex (ver `n8n/SETTER-MVP-TRACKING.md` decisión #5).
 
 ---
 
-## 7. Lo que el Setter (y el Agente) NO Hace
+## 6. Lo que el agente NO hace
 
-- ❌ No revela el precio en el DM
-- ❌ No salta etapas — el funnel es secuencial (video → audio → VSL → Calendly)
-- ❌ No envía la VSL sin antes haber recibido el 👍 del video
-- ❌ No insiste más de 3 veces por etapa sin respuesta
-- ❌ No usa lenguaje de presión ni escasez artificial
-- ❌ No agenda si el lead no ha mostrado intención mínima (👍 post-VSL)
+- ❌ No revela el precio.
+- ❌ No salta etapas — `set_stage` rechaza saltos (`A → C`, `MS → D`).
+- ❌ No envía contenido de B antes de tener `B` confirmado.
+- ❌ No agenda sin haber transitado por `B` con evidencia positiva.
+- ❌ No insiste contra una objeción — descalifica.
+- ❌ No usa emojis, escasez, urgencia artificial.
 
 ---
 
-## 8. Gaps y Preguntas Abiertas
+## 7. Gaps y Preguntas Abiertas
 
-> Puntos a validar con Alex antes de construir el agente:
-
-- [ ] ¿Cuáles son los 4 videos de 25s? ¿Tienen temáticas distintas o son variaciones del mismo gancho?
-- [ ] ¿El round robin es puramente secuencial (1→2→3→4→1…) o tiene lógica por tipo de lead?
-- [ ] ¿Cuánto dura el audio de pre-VSL? ¿Hay más de uno o es siempre el mismo?
-- [ ] ¿Cuál es el copy exacto que Alex usa al pedir el 👍 post-video y post-VSL?
-- [ ] ¿Cuáles son las palabras clave exactas que disparan ManyChat?
-- [ ] ¿Cuánto tiempo espera antes del primer follow-up en cada etapa?
-- [ ] ¿Cuáles son los criterios de calificación del programa de coaching? (¿la VSL califica o hay preguntas antes?)
-- [ ] ¿Cómo se integra Calendly con Close CRM actualmente?
-- [ ] ¿Cuál es la política sobre revelar que hay IA detrás del setter?
-- [ ] ¿Qué hace Alex con los leads que prospecta manualmente — los pasa a alguna lista o los maneja en paralelo?
+- [ ] Cadencia exacta de follow-ups por etapa (los seed son provisional)
+- [ ] Textos reales de los follow-ups (hoy templates con placeholders)
+- [ ] Cuenta de Instagram conectada (handle exacto)
+- [ ] Política exacta de escalación a humano vivo (insulto, lead VIP, lead caliente)
+- [ ] Webhook Calendly C→D (hoy se cubre por confirmación verbal)
+- [ ] Cambio arquitectónico a salida JSON estructurada (ver doc 06)

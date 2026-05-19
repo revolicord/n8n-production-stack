@@ -1,98 +1,94 @@
 # 11 — Handoff and Escalation
-## Cuándo y Cómo el Agente Pasa a Humano
+## Cuándo y Cómo el Agente Pasa a Humano (Quantum Creators)
 
 ---
 
-> **Propósito:** Definir las condiciones que activan handoff/escalación y el mecanismo de transferencia.
+> **Propósito:** Definir las condiciones que activan handoff/escalación y el mecanismo de transferencia en el funnel A/MS/B/C/D.
 
 ---
 
 ## 1. Tipos de Handoff
 
-### 1.1 Handoff Planificado
-El agente termina su trabajo y entrega al humano según el flujo normal.
+### 1.1 Handoff Planificado — el flujo normal
+
+El agente termina su trabajo y entrega al humano según el funnel:
 
 | Caso | A quién pasa | Cómo pasa |
 |---|---|---|
-| Llamada agendada | Closer | Agendado en Calendly + lead en estado `SCHEDULED` en Close |
+| Lead llega a `D` (Booked) | Closer humano | Cita en Calendly + lead en estado `D` en `api.lead_stages`. Cuando exista el webhook (P1), también marca `D` automáticamente. |
 
-### 1.2 Handoff por Excepción (Escalación)
-El agente detecta una situación que no debe manejar y transfiere a humano.
+### 1.2 Handoff por Excepción — escalación
+
+El agente detecta una situación que no debe manejar y transfiere a humano (Alex).
 
 ---
 
 ## 2. Triggers de Escalación
 
-| Trigger | Tipo | A quién | Urgencia |
-|---|---|---|---|
-| Lead pide hablar con humano explícitamente | Detección directa | Alex | Alta |
-| Lead muy caliente quiere comprar ya | Detección por señales | Closer | Alta |
-| Objeción de precio explícita | Detección por palabras clave | Alex | Media |
-| Insulto / queja / lenguaje hostil | Detección por sentimiento | Alex | Alta |
-| Lead VIP (cuenta grande, referido, etc.) | Tag en Close | Alex | Alta |
-| Pregunta sobre el producto que el agente no sabe responder | Detección por incertidumbre del modelo | Alex | Media |
-| El lead pregunta "¿eres una IA?" | Detección directa | _[completar política]_ | Media |
-| Conversación atascada (sin avance en X días) | Timeout | Alex | Baja |
+| Trigger | Mecanismo actual | Estado |
+|---|------------------|--------|
+| Lead pide hablar con humano explícitamente | El agente NO tiene tool `notify_human` hoy. Política pendiente: el prompt v3 no contempla este caso. | ❌ NO implementado |
+| Lead muy caliente (quiere comprar ya) | El agente debería pasar a `C` con Calendly. Si pide canal humano, hoy no hay mecanismo. | ❌ NO implementado |
+| Insulto / queja agresiva | Sin tool — el prompt v3 no actúa específicamente. | ❌ NO implementado |
+| Lead VIP / referido | No hay flag en la DB. | ❌ NO modelado |
+| Follow-up #5 sin respuesta | Marcar `escalated_human_call` → notificación a Alex para llamada manual por IG | ⏳ Spec en `followup-runner` y prompt v3; cron pendiente de cablear |
+| Pregunta sobre producto que el agente no sabe | Sin detección de incertidumbre; hoy el prompt v3 evita explicar y se apoya en el contenido multimedia | ❌ NO implementado |
+| "¿Eres una IA?" | Prompt v3 prohíbe admitirlo y mantiene la persona | ✅ Cubierto por prompt |
+| Objeción dura (no_money, etc.) | `set_stage("disqualified", reason, evidence)` — descalificación inmediata, no escalación | ✅ Cubierto |
 
 ---
 
-## 3. Mecanismo de Escalación
+## 3. Mecanismo de Escalación (estado actual)
 
-### 3.1 Acciones del agente al escalar
-1. Marcar el lead en Close CRM con etiqueta `ESCALATED`.
-2. Registrar el motivo de escalación en notas del lead.
-3. Pausar respuestas automáticas en ManyChat para ese suscriptor.
-4. Notificar al humano según canal definido.
+### 3.1 Lo que existe hoy
+- **`escalated_human_call`** como estado terminal del lead — gestionado por el `followup-runner` cuando agota cierto número de follow-ups (cadencia por definir).
+- **`disqualified`** como salida limpia — manejado por el agente con `set_stage`.
 
-### 3.2 Canal de notificación
-> 🚧 Pendiente: definir cuál es el canal.
+### 3.2 Lo que falta (P1)
+- Tabla `notifications` para registrar notificaciones a humanos.
+- Tool `notify_human(reason, summary)` que el agente pueda invocar.
+- Canal de entrega: pendiente de elegir entre Slack / email / SMS / "etiqueta en ManyChat" / notificación push.
+- Endpoint Fastify para crear notificaciones.
+- Pausa automática del agente para ese suscriber (campo en `subscribers.status` o `paused_until`).
 
-Opciones evaluadas:
-- [ ] Slack (canal de escalaciones)
-- [ ] Email a Alex
-- [ ] SMS / WhatsApp
-- [ ] Notificación en Close
-- [ ] Combinación
-
-### 3.3 Información que se transfiere
-- Link directo al lead en Close.
-- Historial de la conversación.
-- Motivo de la escalación.
-- Última acción del agente.
-- Etapa del funnel en la que estaba.
+### 3.3 Información que se transferirá cuando exista
+- Link directo al lead en el panel admin (cuando exista).
+- Resumen del turno actual + últimos N mensajes.
+- Motivo declarado por el agente (si se invocó vía `notify_human`).
+- Etapa del funnel y `evidence` del último `set_stage`.
 
 ---
 
 ## 4. Reanudación del Agente Post-Handoff
 
-> ¿El agente vuelve a tomar el control después de que el humano resuelve?
+> Política por definir formalmente. Comportamiento esperado:
 
 | Caso | ¿Vuelve el agente? |
 |---|---|
-| Humano resolvió objeción y lead sigue en funnel | Sí, vuelve al estado previo |
-| Humano agendó manualmente | No, va directo a `SCHEDULED` |
-| Humano descalificó al lead | No, queda `ARCHIVED_NOT_FIT` |
-| Humano marcó como VIP | No, queda en manejo humano permanente |
+| Humano resolvió objeción y lead sigue en el funnel | Sí — el agente continúa en la etapa actual. La conversación en `subscribers.paused_until` debe expirar. |
+| Humano agendó manualmente | No — pasar a `D` con `set_stage` manual. |
+| Humano descalificó | No — pasar a `disqualified`. |
+| Humano marcó como VIP (futuro) | No — queda en manejo humano permanente. |
 
 ---
 
 ## 5. SLA de Respuesta Humana
 
-> Cuánto tiempo tiene el humano para responder cuando el agente escala.
+> ⚠️ Pendiente de definir con el founder.
 
-| Urgencia | SLA |
-|---|---|
-| Alta | _[completar — ej: 30 min en horario laboral]_ |
-| Media | _[completar — ej: 4 horas]_ |
-| Baja | _[completar — ej: 24 horas]_ |
-
-> ⚠️ Si el humano no responde dentro del SLA, ¿qué hace el agente? _[completar política]_
+| Urgencia | SLA propuesto | A confirmar |
+|---|---|---|
+| Alta (lead caliente / insulto) | 30 min en horario laboral | [ ] |
+| Media (objeción compleja) | 4 horas | [ ] |
+| Baja (lead atascado) | 24 horas | [ ] |
 
 ---
 
 ## 6. Gaps y Preguntas Abiertas
 
-- [ ] Definir canal de notificación de escalación
+- [ ] Diseñar e implementar la tool `notify_human` y la tabla `notifications` (P1)
+- [ ] Elegir canal de notificación
+- [ ] Definir política exacta cuando el lead pide humano explícitamente (`set_stage` no aplica — no hay etapa "pidió humano")
 - [ ] Confirmar SLAs de respuesta humana
-- [ ] Definir política exacta cuando el lead pregunta "¿eres IA?"
-- [ ] Decidir si hay un humano de respaldo si Alex no está disponible
+- [ ] Definir si hay un humano de respaldo si Alex no está disponible
+- [ ] Diseñar el flag de pausa por suscriptor cuando se escala (`subscribers.paused_until` ya existe en schema; falta la lógica que lo respete antes del dispatch)

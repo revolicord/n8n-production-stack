@@ -115,7 +115,7 @@ ManyChat → POST /webhook/manychat
   → Lua atomic debounce (Redis buffer RPUSH + debounce timer reset)
   → BullMQ job scheduled after DEBOUNCE_MS (default 15 s)
   → worker fires → acquire turn lock → drain buffer → POST n8n /webhook/agent-run
-      n8n: Build Context → AI Agent (Groq LLM) → send ManyChat response
+      n8n: Build Context → AI Agent (Claude Sonnet 4.6) → send ManyChat response
       n8n: → POST /admin/turn-completed  ← releases lock + persists metrics
 ```
 
