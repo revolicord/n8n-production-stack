@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ManyChatInstagramContextSchema } from './manychat.js';
 
 export const N8nDispatchMessageSchema = z.object({
   id: z.string().uuid(),
@@ -33,6 +34,10 @@ export const N8nDispatchPayloadSchema = z.object({
     id: z.string().uuid(),
     opened_at: z.string(),
   }),
+  // Presencia IG del lead (last_seen, last_interaction, ...). Persistida en
+  // subscribers.instagram_context y reenviada para que el Build Context de n8n
+  // pueda leer body.instagram_context por lead. Default {} si nunca se recibió.
+  instagram_context: ManyChatInstagramContextSchema.default({}),
   messages: z.array(N8nDispatchMessageSchema),
   trigger: z
     .object({

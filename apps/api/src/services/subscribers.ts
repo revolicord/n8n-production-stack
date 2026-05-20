@@ -11,6 +11,7 @@ export async function getOrCreateSubscriber(
     displayName?: string | undefined;
     locale?: string | undefined;
     currentChannel?: string | undefined;
+    instagramContext?: Record<string, unknown> | undefined;
   },
 ): Promise<Subscriber> {
   // Insert or update on conflict, returning row
@@ -24,6 +25,7 @@ export async function getOrCreateSubscriber(
       displayName: args.displayName,
       locale: args.locale,
       currentChannel: args.currentChannel,
+      instagramContext: args.instagramContext,
     })
     .onConflictDoUpdate({
       target: [subscribers.tenantId, subscribers.manychatSubscriberId],
@@ -34,6 +36,9 @@ export async function getOrCreateSubscriber(
         displayName: sql`coalesce(excluded.display_name, ${subscribers.displayName})`,
         locale: sql`coalesce(excluded.locale, ${subscribers.locale})`,
         currentChannel: sql`coalesce(excluded.current_channel, ${subscribers.currentChannel})`,
+        // Solo sobrescribir si el webhook trajo contexto IG no vacío; un '{}'
+        // entrante no debe borrar la última presencia conocida del lead.
+        instagramContext: sql`case when excluded.instagram_context = '{}'::jsonb then ${subscribers.instagramContext} else excluded.instagram_context end`,
       },
     })
     .returning();

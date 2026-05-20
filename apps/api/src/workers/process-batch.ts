@@ -154,6 +154,7 @@ export async function processBatchJob(job: Job<ProcessBatchJobData>): Promise<Pr
         id: conversation.id,
         opened_at: conversation.openedAt.toISOString(),
       },
+      instagram_context: (subscriber.instagramContext as Record<string, unknown>) ?? {},
       messages: messages.map((m) => ({
         id: m.id,
         external_message_id: m.external_message_id,

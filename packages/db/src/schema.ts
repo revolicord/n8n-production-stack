@@ -55,6 +55,9 @@ export const subscribers = apiSchema.table(
     status: text('status').notNull().default('active'),
     pausedUntil: timestamp('paused_until', { withTimezone: true }),
     metadata: jsonb('metadata').notNull().default(sql`'{}'::jsonb`),
+    // Última presencia IG recibida de ManyChat (last_seen, last_interaction,
+    // messaging_window, etc.). El worker la reenvía a n8n (Build Context).
+    instagramContext: jsonb('instagram_context').notNull().default(sql`'{}'::jsonb`),
     firstSeenAt: timestamp('first_seen_at', { withTimezone: true }).notNull().defaultNow(),
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
   },

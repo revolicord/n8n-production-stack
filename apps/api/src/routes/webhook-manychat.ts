@@ -55,6 +55,7 @@ export default async function webhookManyChatRoute(app: FastifyInstance): Promis
       displayName: event.subscriber.full_name ?? event.subscriber.name,
       locale: event.subscriber.locale,
       currentChannel: event.trigger?.channel,
+      instagramContext: event.instagram_context,
     });
 
     // 5. Skip if paused/blocked
