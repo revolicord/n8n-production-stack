@@ -260,6 +260,9 @@ export const funnelStages = apiSchema.table(
     displayName: text('display_name').notNull(),
     position: integer('position').notNull(),
     description: text('description'),
+    // Objetivo de la etapa + transiciones válidas (usadas por el routing de n8n)
+    goal: text('goal'),
+    validNextStages: text('valid_next_stages').array().notNull().default(sql`'{}'::text[]`),
     maxFollowups: integer('max_followups').default(3),
     isActive: boolean('is_active').default(true),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
@@ -286,10 +289,24 @@ export const stageFlows = apiSchema.table(
     description: text('description'),
     weight: integer('weight').default(1),
     isActive: boolean('is_active').default(true),
+    // ADR-0016 (Flow Registry): metadatos semánticos del flow ManyChat
+    humanName: text('human_name'),
+    mediaType: text('media_type'),
+    contentDescription: text('content_description'),
+    usageCondition: text('usage_condition'),
+    variantGroup: text('variant_group'),
+    pendingNs: text('pending_ns'),
+    syncedAt: timestamp('synced_at', { withTimezone: true }),
+    // Identificador corto del contenido (referenciado por lead_content_sent)
+    slugId: text('slug_id'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   },
   (t) => ({
     stageActiveIdx: index('stage_flows_stage_active_idx').on(t.stageId, t.isActive),
+    humanNameTenantIdx: index('stage_flows_human_name_tenant_idx').on(t.tenantId, t.humanName),
+    pendingNsIdx: index('stage_flows_pending_ns_idx')
+      .on(t.tenantId, t.pendingNs)
+      .where(sql`pending_ns IS NOT NULL`),
   }),
 );
 
@@ -378,6 +395,62 @@ export const leadCrons = apiSchema.table(
 );
 
 // ───────────────────────────────────────────────────────────────
+// lead_content_sent — log de contenido (flow) enviado por lead (usada por n8n)
+// ───────────────────────────────────────────────────────────────
+export const leadContentSent = apiSchema.table(
+  'lead_content_sent',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: uuid('tenant_id').notNull(),
+    subscriberId: uuid('subscriber_id').notNull(),
+    conversationId: uuid('conversation_id').notNull(),
+    stageSlug: text('stage_slug').notNull(),
+    slugId: text('slug_id').notNull(),
+    flowNs: text('flow_ns').notNull(),
+    turnId: uuid('turn_id'),
+    sentAt: timestamp('sent_at', { withTimezone: true }).notNull().defaultNow(),
+    leadResponded: boolean('lead_responded').notNull().default(false),
+    respondedAt: timestamp('responded_at', { withTimezone: true }),
+  },
+  (t) => ({
+    lookupIdx: index('idx_lcs_lookup').on(
+      t.subscriberId,
+      t.conversationId,
+      t.stageSlug,
+      t.sentAt.desc(),
+    ),
+    pendingResponseIdx: index('idx_lcs_pending_response')
+      .on(t.subscriberId, t.conversationId)
+      .where(sql`lead_responded = false`),
+  }),
+);
+
+// ───────────────────────────────────────────────────────────────
+// stage_transitions_map — mapa configurable de transiciones válidas (usada por n8n)
+// ───────────────────────────────────────────────────────────────
+export const stageTransitionsMap = apiSchema.table(
+  'stage_transitions_map',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: uuid('tenant_id').notNull(),
+    fromStageSlug: text('from_stage_slug').notNull(),
+    toStageSlug: text('to_stage_slug').notNull(),
+    whenToUse: text('when_to_use').notNull(),
+    isActive: boolean('is_active').notNull().default(true),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    tenantFromToUnique: uniqueIndex('stage_transitions_map_tenant_from_to_unique').on(
+      t.tenantId,
+      t.fromStageSlug,
+      t.toStageSlug,
+    ),
+    lookupIdx: index('idx_stm_lookup').on(t.tenantId, t.fromStageSlug).where(sql`is_active = true`),
+  }),
+);
+
+// ───────────────────────────────────────────────────────────────
 // Inferred types
 // ───────────────────────────────────────────────────────────────
 export type Tenant = typeof tenants.$inferSelect;
@@ -405,3 +478,7 @@ export type LeadFollowupLog = typeof leadFollowupLog.$inferSelect;
 export type NewLeadFollowupLog = typeof leadFollowupLog.$inferInsert;
 export type LeadCron = typeof leadCrons.$inferSelect;
 export type NewLeadCron = typeof leadCrons.$inferInsert;
+export type LeadContentSent = typeof leadContentSent.$inferSelect;
+export type NewLeadContentSent = typeof leadContentSent.$inferInsert;
+export type StageTransitionsMap = typeof stageTransitionsMap.$inferSelect;
+export type NewStageTransitionsMap = typeof stageTransitionsMap.$inferInsert;
