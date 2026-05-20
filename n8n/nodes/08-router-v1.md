@@ -14,6 +14,7 @@
 | 2 | **400 INVALID_PAYLOAD** en `change_stage` | `reason` o `evidence` pueden llegar `undefined`; el schema Zod requiere `string.min(1)` | Agregar fallback `|| 'no reason provided'` / `|| 'no evidence provided'` |
 | 3 | **404 de ManyChat** en `send_content` | El agente emite el `human_name` del flow (`QC_MS_AUDIO_…`) en lugar del `flow_ns` real (`content2026…`). El nodo ahora acepta **`flow_ns` directo** en `sendContent.flow_ns` (igual que el nodo HTTP con `$fromAI`) y lo usa sin lookup. Si viene `slug_id`, hace el lookup legacy en `selectedVariants`. | Ver sección `send_content` |
 | 4 | **Errores opacos** — no se veía qué `flow_ns` se enviaba | Sin contexto en el objeto de error | Agregar `slug_id`, `flow_ns`, `available_slugs`, `status_code`, `api_response` en todos los paths de error |
+| 5 | **400 en `reply_text`** (`sendContent`) | `message_tag: "ACCOUNT_UPDATE"` en el body — ManyChat retorna 400 cuando el tag no está permitido para el canal o la conversación está dentro de la ventana de 24h | Quitar `message_tag`; agregar `actions: []` y `quick_replies: []` al content |
 
 ---
 
@@ -76,10 +77,13 @@ async function callManychatText(text) {
       data: {
         version: 'v2',
         content: {
-          messages: [{ type: 'text', text: text }]
+          messages: [{ type: 'text', text: text }],
+          actions: [],
+          quick_replies: []
         }
-      },
-      message_tag: 'ACCOUNT_UPDATE'
+      }
+      // message_tag omitido: dentro de la ventana de 24h no es necesario
+      // y ManyChat retorna 400 si el tag no está permitido para el canal
     },
     json: true,
     returnFullResponse: true
@@ -201,7 +205,11 @@ if (replyText && typeof replyText === 'string' && replyText.trim().length > 0) {
       api_response: ok ? null : res.body
     };
   } catch (err) {
-    results.reply_text = { status: 'error', reason: err.message || String(err) };
+    results.reply_text = {
+      status:       'error',
+      reason:       err.message || String(err),
+      api_response: err.response ? err.response.body : null
+    };
   }
 }
 
