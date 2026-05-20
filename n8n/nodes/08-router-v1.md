@@ -83,13 +83,10 @@ async function callManychatText(text) {
       data: {
         version: 'v2',
         content: {
-          messages: [{ type: 'text', text: text }],
-          actions: [],
-          quick_replies: []
+          type: 'instagram',
+          messages: [{ type: 'text', text: text }]
         }
       }
-      // message_tag omitido: dentro de la ventana de 24h no es necesario
-      // y ManyChat retorna 400 si el tag no está permitido para el canal
     },
     json: true,
     returnFullResponse: true
