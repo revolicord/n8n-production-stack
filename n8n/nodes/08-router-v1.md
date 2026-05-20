@@ -6,13 +6,14 @@
 
 ---
 
-## Bugs corregidos (vs. versión original)
+## Historial de correcciones
 
 | # | Problema | Causa | Fix |
 |---|----------|-------|-----|
-| 1 | **400 de ManyChat** en `send_content` / `reply_text` | Endpoints `/fb/` usados en lugar de `/ig/` — el sistema es Instagram DM | Cambiar a `/ig/sending/sendFlow` e `/ig/sending/sendContent` |
-| 2 | **404 / UUID inválido** en `change_stage` | `ctx.subscriberId` es el ID numérico de ManyChat; la ruta `/admin/leads/:id/stage` espera el UUID de la DB | Cambiar a `ctx.subscriberDbId` |
-| 3 | **400 INVALID_PAYLOAD** en `change_stage` | `reason` o `evidence` pueden llegar `undefined` desde el AI Agent; el schema Zod requiere `string.min(1)` | Agregar fallback `|| 'no reason provided'` / `|| 'no evidence provided'` |
+| 1 | **404 / UUID inválido** en `change_stage` | `ctx.subscriberId` es el ID numérico de ManyChat; la ruta `/admin/leads/:id/stage` espera el UUID de la DB | Cambiar a `ctx.subscriberDbId` |
+| 2 | **400 INVALID_PAYLOAD** en `change_stage` | `reason` o `evidence` pueden llegar `undefined`; el schema Zod requiere `string.min(1)` | Agregar fallback `|| 'no reason provided'` / `|| 'no evidence provided'` |
+| 3 | **404 de ManyChat** en `send_content` | El agente emite el `human_name` del flow (`QC_MS_AUDIO_…`) en lugar del `flow_ns` real (`content2026…`). El nodo ahora acepta **`flow_ns` directo** en `sendContent.flow_ns` (igual que el nodo HTTP con `$fromAI`) y lo usa sin lookup. Si viene `slug_id`, hace el lookup legacy en `selectedVariants`. | Ver sección `send_content` |
+| 4 | **Errores opacos** — no se veía qué `flow_ns` se enviaba | Sin contexto en el objeto de error | Agregar `slug_id`, `flow_ns`, `available_slugs`, `status_code`, `api_response` en todos los paths de error |
 
 ---
 
@@ -22,13 +23,9 @@
 // ============================================================================
 // ROUTER v1 — ejecuta el plan emitido por el AI Agent.
 // ============================================================================
-// Lee:
-//   - El plan del AI Agent (output con reasoning, send_content, change_stage, reply_text)
-//   - Build Context (selectedVariants, IDs, tokens, etc.)
-// Ejecuta:
-//   1. send_content -> POST ManyChat ig/sending/sendFlow + prepara INSERT lead_content_sent
-//   2. change_stage -> POST /admin/leads/:subscriberDbId/stage
-//   3. reply_text   -> POST ManyChat ig/sending/sendContent (texto)
+// send_content acepta dos formatos:
+//   { flow_ns: "content20260511…", evidence: "…" }   ← directo (preferido, igual que nodo HTTP)
+//   { slug_id: "QC_MS_…",          evidence: "…" }   ← legacy, hace lookup en selectedVariants
 // ============================================================================
 
 // ---------- 1. Leer inputs --------------------------------------------------
@@ -55,7 +52,7 @@ const results = {
 async function callManychatFlow(flowNs) {
   return await this.helpers.httpRequest({
     method: 'POST',
-    url: 'https://api.manychat.com/ig/sending/sendFlow',
+    url: 'https://api.manychat.com/fb/sending/sendFlow',
     headers: {
       Authorization: `Bearer ${ctx.mcApiKey}`,
       'Content-Type': 'application/json'
@@ -69,7 +66,7 @@ async function callManychatFlow(flowNs) {
 async function callManychatText(text) {
   return await this.helpers.httpRequest({
     method: 'POST',
-    url: 'https://api.manychat.com/ig/sending/sendContent',
+    url: 'https://api.manychat.com/fb/sending/sendContent',
     headers: {
       Authorization: `Bearer ${ctx.mcApiKey}`,
       'Content-Type': 'application/json'
@@ -90,7 +87,6 @@ async function callManychatText(text) {
 }
 
 async function callSetStage(newStage, reason, evidence) {
-  // Ruta real: POST /admin/leads/:subscriberDbId/stage (UUID de la DB)
   const baseUrl = ctx.callbackUrl.replace('/turn-completed', '');
   return await this.helpers.httpRequest({
     method: 'POST',
@@ -112,13 +108,22 @@ async function callSetStage(newStage, reason, evidence) {
 
 // ---------- 3. send_content -------------------------------------------------
 
-if (sendContent && sendContent.slug_id) {
-  const flowNs = (ctx.selectedVariants || {})[sendContent.slug_id];
+if (sendContent) {
+  // Formato directo (preferido): el agente emite flow_ns exacto
+  // Formato legacy:              el agente emite slug_id → lookup en selectedVariants
+  let flowNs = sendContent.flow_ns || null;
+  const slugId = sendContent.slug_id || null;
+
+  if (!flowNs && slugId) {
+    flowNs = (ctx.selectedVariants || {})[slugId];
+  }
 
   if (!flowNs) {
     results.send_content = {
-      status: 'error',
-      reason: `slug_id "${sendContent.slug_id}" no existe en selectedVariants`
+      status:           'error',
+      reason:           `No se encontró flow_ns. slug_id="${slugId}" flow_ns_directo="${sendContent.flow_ns}"`,
+      slug_id:          slugId,
+      available_slugs:  Object.keys(ctx.selectedVariants || {})
     };
   } else {
     try {
@@ -128,7 +133,7 @@ if (sendContent && sendContent.slug_id) {
       results.send_content = ok
         ? {
             status:   'sent',
-            slug_id:  sendContent.slug_id,
+            slug_id:  slugId,
             flow_ns:  flowNs,
             evidence: sendContent.evidence,
             insert_payload: {
@@ -136,17 +141,27 @@ if (sendContent && sendContent.slug_id) {
               subscriber_id:   ctx.subscriberDbId,
               conversation_id: ctx.conversationId,
               stage_slug:      ctx.currentStage,
-              slug_id:         sendContent.slug_id,
+              slug_id:         slugId,
               flow_ns:         flowNs,
               turn_id:         ctx.turnId
             }
           }
         : {
-            status: 'error',
-            reason: `ManyChat ${res.statusCode}: ${JSON.stringify(res.body)}`
+            status:       'error',
+            slug_id:      slugId,
+            flow_ns:      flowNs,
+            status_code:  res.statusCode,
+            api_response: res.body,
+            reason:       `ManyChat ${res.statusCode}: ${JSON.stringify(res.body)}`
           };
     } catch (err) {
-      results.send_content = { status: 'error', reason: err.message || String(err) };
+      results.send_content = {
+        status:       'error',
+        slug_id:      slugId,
+        flow_ns:      flowNs,
+        reason:       err.message || String(err),
+        api_response: err.response ? err.response.body : null
+      };
     }
   }
 }
@@ -201,20 +216,38 @@ return [{
       ? results.send_content.insert_payload
       : null,
 
-    subscriberDbId:  ctx.subscriberDbId,
-    conversationId:  ctx.conversationId,
-    turnId:          ctx.turnId,
-    callbackUrl:     ctx.callbackUrl,
-    callbackToken:   ctx.callbackToken
+    subscriberDbId: ctx.subscriberDbId,
+    conversationId: ctx.conversationId,
+    turnId:         ctx.turnId,
+    callbackUrl:    ctx.callbackUrl,
+    callbackToken:  ctx.callbackToken
   }
 }];
 ```
 
 ---
 
-## Transiciones válidas (referencia)
+## Por qué dos formatos para `send_content`
 
-Definidas en `apps/api/src/routes/admin/set-stage.ts:24`:
+El nodo HTTP de n8n usa `$fromAI('flow_id', …)` — el agente emite el `flow_ns` real (ej. `content20260511153207_699341`) directamente en el campo. El código replica eso:
+
+```json
+{ "flow_ns": "content20260511153207_699341", "evidence": "…" }
+```
+
+El formato legacy con `slug_id` requiere que Build Context exporte `selectedVariants` con el mapeo `human_name → flow_ns`. Si ese mapeo no está en el output de Build Context, el lookup siempre falla. **Usar `flow_ns` directo elimina esa dependencia.**
+
+Para que el agente emita `flow_ns` y no `slug_id`, el prompt en Build Context ya le pide que copie el valor exacto:
+```
+→ flow_name (cópialo EXACTO, carácter por carácter):
+  content20260511153207_699341
+```
+
+Si el agente igual alucina un nombre legible (`QC_MS_AUDIO_…`), revisar el prompt o agregar `selectedVariants` al output de Build Context.
+
+---
+
+## Transiciones válidas (`change_stage`)
 
 ```
 A  → MS | disqualified
@@ -225,11 +258,11 @@ D  → (ninguna)
 disqualified → (ninguna)
 ```
 
-Si el AI Agent emite una transición inválida (ej. `A → B`), el API retorna `400 INVALID_TRANSITION`. El nodo registra el error en `results.change_stage.api_response` sin bloquear el resto del turno.
+Definidas en `apps/api/src/routes/admin/set-stage.ts:24`. Transición inválida → `400 INVALID_TRANSITION` registrado en `results.change_stage.api_response`.
 
 ---
 
-## Campos que el AI Agent debe emitir en `change_stage`
+## Campos requeridos en `change_stage`
 
 ```json
 {
@@ -241,4 +274,4 @@ Si el AI Agent emite una transición inválida (ej. `A → B`), el API retorna `
 }
 ```
 
-`reason` y `evidence` son **obligatorios** (`string`, mínimo 1 carácter). Si el prompt no los exige, el nodo usa fallbacks pero el dato queda sin contexto útil.
+`reason` y `evidence` son obligatorios (`string min(1)`). El nodo usa fallback `'no reason provided'` si llegan vacíos, pero el dato queda sin contexto útil en DB.
