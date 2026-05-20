@@ -6,15 +6,21 @@
 
 ---
 
+## Estado del código en el workflow vivo
+
+> El código que aparece en la sección "Código completo" abajo es el **estado canónico correcto** (bugs aplicados).  
+> El JSON exportado `agent-run(5).json` tiene los bugs 3 y 5 **aún sin aplicar** — ver tabla.
+
 ## Historial de correcciones
 
-| # | Problema | Causa | Fix |
-|---|----------|-------|-----|
-| 1 | **404 / UUID inválido** en `change_stage` | `ctx.subscriberId` es el ID numérico de ManyChat; la ruta `/admin/leads/:id/stage` espera el UUID de la DB | Cambiar a `ctx.subscriberDbId` |
-| 2 | **400 INVALID_PAYLOAD** en `change_stage` | `reason` o `evidence` pueden llegar `undefined`; el schema Zod requiere `string.min(1)` | Agregar fallback `|| 'no reason provided'` / `|| 'no evidence provided'` |
-| 3 | **404 de ManyChat** en `send_content` | El agente emite el `human_name` del flow (`QC_MS_AUDIO_…`) en lugar del `flow_ns` real (`content2026…`). El nodo ahora acepta **`flow_ns` directo** en `sendContent.flow_ns` (igual que el nodo HTTP con `$fromAI`) y lo usa sin lookup. Si viene `slug_id`, hace el lookup legacy en `selectedVariants`. | Ver sección `send_content` |
-| 4 | **Errores opacos** — no se veía qué `flow_ns` se enviaba | Sin contexto en el objeto de error | Agregar `slug_id`, `flow_ns`, `available_slugs`, `status_code`, `api_response` en todos los paths de error |
-| 5 | **400 en `reply_text`** (`sendContent`) | `message_tag: "ACCOUNT_UPDATE"` en el body — ManyChat retorna 400 cuando el tag no está permitido para el canal o la conversación está dentro de la ventana de 24h | Quitar `message_tag`; agregar `actions: []` y `quick_replies: []` al content |
+| # | Estado en vivo | Problema | Causa | Fix |
+|---|---------------|----------|-------|-----|
+| 1 | ✅ aplicado | **404 / UUID inválido** en `change_stage` | `ctx.subscriberId` es el ID numérico de ManyChat; la ruta `/admin/leads/:id/stage` espera el UUID de la DB | Cambiar a `ctx.subscriberDbId` |
+| 2 | ✅ aplicado | **400 INVALID_PAYLOAD** en `change_stage` | `reason` o `evidence` pueden llegar `undefined`; el schema Zod requiere `string.min(1)` | Agregar fallback `|| 'no reason provided'` / `|| 'no evidence provided'` |
+| 3 | ✅ aplicado | **404 de ManyChat** en `send_content` | El agente emite el `human_name` del flow (`QC_MS_AUDIO_…`) en lugar del `flow_ns` real. El nodo acepta **`flow_ns` directo** en `sendContent.flow_ns` y lo usa sin lookup. Si viene `slug_id`, hace el lookup legacy en `selectedVariants`. | Ver sección `send_content` |
+| 4 | ✅ aplicado | **Errores opacos** — no se veía qué `flow_ns` se enviaba | Sin contexto en el objeto de error | Agregar `slug_id`, `flow_ns`, `available_slugs`, `status_code`, `api_response` en todos los paths de error |
+| 5 | ⚠️ **PENDIENTE** | **400 en `reply_text`** (`sendContent`) — `message_tag: "ACCOUNT_UPDATE"` aún presente en el JSON vivo | ManyChat retorna 400 cuando el tag no está permitido para el canal o la conversación está dentro de la ventana de 24h | Quitar `message_tag`; agregar `actions: []` y `quick_replies: []` al content |
+| 6 | ⚠️ **PENDIENTE** | **Turn lock nunca liberado** — no existe nodo turn-completed al final del workflow | Falta HTTP Request que llame `POST callbackUrl` al finalizar | Añadir nodo HTTP Request al final de todas las ramas |
 
 ---
 

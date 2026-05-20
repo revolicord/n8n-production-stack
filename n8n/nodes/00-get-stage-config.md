@@ -1,13 +1,13 @@
 # Nodo: Get Stage Config
 
 **Tipo:** Postgres  
-**Posición en cadena:** 0 — antes de `Build Context`  
+**Posición en cadena:** 0 — en paralelo con `Get Subscriber CRM Context`  
 **ADR:** ADR-0010  
-**Propósito:** Leer la configuración de la etapa actual desde `funnel_stages` + `stage_flows`. Reemplaza el `FLOW_MAP` hardcodeado de `Build Context`.
+**Propósito:** Leer la configuración de la etapa actual del lead desde `funnel_stages` + `stage_flows` + `stage_transitions_map`. Incluye lista de transiciones válidas con su `when_to_use`, y todos los flows disponibles con sus metadatos.
 
 ---
 
-## Query SQL
+## Query SQL (exacta del workflow)
 
 ```sql
 SELECT
@@ -15,11 +15,28 @@ SELECT
   fs.slug,
   fs.display_name,
   fs.description,
+  fs.goal,
   fs.max_followups,
+  COALESCE(
+    (
+      SELECT json_agg(
+        json_build_object(
+          'slug',        stm.to_stage_slug,
+          'when_to_use', stm.when_to_use
+        ) ORDER BY stm.to_stage_slug
+      )
+      FROM api.stage_transitions_map stm
+      WHERE stm.tenant_id = fs.tenant_id
+        AND stm.from_stage_slug = fs.slug
+        AND stm.is_active = TRUE
+    ),
+    '[]'::json
+  ) AS valid_transitions,
   COALESCE(
     json_agg(
       json_build_object(
         'flow_ns',             sf.flow_ns,
+        'slug_id',             COALESCE(sf.slug_id, sf.human_name),
         'human_name',          sf.human_name,
         'media_type',          sf.media_type,
         'content_description', sf.content_description,
@@ -32,21 +49,24 @@ SELECT
   ) AS flows
 FROM api.funnel_stages fs
 LEFT JOIN api.stage_flows sf ON sf.stage_id = fs.id AND sf.is_active = TRUE
-WHERE fs.tenant_id = '{{ $json.body.tenant.id }}'
-  AND fs.slug      = '{{ $json.body.subscriber.lead_stage }}'
+WHERE fs.tenant_id = $1::uuid
+  AND fs.slug      = $2
   AND fs.is_active = TRUE
-GROUP BY fs.id;
+GROUP BY fs.id
 ```
 
-> El filtro `sf.flow_ns NOT LIKE 'PENDIENTE%'` excluye flows con ns pendiente de configurar.
-> Así el agente nunca recibe un flow roto aunque esté marcado como activo en DB.
+## Parámetros (queryReplacement — comma-separated)
 
-## Parámetros
+```
+={{ $json.body.tenant.id }},{{ $json.body.subscriber.lead_stage || 'A' }}
+```
 
-| Variable n8n | Fuente |
-|---|---|
-| `tenant.id` | `body.tenant.id` del payload del webhook |
-| `subscriber.lead_stage` | `body.subscriber.lead_stage` del payload del webhook |
+| $N | Campo | Fuente |
+|----|-------|--------|
+| $1 | `tenant_id` UUID | `body.tenant.id` |
+| $2 | `stage_slug` string | `body.subscriber.lead_stage` (fallback `'A'`) |
+
+> **Nota:** el nodo Webhook es el primero en la cadena; `$json` en este nodo apunta al output del Webhook. No hace falta `$('Webhook').first()`.
 
 ## Salida esperada
 
@@ -55,22 +75,38 @@ GROUP BY fs.id;
   "stage_id": "uuid",
   "slug": "A",
   "display_name": "Enganche",
-  "description": "Video de enganche 25s — primer contacto, pedir pulgar arriba",
+  "description": "Video de enganche 25s — primer contacto",
+  "goal": "Conseguir que el lead vea el video y reaccione con pulgar arriba",
   "max_followups": 3,
+  "valid_transitions": [
+    { "slug": "MS", "when_to_use": "El lead confirma que vio el video o reacciona positivamente" },
+    { "slug": "disqualified", "when_to_use": "El lead declara explícitamente que no le interesa o no puede pagar" }
+  ],
   "flows": [
-    { "flow_ns": "content...", "description": "Video hook 25s", "weight": 1 }
+    {
+      "flow_ns": "content20260511153207_699341",
+      "slug_id": "QC_A_VIDEO_HOOK",
+      "human_name": "QC_A_VIDEO_HOOK",
+      "media_type": "video",
+      "content_description": "Video hook 25s — enganche inicial",
+      "usage_condition": "Primer turno o cuando el lead saluda sin haber visto nada",
+      "weight": 1,
+      "variant_group": null
+    }
   ]
 }
 ```
 
-## Manejo de error
+> `valid_transitions` es un array de objetos `{ slug, when_to_use }`. Build Context lo pasa directamente al LLM como guía de cuándo transicionar.
 
-Si la query no retorna filas (etapa no existe en DB):
-- `Build Context` usa `flows = []` y `description = ''` como defaults.
-- El agente continúa sin enviar flow multimedia.
-- Registrar en logs: `[Get Stage Config] etapa desconocida: <slug>`.
+## Salida cuando la etapa no existe en DB
+
+La query no retorna filas. `Build Context` usa `stageConfig = {}` como fallback:
+- `flows = []`, `goal = null`, `valid_transitions = []`
+- El agente continúa sin flows ni transiciones disponibles.
 
 ## Notas
 
-- Encadenar en paralelo con `Get Subscriber CRM Context` (ADR-0013) para minimizar latencia total.
-- Si la etapa es `B`, `C` o `D`, `flows` retorna `[]` (no hay multimedia) — comportamiento esperado.
+- El filtro `sf.flow_ns NOT LIKE 'PENDIENTE%'` excluye flows con ns aún no configurado.
+- `slug_id` = `COALESCE(sf.slug_id, sf.human_name)` — si la columna `slug_id` está vacía, usa el nombre humano como identificador.
+- Encadenar en paralelo con `Get Subscriber CRM Context` para minimizar latencia.
