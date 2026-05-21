@@ -1,0 +1,487 @@
+{
+  "name": "followup-runner",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes"
+            }
+          ]
+        }
+      },
+      "id": "f4fdfc8c-11a3-4ebc-8346-0a0ad94dbf47",
+      "name": "Every 5 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        432
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT lc.id AS cron_id, lc.tenant_id, lc.subscriber_id, lc.conversation_id, lc.current_stage_id, lc.next_sequence_number, s.manychat_subscriber_id, s.display_name, t.config->>'manychat_api_key' AS mc_api_key, fs.slug AS stage_slug, ft.id AS template_id, ft.type AS followup_type, ft.text_template, ft.flow_ns AS followup_flow_ns, ft.description AS followup_description, ft_next.delay_hours AS next_delay_hours FROM api.lead_crons lc JOIN api.subscribers s ON s.id = lc.subscriber_id JOIN api.tenants t ON t.id = lc.tenant_id JOIN api.funnel_stages fs ON fs.id = lc.current_stage_id LEFT JOIN api.followup_templates ft ON ft.stage_id = lc.current_stage_id AND ft.sequence_number = lc.next_sequence_number AND ft.is_active = TRUE LEFT JOIN api.followup_templates ft_next ON ft_next.stage_id = lc.current_stage_id AND ft_next.sequence_number = lc.next_sequence_number + 1 AND ft_next.is_active = TRUE WHERE lc.is_active = TRUE AND lc.next_followup_at IS NOT NULL AND lc.next_followup_at <= NOW() ORDER BY lc.next_followup_at ASC LIMIT 50",
+        "options": {}
+      },
+      "id": "e7cf67be-6489-4db8-ba3e-2ffa4c2f9b14",
+      "name": "Get Due Leads",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        144,
+        320
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "xBbNbntvO0xJs5HM",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.map(item => {\n  const d = item.json;\n  const textSent = d.followup_type === 'text'\n    ? (d.text_template || '').replace(/{{name}}/g, d.display_name || '')\n    : '[flow: ' + (d.followup_flow_ns || '') + '] — ' + (d.followup_description || '');\n  const chatMemoryText = '[SEGUIMIENTO AUTOMÁTICO #' + d.next_sequence_number + '] ' + textSent;\n  return { json: { ...d, textSent, chatMemoryText } };\n});"
+      },
+      "id": "ba2ab3a7-205c-4e15-8e3d-07390e50b185",
+      "name": "Prepare Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        272,
+        416
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "=$json.template_id",
+              "operator": {
+                "type": "string",
+                "operation": "exists"
+              },
+              "rightValue": ""
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "636723fe-bea5-4d8c-96ae-9e117f613663",
+      "name": "Has Template?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        592,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c2",
+              "leftValue": "=$json.followup_type",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "rightValue": "text"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "bdf42cbb-bd06-4f75-af68-a88471b114b1",
+      "name": "Type is text?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        752,
+        448
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.manychat.com/fb/sending/sendContent",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=\"Bearer \" + $json.mc_api_key"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "=JSON.stringify({ subscriber_id: $json.manychat_subscriber_id, data: { version: 'v2', content: { type: 'instagram', messages: [{ type: 'text', text: $json.textSent }] } } })",
+        "options": {}
+      },
+      "id": "d9ec2a2f-da32-4f05-9fb3-802138c22e1c",
+      "name": "sendContent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        944,
+        400
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "b6c1937d-09c7-4e16-9d58-514f6d6f9d91",
+      "name": "After Send",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1152,
+        496
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.manychat.com/fb/sending/sendFlow",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=\"Bearer \" + $json.mc_api_key"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "=JSON.stringify({ subscriber_id: $json.manychat_subscriber_id, flow_ns: $json.followup_flow_ns })",
+        "options": {}
+      },
+      "id": "2efe38d3-939c-49fa-97af-24e2c1f7112b",
+      "name": "sendFlow",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        960,
+        624
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE api.lead_crons SET is_active = FALSE, archived_at = NOW(), archive_reason = 'max_followups', updated_at = NOW() WHERE id = $1",
+        "options": {
+          "queryReplacement": "=$json.cron_id"
+        }
+      },
+      "id": "77c4686c-45fa-4dcb-ab3d-b6a00635a2d9",
+      "name": "Archive lead_crons",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        752,
+        624
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "xBbNbntvO0xJs5HM",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "09414258-96c2-4e45-ba1b-780b95da20e6",
+      "name": "Loop Over Leads",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        432,
+        448
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const pd = $('Loop Over Leads').first().json;\nconst esc = s => String(s || '').replace(/'/g, \"''\");\nconst stageId = pd.current_stage_id ? \"'\" + pd.current_stage_id + \"'\" : 'NULL';\nconst templateId = pd.template_id ? \"'\" + pd.template_id + \"'\" : 'NULL';\nconst delayHours = pd.next_delay_hours;\n\nconst logSql = \"INSERT INTO api.lead_followup_log (tenant_id, subscriber_id, conversation_id, stage_id, template_id, sequence_number, text_sent, status) VALUES ('\" + pd.tenant_id + \"','\" + pd.subscriber_id + \"','\" + pd.conversation_id + \"',\" + stageId + \",\" + templateId + \",\" + pd.next_sequence_number + \",'\" + esc(pd.textSent) + \"','sent')\";\n\nconst histSql = \"INSERT INTO n8n_chat_histories (session_id, message) VALUES ('\" + pd.manychat_subscriber_id + \"', jsonb_build_object('type','ai','data',jsonb_build_object('content','\" + esc(pd.chatMemoryText) + \"','additional_kwargs','{}'))::jsonb)\";\n\nconst updateSql = delayHours\n  ? \"UPDATE api.lead_crons SET next_sequence_number = next_sequence_number + 1, next_followup_at = NOW() + INTERVAL '\" + parseInt(delayHours) + \" hours', is_active = TRUE, archived_at = NULL, archive_reason = NULL, updated_at = NOW() WHERE id = '\" + pd.cron_id + \"'\"\n  : \"UPDATE api.lead_crons SET is_active = FALSE, archived_at = NOW(), archive_reason = 'max_followups', updated_at = NOW() WHERE id = '\" + pd.cron_id + \"'\";\n\nreturn [{ json: { logSql, histSql, updateSql } }];"
+      },
+      "id": "6ab1ef17-e65c-4c01-9dfb-22b68546ac5b",
+      "name": "Build SQL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1280,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "$json.logSql",
+        "options": {}
+      },
+      "id": "e673b45d-621e-4b2c-b3fe-e1b63c0f03b2",
+      "name": "Insert followup log",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1408,
+        480
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "xBbNbntvO0xJs5HM",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "$json.histSql",
+        "options": {}
+      },
+      "id": "47928882-ab63-4632-a60d-8fc841aa30d2",
+      "name": "Insert chat history",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1536,
+        592
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "xBbNbntvO0xJs5HM",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "$json.updateSql",
+        "options": {}
+      },
+      "id": "87caa6fc-9809-42c4-9c50-13bbb4fb2a48",
+      "name": "Update lead_crons",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1680,
+        672
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "xBbNbntvO0xJs5HM",
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Every 5 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Get Due Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Due Leads": {
+      "main": [
+        [
+          {
+            "node": "Prepare Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Data": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Template?": {
+      "main": [
+        [
+          {
+            "node": "Type is text?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Archive lead_crons",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Type is text?": {
+      "main": [
+        [
+          {
+            "node": "sendContent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "sendFlow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "sendContent": {
+      "main": [
+        [
+          {
+            "node": "After Send",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "After Send": {
+      "main": [
+        [
+          {
+            "node": "Build SQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "sendFlow": {
+      "main": [
+        [
+          {
+            "node": "After Send",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Archive lead_crons": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Leads": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Has Template?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build SQL": {
+      "main": [
+        [
+          {
+            "node": "Insert followup log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert followup log": {
+      "main": [
+        [
+          {
+            "node": "Insert chat history",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert chat history": {
+      "main": [
+        [
+          {
+            "node": "Update lead_crons",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update lead_crons": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  },
+  "versionId": "90405ecd-ce6f-46c5-ae35-7e9ffadc5fda",
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp",
+    "instanceId": "21306735202e285844d411adfa35bfd1d0be76295bd6e5f059c09c42be5eaef8"
+  },
+  "id": "hEXWrZBCqNyZGf2v",
+  "tags": []
+}
