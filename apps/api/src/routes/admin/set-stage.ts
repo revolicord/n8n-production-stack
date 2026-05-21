@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { getConfig } from '../../config.js';
@@ -29,6 +30,21 @@ const VALID_TRANSITIONS: Record<Stage, readonly Stage[]> = {
   D: [],
   disqualified: [],
 };
+
+/**
+ * Etapas donde los follow-ups de la etapa anterior dejan de tener sentido.
+ *
+ * Cuando un lead cruza a cualquiera de estas, el `lead_cron` activo asociado
+ * a su conversación se archiva con motivo 'stage_advanced'. Eso evita que el
+ * followup-runner siga mandándole mensajes obsoletos (ej. "¿pudiste agendar?"
+ * cuando ya reservó la llamada).
+ *
+ * NO incluye A→MS ni MS→B: en esas el flujo del agente sigue activo y los
+ * follow-ups de la etapa destino sí aplican. El `Upsert Lead Cron` del
+ * workflow agent-run se encarga de reprogramar el siguiente follow-up con
+ * los delays de la nueva etapa.
+ */
+const STAGES_THAT_CANCEL_FOLLOWUPS: readonly Stage[] = ['C', 'D', 'disqualified'] as const;
 
 const SetStageBodySchema = z
   .object({
@@ -107,6 +123,53 @@ export default async function setStageRoute(app: FastifyInstance): Promise<void>
         reason,
         agentEvidence: evidence,
       });
+
+      // ─────────────────────────────────────────────────────────────────────
+      // Cancelar lead_crons activos cuando el lead avanza a una etapa donde
+      // los follow-ups previos pierden sentido (C, D, disqualified).
+      //
+      // Esto resuelve el caso "el lead reservó en Calendly pero el cron sigue
+      // mandándole '¿pudiste agendar?'" — al pasar a C/D, archivamos los
+      // crons pendientes con motivo 'stage_advanced'.
+      //
+      // El UPDATE filtra por subscriber_id + tenant_id + is_active=TRUE.
+      // No filtramos por conversation_id porque puede haber leads sin turn
+      // activo (set-stage llamado por un webhook externo de Calendly más
+      // adelante), y el modelo es "una conversación activa por subscriber".
+      //
+      // Es idempotente: si ya estaba archivado, no hace nada (filtro
+      // is_active = TRUE).
+      // ─────────────────────────────────────────────────────────────────────
+      if (STAGES_THAT_CANCEL_FOLLOWUPS.includes(new_stage as Stage)) {
+        try {
+          await getDb().execute(sql`
+            UPDATE api.lead_crons
+            SET is_active      = FALSE,
+                archived_at    = NOW(),
+                archive_reason = 'stage_advanced',
+                updated_at     = NOW()
+            WHERE tenant_id     = ${subscriber.tenantId}
+              AND subscriber_id = ${subscriber.id}
+              AND is_active     = TRUE
+          `);
+
+          req.log.info(
+            { subscriber_id: subscriberId, new_stage },
+            'lead_crons cancelled due to stage advance',
+          );
+        } catch (err) {
+          // No queremos que un fallo cancelando lead_crons rompa el cambio
+          // de etapa, que ya está commiteado arriba. Logueamos para auditar
+          // pero respondemos éxito — el lead avanzó correctamente y los
+          // follow-ups obsoletos los podemos limpiar manualmente si hace
+          // falta. Si esto pasa más de una vez, hay que escalarlo a un job
+          // de limpieza, no a un rollback del cambio de etapa.
+          req.log.error(
+            { err, subscriber_id: subscriberId, new_stage },
+            'failed to cancel lead_crons after stage advance',
+          );
+        }
+      }
 
       req.log.info(
         { subscriber_id: subscriberId, from: fromStage, to: new_stage },
