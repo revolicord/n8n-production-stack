@@ -13,26 +13,43 @@ La API está implementada con Fastify en `apps/api/`. Todos los endpoints viven 
 | POST | `/tenants/:slug/tools/sync` | n8n / script | Sincroniza flows desde ManyChat |
 | POST | `/admin/turn-completed` | n8n (al final del agente) | Cierra turno, libera lock |
 | POST | `/admin/leads/:id/stage` | n8n (Router) | Avanza etapa del lead |
-| GET | `/admin/funnel-stages/:id/followups` | UI Revolicord | Lista plantillas de follow-up de una etapa |
-| POST | `/admin/funnel-stages/:id/followups` | UI Revolicord | Crea una plantilla de follow-up |
-| PUT | `/admin/followup-templates/:id` | UI Revolicord | Edita una plantilla |
-| DELETE | `/admin/followup-templates/:id` | UI Revolicord | Soft delete de una plantilla |
-| GET | `/admin/leads/:id/followup-history` | UI Revolicord | Historial de follow-ups enviados a un lead |
+| POST | `/admin/login` | Dashboard | Obtiene JWT de admin (password → token) |
+| GET | `/admin/tenants` | Dashboard | Lista tenants activos |
+| GET | `/admin/tenants/:id/funnel-stages` | Dashboard | Lista etapas del embudo de un tenant |
+| GET | `/admin/funnel-stages/:id/followups` | Dashboard / UI | Lista plantillas de follow-up de una etapa |
+| POST | `/admin/funnel-stages/:id/followups` | Dashboard / UI | Crea una plantilla de follow-up |
+| PUT | `/admin/followup-templates/:id` | Dashboard / UI | Edita una plantilla |
+| DELETE | `/admin/followup-templates/:id` | Dashboard / UI | Soft delete de una plantilla |
+| GET | `/admin/followup-templates/:id/messages` | Dashboard | Lista mensajes de una plantilla tipo content |
+| POST | `/admin/followup-templates/:id/messages` | Dashboard | Crea un mensaje en una plantilla content |
+| PUT | `/admin/followup-messages/:id` | Dashboard | Edita un mensaje |
+| DELETE | `/admin/followup-messages/:id` | Dashboard | Elimina un mensaje |
+| POST | `/admin/assets/upload` | Dashboard | Sube imagen a MinIO, devuelve URL pública |
+| GET | `/admin/tenants/:id/agent-resources` | Dashboard | Lista recursos del agente por categoría |
+| POST | `/admin/tenants/:id/agent-resources` | Dashboard | Crea un recurso del agente |
+| PUT | `/admin/agent-resources/:id` | Dashboard | Edita un recurso del agente |
+| DELETE | `/admin/agent-resources/:id` | Dashboard | Soft delete de un recurso |
+| GET | `/admin/leads/:id/followup-history` | Dashboard / UI | Historial de follow-ups enviados a un lead |
 
 ---
 
 ## Autenticación
 
-Todos los endpoints `/admin/*` y `/tenants/*` requieren:
+Los endpoints `/admin/*` admiten **dos caminos** (dual-auth, `lib/admin-auth.ts`):
 
+**Camino 1 — Bearer estático** (n8n, scripts internos, backwards-compatible):
 ```
 Authorization: Bearer <N8N_CALLBACK_TOKEN>
 ```
 
-El token se valida con `verifyBearerToken()` de `lib/auth.ts`. Sin token o token incorrecto → `401`.
+**Camino 2 — JWT de admin** (dashboard):
+1. `POST /admin/login` con `{ "password": "<ADMIN_PASSWORD>" }` → recibe `{ token, expires_in: 43200 }`
+2. Usar el token: `Authorization: Bearer <token>`
+
+El JWT expira a las 12 h. El login overlay del dashboard detecta la expiración y muestra el formulario.
 
 Los endpoints de liveness/readiness no requieren auth.  
-`/webhook/manychat` usa su propio token de ManyChat (cabecera distinta).
+`/webhook/manychat` usa su propio token de ManyChat (cabecera `X-MC-Token`).
 
 ---
 
@@ -73,3 +90,5 @@ Todos los errores usan la misma estructura:
 ## Documentación por módulo
 
 - [Follow-up Templates](./followup-templates.md) — ADR-0015 CRUD completo
+- [Agent Resources](./agent-resources.md) — ADR-0019 recursos de cierre/objeción para el agente
+- [Dashboard Smoke Checklist](./dashboard-smoke.md) — 11 pasos de smoke e2e tras cada deploy

@@ -111,3 +111,7 @@ El nodo 06 (Switch por tipo) añade una rama `content` que construye el payload 
 - ADR-0015: Sistema de Follow-ups por Etapa (tabla padre `followup_templates`)
 - ADR-0003: Almacenamiento MinIO (configuración del servicio Docker)
 - `n8n/workflows/followup-runner/07c-send-content-messages.md` — instrucciones de implementación del nodo n8n
+
+---
+
+**Nota (2026-05-22):** El dashboard de configuración fue implementado en `/dashboard` del API Fastify (sin frontend separado). Alex puede editar textos de follow-ups, subir imágenes de memes y ajustar delays directamente desde el navegador en `https://<API_HOST>/dashboard`. La autenticación usa JWT firmado por `POST /admin/login` — el bearer estático de n8n sigue funcionando en paralelo (dual-auth, `lib/admin-auth.ts`).

@@ -155,6 +155,33 @@ make logs-worker   # buscar errores de conexión a Redis o Postgres
 make status        # verificar que los 3 workers están Running
 ```
 
+## Dashboard de configuración
+
+El dashboard web de Alex está disponible en:
+
+```
+https://<API_HOST>/dashboard
+```
+
+- Editar textos de follow-ups y delays
+- Subir imágenes de memes (MinIO, acceso público)
+- Gestionar recursos de cierre y objeción del agente
+
+**Primer acceso:**
+
+1. Abrir `https://<API_HOST>/dashboard` en el navegador
+2. El overlay de login aparece — ingresar `ADMIN_PASSWORD` del `.env`
+3. El JWT dura 12 h; al expirar el overlay vuelve automáticamente
+
+**Smoke test rápido post-deploy:**
+
+```bash
+curl -s -o /dev/null -w "%{http_code}" https://<API_HOST>/dashboard/
+# → 200
+```
+
+Checklist completo: [`docs/api/dashboard-smoke.md`](docs/api/dashboard-smoke.md)
+
 ## API DM Setter (Sprint 1+)
 
 Este repo también contiene el monorepo de la API que recibe los webhooks de ManyChat, hace debounce de mensajes consecutivos y los despacha a n8n para análisis con IA.
