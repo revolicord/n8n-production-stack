@@ -19,7 +19,8 @@
 | v4.1 | Sin cambios de lógica (refactor interno) |
 | v4.2 | Fix bug "MS→B busca audios donde no están": `lookup_stage` en macros para resolver slugs cross-stage |
 | v4.3 | Fix: `withRetry` adjunta `__attempts`/`__retried` al error antes de rethrow; el catch de `execSendContent` lo usa en vez de hardcodear `attempts:3`. También añade `ECONNABORTED` a códigos retryables para que los timeouts de axios se reintenten. |
-| **v4.4** | Fix: `RangeError: Maximum call stack size exceeded` en `observable-object.ts` — el `json` de salida se envuelve en `JSON.parse(JSON.stringify(...))` para eliminar los ObservableObject proxies de n8n que venían de `$input` (agentActions, trace.action) antes de que n8n intente re-envolverlos. |
+| v4.4 | Fix: `RangeError: Maximum call stack size exceeded` en `observable-object.ts` — el `json` de salida se envuelve en `JSON.parse(JSON.stringify(...))` para eliminar los ObservableObject proxies de n8n que venían de `$input` (agentActions, trace.action) antes de que n8n intente re-envolverlos. |
+| **v4.5** | Sube timeout de `callManychatFlow` y `callManychatText` de 15 000 ms a 30 000 ms para absorber picos de latencia en la API de ManyChat que agotaban los 3 reintentos. |
 
 ---
 
@@ -84,7 +85,7 @@ send_content de macro    → stageFlowsBySlug[lookup_stage][slug_id]  (stage exp
 
 ```javascript
 // ============================================================================
-// ROUTER v4.4 — fix: JSON.parse/stringify en return para strip ObservableObject proxies.
+// ROUTER v4.5 — timeout callManychatFlow/callManychatText: 15 000 ms → 30 000 ms.
 // ============================================================================
 
 const TRANSITION_MACROS = {
@@ -191,7 +192,7 @@ async function callManychatFlow(flowNs) {
       url: 'https://api.manychat.com/fb/sending/sendFlow',
       headers: { Authorization: `Bearer ${ctx.mcApiKey}`, 'Content-Type': 'application/json' },
       body: { subscriber_id: ctx.subscriberId, flow_ns: flowNs },
-      json: true, returnFullResponse: true, timeout: 15000
+      json: true, returnFullResponse: true, timeout: 30000
     }),
     `sendFlow(${flowNs})`
   );
@@ -209,7 +210,7 @@ async function callManychatText(text) {
         subscriber_id: ctx.subscriberId,
         data: { version: 'v2', content: { type: 'instagram', messages: [{ type: 'text', text }] } }
       },
-      json: true, returnFullResponse: true, timeout: 15000
+      json: true, returnFullResponse: true, timeout: 30000
     }),
     `sendContent(text)`
   );
