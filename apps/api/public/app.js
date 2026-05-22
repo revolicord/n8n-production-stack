@@ -265,7 +265,7 @@ function templateCard(t, stage) {
   return `
     <div id="card-${t.id}" class="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 mb-4">
       <div class="flex items-center justify-between mb-3">
-        <span class="text-xs text-gray-400 font-mono">${t.sequenceNumber}${stageTag} · <span id="label-${t.id}" class="cursor-pointer hover:text-gray-100 hover:underline transition-colors" title="Click para editar" onclick="startEditLabel('${t.id}', ${JSON.stringify(label)})">${escHtml(label)}</span></span>
+        <span class="text-xs text-gray-400 font-mono">${t.sequenceNumber}${stageTag} · <span id="label-${t.id}" data-label="${escHtml(label)}" class="cursor-pointer hover:text-gray-100 hover:underline transition-colors" title="Click para editar" onclick="startEditLabel('${t.id}')">${escHtml(label)}</span></span>
         <div class="flex items-center gap-2">
           <label class="text-xs text-gray-400">Delay (min):</label>
           <input id="${delayId}" type="number" min="1" value="${t.delayMinutes}"
@@ -396,7 +396,7 @@ function resourceCard(r) {
   return `
     <div id="res-${r.id}" class="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 mb-4">
       <div class="flex items-center justify-between mb-2">
-        <span id="res-name-${r.id}" class="text-sm font-medium text-gray-200 cursor-pointer hover:text-white hover:underline transition-colors" title="Click para editar" onclick="startEditResourceName('${r.id}', ${JSON.stringify(r.display_name)})">${escHtml(r.display_name)}</span>
+        <span id="res-name-${r.id}" data-name="${escHtml(r.display_name)}" class="text-sm font-medium text-gray-200 cursor-pointer hover:text-white hover:underline transition-colors" title="Click para editar" onclick="startEditResourceName('${r.id}')">${escHtml(r.display_name)}</span>
         <button onclick="deactivateResource('${r.id}')"
           class="text-xs text-red-400 hover:text-red-300 transition-colors">Eliminar</button>
       </div>
@@ -469,15 +469,16 @@ async function saveAllResources() {
 }
 
 // ── Inline name editing ───────────────────────────────────────────────────────
-function startEditLabel(templateId, currentValue) {
+function startEditLabel(templateId) {
   const span = document.getElementById(`label-${templateId}`);
   if (!span) return;
+  const currentValue = span.dataset.label ?? span.textContent;
   const input = document.createElement('input');
   input.type = 'text';
   input.value = currentValue;
   input.className =
     'bg-[#111] border border-teal-500 rounded px-1 py-0 text-xs text-gray-200 focus:outline-none w-40';
-  input.onblur = () => commitEditLabel(templateId, input.value);
+  input.onblur = () => commitEditLabel(templateId, currentValue, input.value);
   input.onkeydown = (e) => {
     if (e.key === 'Enter') input.blur();
     if (e.key === 'Escape') {
@@ -490,18 +491,20 @@ function startEditLabel(templateId, currentValue) {
   input.select();
 }
 
-async function commitEditLabel(templateId, newValue) {
+async function commitEditLabel(templateId, original, newValue) {
   const trimmed = newValue.trim();
   const t = STATE.templates.find((x) => x.id === templateId);
-  const original = t?.description ?? t?.type ?? '';
-  const container = document.getElementById(`card-${templateId}`);
-  const input = container?.querySelector('input.text-xs');
+  const fallback = t?.description ?? t?.type ?? original;
+  const displayed = trimmed || fallback;
   const span = document.createElement('span');
   span.id = `label-${templateId}`;
+  span.dataset.label = displayed;
   span.className = 'cursor-pointer hover:text-gray-100 hover:underline transition-colors';
   span.title = 'Click para editar';
-  span.textContent = trimmed || original;
-  span.onclick = () => startEditLabel(templateId, span.textContent);
+  span.textContent = displayed;
+  span.onclick = () => startEditLabel(templateId);
+  const container = document.getElementById(`card-${templateId}`);
+  const input = container?.querySelector('input[type=text]');
   if (input) input.replaceWith(span);
   if (!trimmed || trimmed === original) return;
   try {
@@ -513,19 +516,21 @@ async function commitEditLabel(templateId, newValue) {
     toast('Nombre actualizado');
   } catch (e) {
     span.textContent = original;
+    span.dataset.label = original;
     toast(`Error: ${e.message}`, false);
   }
 }
 
-function startEditResourceName(resourceId, currentValue) {
+function startEditResourceName(resourceId) {
   const span = document.getElementById(`res-name-${resourceId}`);
   if (!span) return;
+  const currentValue = span.dataset.name ?? span.textContent;
   const input = document.createElement('input');
   input.type = 'text';
   input.value = currentValue;
   input.className =
     'bg-[#111] border border-teal-500 rounded px-1 py-0 text-sm text-gray-200 focus:outline-none w-40';
-  input.onblur = () => commitEditResourceName(resourceId, input.value);
+  input.onblur = () => commitEditResourceName(resourceId, currentValue, input.value);
   input.onkeydown = (e) => {
     if (e.key === 'Enter') input.blur();
     if (e.key === 'Escape') {
@@ -538,19 +543,20 @@ function startEditResourceName(resourceId, currentValue) {
   input.select();
 }
 
-async function commitEditResourceName(resourceId, newValue) {
+async function commitEditResourceName(resourceId, original, newValue) {
   const trimmed = newValue.trim();
   const r = STATE.resources.find((x) => x.id === resourceId);
-  const original = r?.display_name ?? '';
-  const container = document.getElementById(`res-${resourceId}`);
-  const input = container?.querySelector('input.text-sm');
+  const displayed = trimmed || original;
   const span = document.createElement('span');
   span.id = `res-name-${resourceId}`;
+  span.dataset.name = displayed;
   span.className =
     'text-sm font-medium text-gray-200 cursor-pointer hover:text-white hover:underline transition-colors';
   span.title = 'Click para editar';
-  span.textContent = trimmed || original;
-  span.onclick = () => startEditResourceName(resourceId, span.textContent);
+  span.textContent = displayed;
+  span.onclick = () => startEditResourceName(resourceId);
+  const container = document.getElementById(`res-${resourceId}`);
+  const input = container?.querySelector('input[type=text]');
   if (input) input.replaceWith(span);
   if (!trimmed || trimmed === original) return;
   try {
@@ -562,6 +568,7 @@ async function commitEditResourceName(resourceId, newValue) {
     toast('Nombre actualizado');
   } catch (e) {
     span.textContent = original;
+    span.dataset.name = original;
     toast(`Error: ${e.message}`, false);
   }
 }
