@@ -48,7 +48,103 @@
 
 ---
 
-## 2. Paso 1 — Migración `delay_hours` → `delay_minutes`
+## 2. Paso 0 — Verificación de entorno (gate, no commit)
+
+**No produce commit.** Si algo falla aquí, parar y avisar al usuario antes de tocar código.
+
+### 0.1 Checklist de arranque
+
+```bash
+cd /opt/n8n-production    # o donde esté el clon local
+node --version            # debe ser ≥ 20
+pnpm --version            # debe ser ≥ 9
+docker --version          # cualquier 24+
+psql --version || true    # opcional, ayuda al debug
+```
+
+### 0.2 Levantar dependencias en local
+
+El repo tiene un `docker-stack.yml` para Swarm en producción. Para local, levantar solo Postgres + Redis + MinIO con docker-compose ad-hoc, o reutilizar lo que ya tenga el usuario. Variables a tener pobladas en `.env`:
+
+```
+DATABASE_URL=postgres://...
+REDIS_URL=redis://...
+MINIO_ENDPOINT=http://localhost:9000
+MINIO_ACCESS_KEY=minio_admin
+MINIO_SECRET_KEY=<algo>
+MINIO_PUBLIC_URL=http://localhost:9000
+MINIO_BUCKET_ASSETS=assets
+MC_WEBHOOK_TOKEN=<algo de 16+>
+N8N_CALLBACK_TOKEN=<algo de 16+>
+ADMIN_JWT_SECRET=<algo de 32+>
+ADMIN_PASSWORD=<algo de 8+>
+N8N_BASE_URL=http://localhost:5678
+PUBLIC_API_URL=http://localhost:3000
+```
+
+### 0.3 Aplicar todas las migraciones existentes a BD limpia
+
+```bash
+pnpm install
+cd packages/db
+pnpm db:migrate    # corre 0000 a 0008
+cd ../..
+```
+
+**Verificar que el schema `api` tiene las tablas esperadas:**
+
+```sql
+\dt api.*
+```
+
+Mínimo: `tenants`, `subscribers`, `messages_raw`, `conversations`, `turns`, `dead_letter_queue`, `lead_stages`, `stage_transitions`, `funnel_stages`, `stage_flows`, `followup_templates`, `followup_messages`, `lead_followup_log`, `lead_crons`, `lead_content_sent`, `stage_transitions_map`.
+
+Si falta alguna → la migración falló o el `DATABASE_URL` apunta a otra BD. Parar.
+
+### 0.4 Aplicar el seed QC contra la BD local
+
+`packages/db/drizzle/seed_qc_funnel.sql` requiere reemplazar `<TENANT_ID>` con un UUID real. Para la BD local:
+
+```sql
+-- 1. Crear el tenant QC primero
+INSERT INTO api.tenants (slug, name, is_active)
+  VALUES ('quantum-creators', 'Quantum Creators', TRUE)
+  RETURNING id;
+-- copiar el UUID que devuelve
+```
+
+Luego abrir `seed_qc_funnel.sql`, hacer `sed s/<TENANT_ID>/<el uuid>/g` o reemplazo manual, ejecutarlo con `psql`.
+
+> **Si el seed falla o no se puede aplicar limpiamente, parar.** El plan asume que existe el tenant QC y sus `funnel_stages` poblados, sin eso no se puede probar el dashboard.
+
+### 0.5 Arranque smoke del API
+
+```bash
+pnpm dev:api
+curl -s http://localhost:3000/healthz   # → 200 {"ok":true} o similar
+```
+
+Listar las etapas del tenant para confirmar que el seed funcionó:
+
+```sql
+SELECT id, slug, display_name, position FROM api.funnel_stages
+  WHERE tenant_id = '<uuid>' ORDER BY position;
+```
+
+Debe devolver al menos: A, MS, B, C, D.
+
+### 0.6 Output del paso 0
+
+Dejar registrado en un fichero temporal (NO commitear) `.tmp-env-check.md` con:
+- UUID del tenant QC creado.
+- Lista de stages con sus UUIDs.
+- Confirmación de que `pnpm typecheck && pnpm test && pnpm lint` pasan en `master` actual (baseline antes de tocar nada).
+
+Si el baseline ya falla en `master`, **parar y avisar**. No empezar sobre un repo roto.
+
+---
+
+## 3. Paso 1 — Migración `delay_hours` → `delay_minutes`
 
 ### Motivación
 Hoy `followup_templates.delay_hours` es un entero de horas. La fase C tiene un slot 1C que se envía a **15 minutos** y otros que se envían a **2 horas**. No se puede representar 15 min con `delay_hours: 1` (queda en 1 hora). Renombrar a `delay_minutes` permite todos los casos sin floats.
@@ -59,6 +155,8 @@ Hoy `followup_templates.delay_hours` es un entero de horas. La fase C tiene un s
 
 ```sql
 -- Renombrar columna y convertir valores existentes (hours * 60 = minutes).
+-- El UPDATE es seguro aunque en local la tabla esté vacía: no afecta filas.
+-- En producción (cuando se aplique) preserva los datos existentes.
 ALTER TABLE api.followup_templates
   RENAME COLUMN delay_hours TO delay_minutes;
 
@@ -66,7 +164,9 @@ UPDATE api.followup_templates
   SET delay_minutes = delay_minutes * 60;
 ```
 
-> Drizzle a veces no genera RENAME limpio. Si `pnpm db:generate` produce DROP + ADD, **borrar ese SQL generado y escribir manualmente** el RENAME + UPDATE como arriba para no perder datos en producción. Comentar en el fichero por qué se hizo a mano.
+> Drizzle a veces no genera RENAME limpio. Si `pnpm db:generate` produce DROP + ADD, **borrar ese SQL generado y escribir manualmente** el RENAME + UPDATE como arriba. Comentar en el fichero por qué se hizo a mano.
+>
+> **Verificar tras correr `pnpm db:migrate` contra la BD local limpia:** `\d api.followup_templates` en psql debe mostrar `delay_minutes integer NOT NULL` (no `delay_hours`).
 
 **2.2 Schema Drizzle (`packages/db/src/schema.ts`)**
 
@@ -139,7 +239,7 @@ Reemplazar `delay_hours` por `delay_minutes` en todos los ejemplos y la tabla de
 
 ---
 
-## 3. Paso 2 — Endpoint `GET /admin/funnel-stages`
+## 4. Paso 2 — Endpoint `GET /admin/funnel-stages`
 
 ### Motivación
 El dashboard necesita poblar el menú lateral ("General", "Fase B", "Fase C"...). Hoy `funnel_stages` solo se lee desde n8n por SQL directo — no hay HTTP endpoint.
@@ -207,7 +307,7 @@ Añadir sección "List Funnel Stages" antes de "List Followups" siguiendo el mis
 
 ---
 
-## 4. Paso 3 — Tabla `agent_resources` + endpoints (Cierres / Objeciones)
+## 5. Paso 3 — Tabla `agent_resources` + endpoints (Cierres / Objeciones)
 
 ### Motivación
 Las pestañas "Cierres" y "Objeciones" del panel **no son follow-ups**. Son **recursos** (snippets de texto + opcionalmente imagen) que el agente IA debe poder consultar y enviar cuando detecta un contexto que aplica (lead pide precio, lead duda de la promesa, etc.). El agente usa una tool `get_agent_resources(category)` para listarlos en el prompt y otra `send_resource(slug)` para enviarlos (esta segunda es para el sprint que viene, **no entra en este plan** — aquí solo CRUD + listado).
@@ -300,7 +400,7 @@ Y-statement breve: por qué tabla nueva en lugar de reusar `followup_templates` 
 
 ---
 
-## 5. Paso 4 — Auth JWT real
+## 6. Paso 4 — Auth JWT real
 
 ### Motivación
 Hoy `/admin/*` se autentica con el mismo Bearer estático que usa n8n para llamarse a sí mismo. Para el dashboard, Alex no va a pegar ese token cada sesión. Hay que añadir login con contraseña + JWT corto.
@@ -430,7 +530,7 @@ Mínimo dos tests sobre `LoginBodySchema`: acepta `{ password: "x" }`, rechaza `
 
 ---
 
-## 6. Paso 5 — CORS y fix de invariante en followup-messages
+## 7. Paso 5 — CORS y fix de invariante en followup-messages
 
 ### 6.1 CORS
 
@@ -500,7 +600,7 @@ Añadir tests al lado.
 
 ---
 
-## 7. Paso 6 — Auto-crear y configurar el bucket público de MinIO
+## 8. Paso 6 — Auto-crear y configurar el bucket público de MinIO
 
 ### Motivación
 ADR-0018 dice que el bucket `assets` debe existir y tener política `download anonymous`. Hoy hay que crearlo a mano en la consola de MinIO. El `setup.sh` no lo hace.
@@ -567,7 +667,7 @@ Sección "MinIO bucket público" debajo de "Instalación desde cero":
 
 ---
 
-## 8. Paso 7 — Frontend SPA servida por Fastify
+## 9. Paso 7 — Frontend SPA servida por Fastify
 
 ### Motivación
 Dashboard tipo el screenshot, servido desde el mismo Fastify (decisión de Alex), accesible en `https://api.tudominio.com/dashboard`. Sin build complejo: HTML + JS vanilla + Tailwind por CDN. Se mantiene en un solo fichero por simplicidad, modularizado con `<script type="module">`. Replicar la UX del screenshot: dark, menú lateral con fases, panel derecho con secciones por slot (texto + asset path + preview).
@@ -764,7 +864,7 @@ Pestaña que muestra `JSON.stringify` del state actual (templates + messages + r
 
 ---
 
-## 9. Paso 8 — Tests, smoke e2e manual, documentación final
+## 10. Paso 8 — Tests, smoke e2e manual, documentación final
 
 ### 9.1 Test runner
 
@@ -805,23 +905,60 @@ Con BD limpia + seed aplicado:
 
 ---
 
-## 10. Cosas que el ejecutor debe AVISAR al usuario al terminar
+## 11. Cosas que el ejecutor debe AVISAR al usuario al terminar
 
-Tras cerrar todos los pasos, dejar un comentario final con esta lista. Son cosas que Claude **no debe hacer** él mismo (requieren acción humana en producción / n8n):
+Tras cerrar todos los pasos, dejar un mensaje final con esta lista. Son cosas que Sonnet **no debe hacer** él mismo: requieren acción del usuario sobre infraestructura productiva o sobre la UI de n8n.
 
-1. **Aplicar migraciones 0009 y 0010 en producción:**
+Estructurar el mensaje final exactamente así, con tres bloques claros:
+
+### A — Hay que aplicar en producción (humano)
+
+1. **Migraciones 0002–0010 sobre BD productiva:**
    ```
-   cd /opt/n8n-production && DATABASE_URL=... pnpm db:migrate
+   cd /opt/n8n-production && DATABASE_URL=<prod> pnpm db:migrate
    ```
-2. **Editar el workflow `agent-run` en n8n UI** para reflejar el cambio `delay_hours` → `delay_minutes` en las dos queries SQL embebidas (ver paso 2.6). Los ficheros `agent-run(N).json` del repo son artefactos exportados — no editarlos a mano.
-3. **Crear el workflow `followup-runner` en n8n UI** siguiendo los specs `.md`, ya con los SQL actualizados a `delay_minutes`. (Esto sigue siendo P0 según `SETTER-MVP-TRACKING.md`.)
-4. **Setear `ADMIN_PASSWORD` y `ADMIN_JWT_SECRET` en producción** (.env) si no estaban ya.
-5. **Verificar la política del bucket** con `mc anonymous get local/assets` — debe decir `download`.
-6. **Decidir qué hacer con los assets ya subidos manualmente al MinIO** (los del screenshot tipo `setting_assets/phase_b/7B/...`): el dashboard espera URLs públicas absolutas. Si los assets están como rutas relativas en la BD, no van a renderizar. Hay un script de migración por hacer (no incluido aquí porque depende del estado real de los datos de Alex).
+   (Las 0009 y 0010 son nuevas de este sprint. Las 0002–0008 ya existían pero seguían sin aplicarse según `SETTER-MVP-TRACKING.md`.)
+
+2. **Seed QC en producción** (`packages/db/drizzle/seed_qc_funnel.sql` con el `<TENANT_ID>` real de prod sustituido). Después del seed, correr el UPDATE de backfill comentado al final del fichero para llenar `lead_stages.current_stage_id` en filas existentes (si las hay).
+
+3. **Setear en `.env` de producción:** `ADMIN_PASSWORD` (8+ chars, lo elige Alex) y `ADMIN_JWT_SECRET` (32+ chars, `openssl rand -hex 32`). Reiniciar el stack: `make deploy`.
+
+4. **Verificar bucket público en MinIO de producción:**
+   ```
+   bash scripts/init-minio-bucket.sh
+   mc anonymous get local/assets    # debe decir "download"
+   ```
+
+### B — Hay que hacer en la UI de n8n (humano)
+
+5. **Editar el workflow `agent-run`:** en los nodos Postgres que tienen SQL embebido con `delay_hours`, reemplazar manualmente por `delay_minutes` y cambiar `INTERVAL '1 hour'` por `INTERVAL '1 minute'`. Los `agent-run(N).json` del repo son artefactos exportados, no editarlos a mano.
+
+6. **Crear el workflow `followup-runner`** siguiendo las specs en `n8n/workflows/followup-runner/*.md`. Ya están actualizadas a `delay_minutes`. Tiene 9 nodos:
+   - 01: Schedule Trigger cada 5 minutos.
+   - 02: Postgres "Get Due Leads" con la query del `.md` (ojo: ya en minutos).
+   - 03: Code "Prepare Data".
+   - 04: Loop Over Items.
+   - 05: If "Has Template?" → si no, 05b archiva.
+   - 06: Switch por `followup_type` (text / flow / content).
+   - 07a/b/c: HTTP Request a ManyChat según rama.
+   - 08: After Send.
+   - 09: Code "Build SQL".
+
+   Sin este workflow, el dashboard editará texto que nunca sale.
+
+7. **Activar los flows en ManyChat** (siguen como STOPPED según `SETTER-MVP-TRACKING.md`) y verificar que los `flow_ns` reales coinciden con los del seed (`PENDIENTE_ns_video_hook` y `PENDIENTE_ns_video_vsl` deben reemplazarse por los `ns` reales).
+
+### C — Decisión pendiente sobre los assets actuales
+
+8. El screenshot que envió Alex muestra rutas tipo `setting_assets/phase_b/7B/no_abrir_ver_contestar_agendar.jpg` en los campos `media_url`. El dashboard espera **URLs públicas absolutas** (`https://minio.tudominio.com/assets/...`). Si esos assets ya están subidos al MinIO de producción pero la BD tiene rutas relativas, hay dos opciones:
+   - **(recomendada)** Re-subir los assets desde el dashboard nuevo — cada `POST /admin/assets/upload` los pone en MinIO y la URL queda correcta automáticamente.
+   - Escribir un script de migración que para cada `followup_message` con `media_url` relativa, busque el fichero en MinIO y reescriba con la URL absoluta. Más trabajo y frágil.
+
+   Alex decide. Sonnet no toca esto.
 
 ---
 
-## 11. Deuda técnica detectada — NO entra en este plan, pero hay que registrarla
+## 12. Deuda técnica detectada — NO entra en este plan, pero hay que registrarla
 
 > El ejecutor abre un issue por cada uno en GitHub con el título exacto.
 
@@ -851,19 +988,19 @@ Tras cerrar todos los pasos, dejar un comentario final con esta lista. Son cosas
 
 ---
 
-## 12. Orden de ejecución sugerido (estrictamente)
+## 13. Orden de ejecución sugerido (estrictamente)
 
-Cada paso es un commit. No saltarse el orden — cada uno desbloquea al siguiente.
+Cada paso es un commit (excepto Paso 0, que es gate de entorno). No saltarse el orden — cada uno desbloquea al siguiente.
 
-1. Paso 2.1–2.8 — `delay_minutes` (BD + API + n8n specs).
-2. Paso 3 — GET funnel-stages.
-3. Paso 5 — fix invariante followup-messages.
-4. Paso 6.1 — CORS.
-5. Paso 4 — agent_resources (BD + endpoints + ADR).
-6. Paso 5 (JWT login) — completo.
-7. Paso 7 — bucket público MinIO.
-8. Paso 8 — frontend SPA (es lo más largo; depende de todos los anteriores).
-9. Paso 9 — tests + smoke + docs.
-10. Mensaje final al usuario con la lista del **paso 10** y la deuda técnica del **paso 11**.
+0. **Paso 0 — verificación de entorno** (NO commit). Si falla, parar y avisar.
+1. Paso 1 (todas las subsecciones) — `delay_minutes` (BD + API + n8n specs).
+2. Paso 2 — GET funnel-stages.
+3. Paso 5 — fix invariante followup-messages + CORS (los dos en el mismo commit).
+4. Paso 3 — agent_resources (BD + endpoints + ADR).
+5. Paso 4 — JWT login con dual-auth.
+6. Paso 6 — bucket público MinIO.
+7. Paso 7 — frontend SPA (es lo más largo; depende de todos los anteriores).
+8. Paso 8 — tests + smoke + docs.
+9. Mensaje final al usuario con los tres bloques A/B/C de la sección 11 y los 12 issues de la sección 12.
 
 Fin del plan.
