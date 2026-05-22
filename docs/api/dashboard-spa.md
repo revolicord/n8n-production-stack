@@ -117,9 +117,55 @@ Todos los tipos de template muestran el mismo layout desde 2026-05-22:
 
 ---
 
+## Edición inline de nombres de cards (2026-05-23)
+
+Los títulos de los cards son editables con click-to-edit. No pasan por `STATE.dirty` — se guardan de forma inmediata en el blur.
+
+### Follow-up templates (Fase B / Fase C)
+
+El label editable es la parte `description` del header (`1B · <label>`). El prefijo numérico-slug es siempre estático.
+
+| Elemento | Valor |
+|---|---|
+| Campo en BD | `followup_templates.description` |
+| API | `PUT /admin/followup-templates/:id` con `{ description: "..." }` |
+| Fallback si `description` es null | muestra `t.type` |
+
+Funciones implicadas:
+- `startEditLabel(templateId)` — lee `span.dataset.label`, reemplaza el span por un `<input>` enfocado.
+- `commitEditLabel(templateId, original, newValue)` — restaura el span, llama al API si el valor cambió; hace rollback en error.
+
+### Recursos (General / Cierres / Objeciones)
+
+| Elemento | Valor |
+|---|---|
+| Campo en BD | `agent_resources.display_name` |
+| API | `PUT /admin/agent-resources/:id` con `{ display_name: "..." }` |
+
+Funciones implicadas:
+- `startEditResourceName(resourceId)` — lee `span.dataset.name`, reemplaza el span por un `<input>` enfocado.
+- `commitEditResourceName(resourceId, original, newValue)` — restaura el span, llama al API si cambió.
+
+### Comportamiento
+
+| Acción | Resultado |
+|---|---|
+| Click en el nombre | Input enfocado con texto seleccionado |
+| Enter | Blur → guarda |
+| Escape | Restaura original, blur sin llamada al API |
+| Click fuera | Guarda si cambió, no-op si es igual |
+| Error de API | Rollback al nombre original + toast de error |
+| Éxito | Toast "Nombre actualizado", `STATE` actualizado en memoria |
+
+> **Gotcha de implementación:** el valor se pasa como atributo `data-label` / `data-name` (no inline en `onclick`). Usar `JSON.stringify()` dentro de `onclick="..."` rompe el HTML cuando el texto contiene comillas.
+
+---
+
 ## Guardar cambios
 
 El botón "Guardar cambios" llama a `saveAllFollowups()`, que itera sobre `STATE.dirty` y hace `PUT` solo a las plantillas marcadas. Solo afecta a campos de la tabla `followup_templates` (delay, texto, tipo). Los mensajes de tipo `content` se guardan de forma individual y automática (`saveContentText` con `onchange`).
+
+La edición inline de nombres **no pasa por `STATE.dirty`** — se guarda de forma inmediata y autónoma.
 
 ---
 
