@@ -251,7 +251,6 @@ function templateCard(t, stage) {
   // Header: e.g. "1B · meme_plus_text" using sequenceNumber + stage.slug + description
   const stageTag = stage ? stage.slug.toUpperCase() : '';
   const label = t.description ?? t.type;
-  const header = `${t.sequenceNumber}${stageTag} · ${escHtml(label)}`;
 
   let bodyHtml;
   if (t.type === 'flow') {
@@ -266,7 +265,7 @@ function templateCard(t, stage) {
   return `
     <div id="card-${t.id}" class="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 mb-4">
       <div class="flex items-center justify-between mb-3">
-        <span class="text-xs text-gray-400 font-mono">${header}</span>
+        <span class="text-xs text-gray-400 font-mono">${t.sequenceNumber}${stageTag} · <span id="label-${t.id}" class="cursor-pointer hover:text-gray-100 hover:underline transition-colors" title="Click para editar" onclick="startEditLabel('${t.id}', ${JSON.stringify(label)})">${escHtml(label)}</span></span>
         <div class="flex items-center gap-2">
           <label class="text-xs text-gray-400">Delay (min):</label>
           <input id="${delayId}" type="number" min="1" value="${t.delayMinutes}"
@@ -397,7 +396,7 @@ function resourceCard(r) {
   return `
     <div id="res-${r.id}" class="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 mb-4">
       <div class="flex items-center justify-between mb-2">
-        <span class="text-sm font-medium text-gray-200">${escHtml(r.display_name)}</span>
+        <span id="res-name-${r.id}" class="text-sm font-medium text-gray-200 cursor-pointer hover:text-white hover:underline transition-colors" title="Click para editar" onclick="startEditResourceName('${r.id}', ${JSON.stringify(r.display_name)})">${escHtml(r.display_name)}</span>
         <button onclick="deactivateResource('${r.id}')"
           class="text-xs text-red-400 hover:text-red-300 transition-colors">Eliminar</button>
       </div>
@@ -467,6 +466,104 @@ async function saveAllResources() {
   }
   if (saved > 0) toast(`${saved} recurso(s) guardados`);
   else toast('Sin cambios pendientes');
+}
+
+// ── Inline name editing ───────────────────────────────────────────────────────
+function startEditLabel(templateId, currentValue) {
+  const span = document.getElementById(`label-${templateId}`);
+  if (!span) return;
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = currentValue;
+  input.className =
+    'bg-[#111] border border-teal-500 rounded px-1 py-0 text-xs text-gray-200 focus:outline-none w-40';
+  input.onblur = () => commitEditLabel(templateId, input.value);
+  input.onkeydown = (e) => {
+    if (e.key === 'Enter') input.blur();
+    if (e.key === 'Escape') {
+      input.value = currentValue;
+      input.blur();
+    }
+  };
+  span.replaceWith(input);
+  input.focus();
+  input.select();
+}
+
+async function commitEditLabel(templateId, newValue) {
+  const trimmed = newValue.trim();
+  const t = STATE.templates.find((x) => x.id === templateId);
+  const original = t?.description ?? t?.type ?? '';
+  const container = document.getElementById(`card-${templateId}`);
+  const input = container?.querySelector('input.text-xs');
+  const span = document.createElement('span');
+  span.id = `label-${templateId}`;
+  span.className = 'cursor-pointer hover:text-gray-100 hover:underline transition-colors';
+  span.title = 'Click para editar';
+  span.textContent = trimmed || original;
+  span.onclick = () => startEditLabel(templateId, span.textContent);
+  if (input) input.replaceWith(span);
+  if (!trimmed || trimmed === original) return;
+  try {
+    await api(`/admin/followup-templates/${templateId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ description: trimmed }),
+    });
+    if (t) t.description = trimmed;
+    toast('Nombre actualizado');
+  } catch (e) {
+    span.textContent = original;
+    toast(`Error: ${e.message}`, false);
+  }
+}
+
+function startEditResourceName(resourceId, currentValue) {
+  const span = document.getElementById(`res-name-${resourceId}`);
+  if (!span) return;
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = currentValue;
+  input.className =
+    'bg-[#111] border border-teal-500 rounded px-1 py-0 text-sm text-gray-200 focus:outline-none w-40';
+  input.onblur = () => commitEditResourceName(resourceId, input.value);
+  input.onkeydown = (e) => {
+    if (e.key === 'Enter') input.blur();
+    if (e.key === 'Escape') {
+      input.value = currentValue;
+      input.blur();
+    }
+  };
+  span.replaceWith(input);
+  input.focus();
+  input.select();
+}
+
+async function commitEditResourceName(resourceId, newValue) {
+  const trimmed = newValue.trim();
+  const r = STATE.resources.find((x) => x.id === resourceId);
+  const original = r?.display_name ?? '';
+  const container = document.getElementById(`res-${resourceId}`);
+  const input = container?.querySelector('input.text-sm');
+  const span = document.createElement('span');
+  span.id = `res-name-${resourceId}`;
+  span.className =
+    'text-sm font-medium text-gray-200 cursor-pointer hover:text-white hover:underline transition-colors';
+  span.title = 'Click para editar';
+  span.textContent = trimmed || original;
+  span.onclick = () => startEditResourceName(resourceId, span.textContent);
+  if (input) input.replaceWith(span);
+  if (!trimmed || trimmed === original) return;
+  try {
+    await api(`/admin/agent-resources/${resourceId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ display_name: trimmed }),
+    });
+    if (r) r.display_name = trimmed;
+    toast('Nombre actualizado');
+  } catch (e) {
+    span.textContent = original;
+    toast(`Error: ${e.message}`, false);
+  }
 }
 
 // ── Content card actions ──────────────────────────────────────────────────────
