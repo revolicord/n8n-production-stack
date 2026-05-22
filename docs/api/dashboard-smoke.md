@@ -82,8 +82,8 @@ curl -s "http://localhost:3000/admin/tenants/$TENANT_ID/funnel-stages" \
 
 - Open `http://localhost:3000/dashboard/` in a browser
 - Login overlay appears → enter `ADMIN_PASSWORD` → click Entrar
-- Sidebar shows funnel stages + Cierres / Objeciones / General sections
-- Select a stage → follow-up cards appear with delay inputs
+- Sidebar shows `Etapa B`, `Etapa C`… (uses `displayName`, **not** `undefined`) + Cierres / Objeciones / General sections
+- Select a stage → follow-up cards appear with headers like `1B · text`, `2B · text`, delay inputs populated, textareas showing the stored text
 
 ### 9. Edit delay and save
 
@@ -92,13 +92,22 @@ curl -s "http://localhost:3000/admin/tenants/$TENANT_ID/funnel-stages" \
 - Toast "X follow-up(s) guardados" appears
 - Reload page → same value persists
 
-### 10. Upload image
+### 10. Upload image — resource
 
 - Navigate to Cierres section
 - If resources exist: click file input → choose a JPG/PNG ≤ 8 MB
 - Toast "Imagen actualizada" appears
 - Thumbnail renders below the upload input
 - Open URL in incógnito tab → image loads without auth
+
+### 10b. Upload image — text follow-up card (converts to content)
+
+- Select a stage with `type='text'` follow-up cards
+- Click the file input under "Imagen (opcional)" → choose a JPG/PNG ≤ 8 MB
+- Toast "Convertido a mensaje multimedia" appears
+- Card reloads as a `content` card showing the image thumbnail and text textarea
+- Verify in DB: `SELECT type FROM api.followup_templates WHERE id='...'` → `'content'`
+- Verify messages: `SELECT message_type, sort_order FROM api.followup_messages WHERE template_id='...' ORDER BY sort_order` → 2 rows (image at 0, text at 1)
 
 ### 11. Soft delete resource
 
@@ -110,6 +119,6 @@ curl -s "http://localhost:3000/admin/tenants/$TENANT_ID/funnel-stages" \
 
 ## After smoke
 
-If all 11 steps pass → release is good. Tag with `git tag dashboard-smoke-<date>`.
+If all 12 steps pass → release is good. Tag with `git tag dashboard-smoke-<date>`.
 
 If any step fails → do NOT push to production. Fix and re-run from step 1.

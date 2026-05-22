@@ -5,13 +5,13 @@ const STATE = {
   token: localStorage.getItem('admin_token') ?? null,
   tenantId: localStorage.getItem('tenant_id') ?? null,
   tenantSlug: localStorage.getItem('tenant_slug') ?? null,
-  stages: [], // [{ id, name, position }]
-  activeStageId: null, // currently selected stage in sidebar
-  activeSection: null, // 'cierre' | 'objecion'
-  templates: [], // followup templates for active stage
-  messages: {}, // { [templateId]: [messages] }
-  resources: [], // agent resources for active section
-  dirty: new Set(), // set of element IDs with unsaved changes
+  stages: [], // [{ id, displayName, slug, position }]
+  activeStageId: null,
+  activeSection: null,
+  templates: [], // followup templates for active stage (camelCase from Drizzle)
+  messages: {}, // { [templateId]: [messages] } — messages use snake_case (toResponse)
+  resources: [],
+  dirty: new Set(),
 };
 
 // ── Utils ────────────────────────────────────────────────────────────────────
@@ -107,14 +107,12 @@ async function loadTenants() {
     toast('No hay tenants activos', false);
     return;
   }
-  // Use first active tenant
   const t = ts[0];
   STATE.tenantId = t.id;
   STATE.tenantSlug = t.slug;
   localStorage.setItem('tenant_id', t.id);
   localStorage.setItem('tenant_slug', t.slug);
 
-  // Populate tenant select if more than one
   const sel = document.getElementById('tenant-select');
   sel.innerHTML = ts
     .map((x) => `<option value="${x.id}" data-slug="${x.slug}">${x.name}</option>`)
@@ -136,6 +134,7 @@ async function loadTenants() {
 
 async function loadStages() {
   const data = await api(`/admin/tenants/${STATE.tenantId}/funnel-stages`);
+  // Drizzle returns camelCase: displayName, slug, position, isActive
   STATE.stages = data?.stages ?? [];
   STATE.activeStageId = null;
   STATE.templates = [];
@@ -149,15 +148,16 @@ async function selectStage(stageId) {
   document.querySelector(`[data-stage="${stageId}"]`)?.classList.add('active');
 
   const data = await api(`/admin/funnel-stages/${stageId}/followups`);
-  STATE.templates = (data?.followups ?? []).filter((t) => t.is_active !== false);
+  // Drizzle returns camelCase: sequenceNumber, delayMinutes, textTemplate, flowNs, isActive
+  STATE.templates = (data?.followups ?? []).filter((t) => t.isActive !== false);
 
-  // Load messages for 'content' type templates
   STATE.messages = {};
   await Promise.all(
     STATE.templates
       .filter((t) => t.type === 'content')
       .map(async (t) => {
         const msgs = await api(`/admin/followup-templates/${t.id}/messages`);
+        // messages use snake_case via toResponse: message_type, text_content, media_url, sort_order
         STATE.messages[t.id] = msgs ?? [];
       }),
   );
@@ -179,13 +179,14 @@ async function selectSection(section) {
 // ── Sidebar ──────────────────────────────────────────────────────────────────
 function renderSidebar() {
   const sidebar = document.getElementById('sidebar-nav');
+  // stages use camelCase: s.displayName (not s.name)
   const stageItems = STATE.stages
     .map(
       (s) => `
     <button data-stage="${s.id}"
       class="sidebar-item w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors"
       onclick="selectStage('${s.id}')">
-      Etapa ${s.name}
+      Etapa ${escHtml(s.displayName)}
     </button>
   `,
     )
@@ -233,11 +234,12 @@ function renderStagePanel(main) {
     return;
   }
 
-  const cards = STATE.templates.map((t) => templateCard(t)).join('');
+  // stage.displayName (camelCase from Drizzle)
+  const cards = STATE.templates.map((t) => templateCard(t, stage)).join('');
   main.innerHTML = `
     <div class="p-6">
       <div class="flex items-center justify-between mb-6">
-        <h2 class="text-lg font-semibold text-white">Etapa ${stage.name} — Follow-ups</h2>
+        <h2 class="text-lg font-semibold text-white">Etapa ${escHtml(stage.displayName)} — Follow-ups</h2>
         <button onclick="saveAllFollowups()" class="px-4 py-1.5 bg-teal-600 hover:bg-teal-500 text-white text-sm rounded transition-colors">
           Guardar cambios
         </button>
@@ -247,30 +249,81 @@ function renderStagePanel(main) {
   `;
 }
 
-function templateCard(t) {
+// ── Template card (unified layout for all types) ──────────────────────────────
+function templateCard(t, stage) {
   const delayId = `delay-${t.id}`;
-  const msgSection =
-    t.type === 'content'
-      ? messagesSection(t)
-      : t.type === 'text'
-        ? `<textarea id="text-${t.id}" rows="3"
-            class="w-full bg-[#111] border border-gray-700 rounded px-3 py-2 text-sm text-gray-200 focus:border-teal-500 focus:outline-none"
-            onchange="markDirty('${t.id}')">${escHtml(t.text_template ?? '')}</textarea>`
-        : `<p class="text-xs text-gray-500">Flow: <code>${escHtml(t.flow_ns ?? '')}</code></p>`;
+  // Header: e.g. "1B · meme_plus_text" using sequenceNumber + stage.slug + description
+  const stageTag = stage ? stage.slug.toUpperCase() : '';
+  const label = t.description ?? t.type;
+  const header = `${t.sequenceNumber}${stageTag} · ${escHtml(label)}`;
+
+  let bodyHtml;
+  if (t.type === 'flow') {
+    bodyHtml = `<p class="text-xs text-gray-500">Flow: <code>${escHtml(t.flowNs ?? '')}</code></p>`;
+  } else if (t.type === 'content') {
+    bodyHtml = contentCardBody(t);
+  } else {
+    // text type — show textarea + asset upload section
+    bodyHtml = textCardBody(t);
+  }
 
   return `
     <div id="card-${t.id}" class="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 mb-4">
       <div class="flex items-center justify-between mb-3">
-        <span class="text-xs text-gray-400 font-mono">Seq #${t.sequence_number} · tipo: ${t.type}</span>
+        <span class="text-xs text-gray-400 font-mono">${header}</span>
         <div class="flex items-center gap-2">
           <label class="text-xs text-gray-400">Delay (min):</label>
-          <input id="${delayId}" type="number" min="1" value="${t.delay_minutes}"
+          <input id="${delayId}" type="number" min="1" value="${t.delayMinutes}"
             class="w-20 bg-[#111] border border-gray-700 rounded px-2 py-1 text-sm text-gray-200 focus:border-teal-500 focus:outline-none"
             onchange="markDirty('${t.id}')">
         </div>
       </div>
-      ${msgSection}
+      ${bodyHtml}
     </div>
+  `;
+}
+
+function textCardBody(t) {
+  return `
+    <textarea id="text-${t.id}" rows="3"
+      class="w-full bg-[#111] border border-gray-700 rounded px-3 py-2 text-sm text-gray-200 focus:border-teal-500 focus:outline-none mb-3"
+      onchange="markDirty('${t.id}')">${escHtml(t.textTemplate ?? '')}</textarea>
+    <div class="mt-1">
+      <p class="text-xs text-gray-500 mb-1">Imagen (opcional — convierte a mensaje multimedia)</p>
+      <div class="flex items-center gap-2">
+        <input type="file" accept="image/*"
+          class="text-xs text-gray-400 file:mr-2 file:text-xs file:bg-teal-700 file:text-white file:border-0 file:rounded file:px-2 file:py-1"
+          onchange="uploadAndConvertToContent(event, '${t.id}')">
+      </div>
+    </div>
+  `;
+}
+
+function contentCardBody(t) {
+  const msgs = STATE.messages[t.id] ?? [];
+  const imgMsg = msgs.find((m) => m.message_type === 'image');
+  const txtMsg = msgs.find((m) => m.message_type === 'text');
+
+  const thumb = imgMsg?.media_url
+    ? `<img src="${escHtml(imgMsg.media_url)}" class="mt-2 max-h-24 w-auto rounded" alt="preview">`
+    : '';
+  const imgLabel = imgMsg?.media_url ? 'Meme configurado ✓' : 'Sin imagen';
+
+  return `
+    <textarea id="text-${t.id}" rows="3"
+      class="w-full bg-[#111] border border-gray-700 rounded px-3 py-2 text-sm text-gray-200 focus:border-teal-500 focus:outline-none mb-3"
+      onchange="saveContentText('${t.id}', '${txtMsg?.id ?? ''}', this.value)"
+    >${escHtml(txtMsg?.text_content ?? '')}</textarea>
+    <div class="mt-1">
+      <p class="text-xs text-gray-500 mb-1">${imgLabel}</p>
+      ${thumb}
+      <div class="flex items-center gap-2 mt-2">
+        <input type="file" accept="image/*"
+          class="text-xs text-gray-400 file:mr-2 file:text-xs file:bg-teal-700 file:text-white file:border-0 file:rounded file:px-2 file:py-1"
+          onchange="uploadContentImage(event, '${t.id}', '${imgMsg?.id ?? ''}')">
+      </div>
+    </div>
+    ${msgs.length > 2 ? `<details class="mt-3"><summary class="text-xs text-gray-500 cursor-pointer">Ver todos los mensajes (${msgs.length})</summary>${messagesSection(t)}</details>` : ''}
   `;
 }
 
@@ -278,10 +331,10 @@ function messagesSection(t) {
   const msgs = STATE.messages[t.id] ?? [];
   const msgCards = msgs.map((m) => messageCard(t.id, m)).join('');
   return `
-    <div id="msgs-${t.id}">
+    <div id="msgs-${t.id}" class="mt-2">
       ${msgCards}
     </div>
-    <button onclick="addMessage('${t.id}', '${t.tenant_id}')"
+    <button onclick="addMessage('${t.id}', '${t.tenantId}')"
       class="mt-2 text-xs text-teal-400 hover:text-teal-300 transition-colors">
       + Añadir mensaje
     </button>
@@ -376,10 +429,11 @@ async function saveAllFollowups() {
   let saved = 0;
   for (const t of STATE.templates) {
     if (!STATE.dirty.has(t.id)) continue;
-    const delay = Number(document.getElementById(`delay-${t.id}`)?.value ?? t.delay_minutes);
-    const patch = { delay_minutes: delay };
+    // t.delayMinutes and t.textTemplate are camelCase (Drizzle)
+    const delay = Number(document.getElementById(`delay-${t.id}`)?.value ?? t.delayMinutes);
+    const patch = { delay_minutes: delay }; // API expects snake_case in request body
     if (t.type === 'text') {
-      patch.text_template = document.getElementById(`text-${t.id}`)?.value ?? t.text_template;
+      patch.text_template = document.getElementById(`text-${t.id}`)?.value ?? t.textTemplate;
     }
     try {
       await api(`/admin/followup-templates/${t.id}`, {
@@ -389,7 +443,7 @@ async function saveAllFollowups() {
       STATE.dirty.delete(t.id);
       saved++;
     } catch (e) {
-      toast(`Error guardando #${t.sequence_number}: ${e.message}`, false);
+      toast(`Error guardando #${t.sequenceNumber}: ${e.message}`, false);
     }
   }
   if (saved > 0) toast(`${saved} follow-up(s) guardados`);
@@ -417,6 +471,97 @@ async function saveAllResources() {
   }
   if (saved > 0) toast(`${saved} recurso(s) guardados`);
   else toast('Sin cambios pendientes');
+}
+
+// ── Content card actions ──────────────────────────────────────────────────────
+async function saveContentText(templateId, messageId, text) {
+  if (!messageId) {
+    // No text message yet — create one
+    try {
+      const msg = await api(`/admin/followup-templates/${templateId}/messages`, {
+        method: 'POST',
+        body: JSON.stringify({ message_type: 'text', text_content: text || ' ', sort_order: 1 }),
+      });
+      if (msg) STATE.messages[templateId] = [...(STATE.messages[templateId] ?? []), msg];
+    } catch (e) {
+      toast(`Error guardando texto: ${e.message}`, false);
+    }
+    return;
+  }
+  try {
+    await api(`/admin/followup-messages/${messageId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ text_content: text }),
+    });
+  } catch (e) {
+    toast(`Error guardando texto: ${e.message}`, false);
+  }
+}
+
+async function uploadContentImage(event, templateId, existingImageMessageId) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const url = await uploadAsset(file);
+  if (!url) return;
+
+  try {
+    if (existingImageMessageId) {
+      // Update existing image message
+      await api(`/admin/followup-messages/${existingImageMessageId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ media_url: url }),
+      });
+    } else {
+      // Create new image message
+      await api(`/admin/followup-templates/${templateId}/messages`, {
+        method: 'POST',
+        body: JSON.stringify({ message_type: 'image', media_url: url, sort_order: 0 }),
+      });
+    }
+    toast('Imagen actualizada');
+    await selectStage(STATE.activeStageId);
+  } catch (e) {
+    toast(`Error actualizando imagen: ${e.message}`, false);
+  }
+}
+
+// Converts a text-type template to content when an image is uploaded
+async function uploadAndConvertToContent(event, templateId) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const t = STATE.templates.find((tmpl) => tmpl.id === templateId);
+  if (!t) return;
+
+  const url = await uploadAsset(file);
+  if (!url) return;
+
+  try {
+    // 1. Convert template type to 'content'
+    await api(`/admin/followup-templates/${templateId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ type: 'content', text_template: null }),
+    });
+
+    // 2. Create image message (sort_order 0 = first)
+    await api(`/admin/followup-templates/${templateId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ message_type: 'image', media_url: url, sort_order: 0 }),
+    });
+
+    // 3. Create text message from current textarea value
+    const textValue =
+      document.getElementById(`text-${templateId}`)?.value?.trim() || t.textTemplate || ' ';
+    await api(`/admin/followup-templates/${templateId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ message_type: 'text', text_content: textValue, sort_order: 1 }),
+    });
+
+    toast('Convertido a mensaje multimedia');
+    await selectStage(STATE.activeStageId);
+  } catch (e) {
+    toast(`Error convirtiendo template: ${e.message}`, false);
+  }
 }
 
 // ── Message actions ──────────────────────────────────────────────────────────
@@ -550,7 +695,7 @@ async function uploadAsset(file) {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function escHtml(str) {
-  return String(str)
+  return String(str ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -559,17 +704,14 @@ function escHtml(str) {
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
-  // Login form
   document.getElementById('login-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const pw = document.getElementById('login-password').value;
     await login(pw);
   });
 
-  // Logout button
   document.getElementById('logout-btn').addEventListener('click', logout);
 
-  // Check token
   if (!STATE.token || jwtExpired(STATE.token)) {
     showLoginOverlay();
   } else {
@@ -584,6 +726,9 @@ window.selectSection = selectSection;
 window.markDirty = markDirty;
 window.saveAllFollowups = saveAllFollowups;
 window.saveAllResources = saveAllResources;
+window.saveContentText = saveContentText;
+window.uploadContentImage = uploadContentImage;
+window.uploadAndConvertToContent = uploadAndConvertToContent;
 window.saveMessageText = saveMessageText;
 window.uploadMessageImage = uploadMessageImage;
 window.deleteMessage = deleteMessage;

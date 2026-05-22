@@ -89,6 +89,7 @@ Todos los errores usan la misma estructura:
 
 ## Documentación por módulo
 
-- [Follow-up Templates](./followup-templates.md) — ADR-0015 CRUD completo
+- [Follow-up Templates](./followup-templates.md) — ADR-0015 CRUD completo (incluye `type='content'` y `followup_messages`)
 - [Agent Resources](./agent-resources.md) — ADR-0019 recursos de cierre/objeción para el agente
-- [Dashboard Smoke Checklist](./dashboard-smoke.md) — 11 pasos de smoke e2e tras cada deploy
+- [Dashboard SPA](./dashboard-spa.md) — Arquitectura del frontend: ciclo de vida, convención camelCase/snake_case, layout de cards
+- [Dashboard Smoke Checklist](./dashboard-smoke.md) — 12 pasos de smoke e2e tras cada deploy

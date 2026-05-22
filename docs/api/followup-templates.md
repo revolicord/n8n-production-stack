@@ -4,12 +4,12 @@ Gestión de las secuencias de mensajes de reactivación por etapa del funnel.
 Estos endpoints permiten configurar follow-ups desde la UI de Revolicord sin tocar n8n.
 
 **Implementación:**
-- Handlers: `apps/api/src/routes/admin/followups.ts`
-- Servicio (Drizzle): `apps/api/src/services/followups.ts`
-- Tests de schema: `apps/api/src/routes/admin/followups.test.ts`
-- Tablas: `followup_templates`, `lead_followup_log` (schema en `packages/db/src/schema.ts`)
+- Handlers: `apps/api/src/routes/admin/followups.ts`, `apps/api/src/routes/admin/followup-messages.ts`
+- Servicio (Drizzle): `apps/api/src/services/followups.ts`, `apps/api/src/services/followup-messages.ts`
+- Tests de schema: `apps/api/src/routes/admin/followups.test.ts`, `apps/api/src/routes/admin/followup-messages.test.ts`
+- Tablas: `followup_templates`, `followup_messages`, `lead_followup_log` (schema en `packages/db/src/schema.ts`)
 
-**Auth:** todos los endpoints requieren `Authorization: Bearer <N8N_CALLBACK_TOKEN>`.
+**Auth:** todos los endpoints requieren `Authorization: Bearer <JWT>` o `Bearer <N8N_CALLBACK_TOKEN>` (dual-auth).
 
 ---
 
@@ -24,14 +24,35 @@ Estos endpoints permiten configurar follow-ups desde la UI de Revolicord sin toc
 | `tenant_id` | UUID | Multi-tenancy |
 | `sequence_number` | INT | Orden dentro de la secuencia (≥ 1). Unique por stage |
 | `delay_minutes` | INT | Minutos de silencio del lead antes de enviar este paso |
-| `type` | `'text'` \| `'flow'` | Tipo de mensaje |
+| `type` | `'text'` \| `'flow'` \| `'content'` | Tipo de mensaje |
 | `text_template` | TEXT \| null | Texto a enviar (soporta `{{name}}`). Requerido si `type='text'` |
 | `flow_ns` | TEXT \| null | Namespace de ManyChat. Requerido si `type='flow'` |
-| `description` | TEXT \| null | Descripción para logs y memoria del agente |
+| `description` | TEXT \| null | Descripción para logs y UI del dashboard (p.ej. `"meme_plus_text"`) |
 | `is_active` | BOOL | `false` = soft-deleted; el runner ignora estas filas |
 | `created_at` | TIMESTAMPTZ | Automático |
 
-**Invariante:** `type='text'` exige `text_template` no nulo; `type='flow'` exige `flow_ns` no nulo.
+**Invariante:** `type='text'` exige `text_template` no nulo; `type='flow'` exige `flow_ns` no nulo; `type='content'` no requiere ninguno (los mensajes viven en `followup_messages`).
+
+> **Respuestas camelCase:** los endpoints devuelven las filas Drizzle sin mapeo, por lo que los campos llegan en camelCase (`sequenceNumber`, `delayMinutes`, `textTemplate`, `flowNs`, `isActive`). Los cuerpos de **request** usan snake_case (`sequence_number`, `delay_minutes`, `text_template`). Ver `docs/api/README.md` — Convenciones generales.
+
+### `followup_messages` (ADR-0018)
+
+Hija de `followup_templates`. Solo aplica cuando `type='content'`.
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `id` | UUID | PK |
+| `template_id` | UUID | FK a `followup_templates` (cascade delete) |
+| `tenant_id` | UUID | Multi-tenancy |
+| `message_type` | `'text'` \| `'image'` | Tipo del mensaje individual |
+| `text_content` | TEXT \| null | Texto con `{{name}}`. Requerido si `message_type='text'` |
+| `media_url` | TEXT \| null | URL pública de MinIO. Requerido si `message_type='image'` |
+| `sort_order` | INT | Orden de envío (0 = primero). Unique por `template_id` |
+| `created_at` | TIMESTAMPTZ | Automático |
+
+Patrón habitual (meme + texto): `sort_order=0` con imagen, `sort_order=1` con texto.
+
+> **Respuestas snake_case:** a diferencia de `followup_templates`, los endpoints de mensajes usan un `toResponse()` explícito que mapea los campos a snake_case (`message_type`, `text_content`, `media_url`, `sort_order`).
 
 ### `lead_followup_log`
 

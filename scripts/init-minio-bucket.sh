@@ -24,10 +24,9 @@ echo "[INFO] Configuring MinIO bucket: ${BUCKET} at ${MINIO_ENDPOINT}"
 
 docker run --rm \
   --network host \
+  --entrypoint /bin/sh \
   minio/mc:latest \
-  sh -c "
-    mc alias set local '${MINIO_ENDPOINT}' '${MINIO_USER}' '${MINIO_PASS}' --quiet &&
-    mc mb --ignore-existing local/${BUCKET} &&
-    mc anonymous set download local/${BUCKET} &&
-    echo '[INFO] Bucket ${BUCKET} ready with public download'
-  "
+  -c "mc alias set local '${MINIO_ENDPOINT}' '${MINIO_USER}' '${MINIO_PASS}' --quiet && \
+      mc mb --ignore-existing local/${BUCKET} && \
+      mc anonymous set download local/${BUCKET} && \
+      echo '[INFO] Bucket ${BUCKET} ready with public download'"
