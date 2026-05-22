@@ -47,7 +47,7 @@ SELECT
   ft.text_template,
   ft.flow_ns                         AS followup_flow_ns,
   ft.description                     AS followup_description,
-  ft_next.delay_hours                AS next_delay_hours
+  ft_next.delay_minutes              AS next_delay_minutes
 FROM api.lead_crons lc
 JOIN api.subscribers    s   ON s.id    = lc.subscriber_id
 JOIN api.tenants        t   ON t.id    = lc.tenant_id
@@ -193,7 +193,7 @@ UPDATE api.lead_crons SET
   archive_reason = CASE WHEN $1 IS NULL THEN 'max_followups' ELSE NULL END,
   updated_at     = NOW()
 WHERE id = $2;
--- $1 = ft_next.delay_hours (NULL si no hay template siguiente → archivar)
+-- $1 = ft_next.delay_minutes (NULL si no hay template siguiente → archivar)
 -- $2 = cron_id (lead_crons.id)
 ```
 

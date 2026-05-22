@@ -19,7 +19,7 @@ INSERT INTO api.lead_crons (
 SELECT
   $1::uuid, $2::uuid, $3::uuid,
   ls.current_stage_id,
-  NOW() + ft.delay_hours * INTERVAL '1 hour',
+  NOW() + ft.delay_minutes * INTERVAL '1 minute',
   1,
   TRUE
 FROM api.lead_stages ls
@@ -53,7 +53,7 @@ ON CONFLICT (tenant_id, subscriber_id, conversation_id) DO UPDATE SET
 ### Lógica
 
 - Lee `lead_stages.current_stage_id` para capturar cambios de etapa que el Router haya ejecutado durante este turno.
-- `LEFT JOIN followup_templates` busca el template de sequence_number 1 para calcular `next_followup_at = NOW() + delay_hours`.
+- `LEFT JOIN followup_templates` busca el template de sequence_number 1 para calcular `next_followup_at = NOW() + delay_minutes`.
 - Si no existe template (ej. etapa D sin follow-ups), `next_followup_at = NULL` — el runner no programa nada.
 - `ON CONFLICT` resetea la secuencia a 1 e is_active a TRUE (el lead respondió, se reinicia el ciclo).
 

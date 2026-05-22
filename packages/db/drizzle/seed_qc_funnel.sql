@@ -54,51 +54,51 @@ ON CONFLICT DO NOTHING;
 
 -- Etapa A — 3 follow-ups en días 1, 2, 3
 INSERT INTO api.followup_templates
-  (stage_id, tenant_id, sequence_number, delay_hours, type, text_template, description)
+  (stage_id, tenant_id, sequence_number, delay_minutes, type, text_template, description)
 VALUES
-  (v_stage_a, v_tenant_id, 1, 24, 'text',
+  (v_stage_a, v_tenant_id, 1, 1440, 'text',
    'Oye {{name}}, ¿pudiste ver el video que te mandé? 👀',
    'Follow-up A #1 — 24h sin respuesta'),
-  (v_stage_a, v_tenant_id, 2, 48, 'text',
+  (v_stage_a, v_tenant_id, 2, 2880, 'text',
    'Hola {{name}}, no quiero molestarte pero me gustaría saber qué te pareció 🙌',
    'Follow-up A #2 — 48h adicionales sin respuesta'),
-  (v_stage_a, v_tenant_id, 3, 72, 'text',
+  (v_stage_a, v_tenant_id, 3, 4320, 'text',
    '{{name}}, último intento. Si no es el momento, sin problema. Cuando quieras aquí estaré 💪',
    'Follow-up A #3 — cierre de secuencia')
 ON CONFLICT (stage_id, sequence_number) DO NOTHING;
 
 -- Etapa MS — 3 follow-ups en días 1, 2, 3
 INSERT INTO api.followup_templates
-  (stage_id, tenant_id, sequence_number, delay_hours, type, text_template, description)
+  (stage_id, tenant_id, sequence_number, delay_minutes, type, text_template, description)
 VALUES
-  (v_stage_ms, v_tenant_id, 1, 24, 'text',
+  (v_stage_ms, v_tenant_id, 1, 1440, 'text',
    'Hey {{name}}, ¿ya pudiste ver la presentación completa? 🎥',
    'Follow-up MS #1 — 24h sin respuesta'),
-  (v_stage_ms, v_tenant_id, 2, 48, 'text',
+  (v_stage_ms, v_tenant_id, 2, 2880, 'text',
    '{{name}}, quería saber si tuviste alguna duda después de ver el video 🤔',
    'Follow-up MS #2 — 48h adicionales sin respuesta'),
-  (v_stage_ms, v_tenant_id, 3, 72, 'text',
+  (v_stage_ms, v_tenant_id, 3, 4320, 'text',
    '{{name}}, entiendo que estás ocupado. Cuando puedas, aquí estoy para resolver tus preguntas 💬',
    'Follow-up MS #3 — cierre de secuencia')
 ON CONFLICT (stage_id, sequence_number) DO NOTHING;
 
 -- Etapa B — 2 follow-ups en días 1, 2
 INSERT INTO api.followup_templates
-  (stage_id, tenant_id, sequence_number, delay_hours, type, text_template, description)
+  (stage_id, tenant_id, sequence_number, delay_minutes, type, text_template, description)
 VALUES
-  (v_stage_b, v_tenant_id, 1, 24, 'text',
+  (v_stage_b, v_tenant_id, 1, 1440, 'text',
    '{{name}}, ¿pudiste agendar tu llamada? 📅 Aquí el link por si lo necesitas',
    'Follow-up B #1 — 24h sin agendar'),
-  (v_stage_b, v_tenant_id, 2, 48, 'text',
+  (v_stage_b, v_tenant_id, 2, 2880, 'text',
    '{{name}}, los slots de esta semana se están llenando. ¿Te gustaría reservar el tuyo? 🚀',
    'Follow-up B #2 — cierre de secuencia')
 ON CONFLICT (stage_id, sequence_number) DO NOTHING;
 
 -- Etapa C — 1 follow-up de confirmación
 INSERT INTO api.followup_templates
-  (stage_id, tenant_id, sequence_number, delay_hours, type, text_template, description)
+  (stage_id, tenant_id, sequence_number, delay_minutes, type, text_template, description)
 VALUES
-  (v_stage_c, v_tenant_id, 1, 2, 'text',
+  (v_stage_c, v_tenant_id, 1, 120, 'text',
    '{{name}}, te confirmo tu llamada agendada 🎯 ¿Nos vemos a la hora acordada?',
    'Follow-up C #1 — confirmación de llamada')
 ON CONFLICT (stage_id, sequence_number) DO NOTHING;

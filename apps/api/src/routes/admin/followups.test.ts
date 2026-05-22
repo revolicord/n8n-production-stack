@@ -5,7 +5,7 @@ describe('CreateFollowupBodySchema', () => {
   it('accepts type:text with text_template', () => {
     const result = CreateFollowupBodySchema.safeParse({
       sequence_number: 1,
-      delay_hours: 24,
+      delay_minutes: 1440,
       type: 'text',
       text_template: 'Oye {{name}}, ¿viste el video?',
     });
@@ -15,7 +15,7 @@ describe('CreateFollowupBodySchema', () => {
   it('accepts type:flow with flow_ns', () => {
     const result = CreateFollowupBodySchema.safeParse({
       sequence_number: 2,
-      delay_hours: 48,
+      delay_minutes: 2880,
       type: 'flow',
       flow_ns: 'QC_video_intro',
     });
@@ -25,7 +25,7 @@ describe('CreateFollowupBodySchema', () => {
   it('rejects type:text without text_template', () => {
     const result = CreateFollowupBodySchema.safeParse({
       sequence_number: 1,
-      delay_hours: 24,
+      delay_minutes: 1440,
       type: 'text',
     });
     expect(result.success).toBe(false);
@@ -34,7 +34,7 @@ describe('CreateFollowupBodySchema', () => {
   it('rejects type:flow without flow_ns', () => {
     const result = CreateFollowupBodySchema.safeParse({
       sequence_number: 1,
-      delay_hours: 24,
+      delay_minutes: 1440,
       type: 'flow',
     });
     expect(result.success).toBe(false);
@@ -43,21 +43,41 @@ describe('CreateFollowupBodySchema', () => {
   it('rejects sequence_number: 0', () => {
     const result = CreateFollowupBodySchema.safeParse({
       sequence_number: 0,
-      delay_hours: 24,
+      delay_minutes: 1440,
       type: 'text',
       text_template: 'x',
     });
     expect(result.success).toBe(false);
   });
 
-  it('rejects negative delay_hours', () => {
+  it('rejects negative delay_minutes', () => {
     const result = CreateFollowupBodySchema.safeParse({
       sequence_number: 1,
-      delay_hours: -1,
+      delay_minutes: -1,
       type: 'text',
       text_template: 'x',
     });
     expect(result.success).toBe(false);
+  });
+
+  it('accepts delay_minutes: 15', () => {
+    const result = CreateFollowupBodySchema.safeParse({
+      sequence_number: 1,
+      delay_minutes: 15,
+      type: 'text',
+      text_template: 'x',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts delay_minutes: 1440', () => {
+    const result = CreateFollowupBodySchema.safeParse({
+      sequence_number: 1,
+      delay_minutes: 1440,
+      type: 'text',
+      text_template: 'x',
+    });
+    expect(result.success).toBe(true);
   });
 });
 
@@ -66,8 +86,8 @@ describe('UpdateFollowupBodySchema', () => {
     expect(UpdateFollowupBodySchema.safeParse({}).success).toBe(true);
   });
 
-  it('accepts partial patch with only delay_hours', () => {
-    expect(UpdateFollowupBodySchema.safeParse({ delay_hours: 36 }).success).toBe(true);
+  it('accepts partial patch with only delay_minutes', () => {
+    expect(UpdateFollowupBodySchema.safeParse({ delay_minutes: 2160 }).success).toBe(true);
   });
 
   it('accepts null text_template to clear', () => {

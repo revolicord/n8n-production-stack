@@ -41,7 +41,7 @@ export async function createFollowupTemplate(
     stageId: string;
     tenantId: string;
     sequenceNumber: number;
-    delayHours: number;
+    delayMinutes: number;
     type: string;
     textTemplate?: string | null;
     flowNs?: string | null;
@@ -54,7 +54,7 @@ export async function createFollowupTemplate(
       stageId: args.stageId,
       tenantId: args.tenantId,
       sequenceNumber: args.sequenceNumber,
-      delayHours: args.delayHours,
+      delayMinutes: args.delayMinutes,
       type: args.type,
       textTemplate: args.textTemplate ?? null,
       flowNs: args.flowNs ?? null,
@@ -83,7 +83,7 @@ export async function updateFollowupTemplate(
   id: string,
   patch: Partial<{
     sequenceNumber: number;
-    delayHours: number;
+    delayMinutes: number;
     type: string;
     textTemplate: string | null;
     flowNs: string | null;

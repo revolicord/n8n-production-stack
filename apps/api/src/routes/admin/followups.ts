@@ -30,7 +30,7 @@ function isTypeConsistent(
 export const CreateFollowupBodySchema = z
   .object({
     sequence_number: z.number().int().min(1),
-    delay_hours: z.number().int().positive(),
+    delay_minutes: z.number().int().positive(),
     type: FollowupTypeEnum,
     text_template: z.string().min(1).optional(),
     flow_ns: z.string().min(1).optional(),
@@ -43,7 +43,7 @@ export const CreateFollowupBodySchema = z
 
 export const UpdateFollowupBodySchema = z.object({
   sequence_number: z.number().int().min(1).optional(),
-  delay_hours: z.number().int().positive().optional(),
+  delay_minutes: z.number().int().positive().optional(),
   type: FollowupTypeEnum.optional(),
   text_template: z.string().min(1).nullable().optional(),
   flow_ns: z.string().min(1).nullable().optional(),
@@ -126,7 +126,7 @@ export default async function followupsRoutes(app: FastifyInstance): Promise<voi
           .send({ error: { code: 'INVALID_PAYLOAD', details: bodyParsed.error.issues } });
       }
 
-      const { sequence_number, delay_hours, type, text_template, flow_ns, description } =
+      const { sequence_number, delay_minutes, type, text_template, flow_ns, description } =
         bodyParsed.data;
 
       try {
@@ -134,7 +134,7 @@ export default async function followupsRoutes(app: FastifyInstance): Promise<voi
           stageId: stage.id,
           tenantId: stage.tenantId,
           sequenceNumber: sequence_number,
-          delayHours: delay_hours,
+          delayMinutes: delay_minutes,
           type,
           textTemplate: text_template,
           flowNs: flow_ns,
@@ -200,7 +200,7 @@ export default async function followupsRoutes(app: FastifyInstance): Promise<voi
 
     const drizzlePatch: Parameters<typeof updateFollowupTemplate>[2] = {};
     if (patch.sequence_number !== undefined) drizzlePatch.sequenceNumber = patch.sequence_number;
-    if (patch.delay_hours !== undefined) drizzlePatch.delayHours = patch.delay_hours;
+    if (patch.delay_minutes !== undefined) drizzlePatch.delayMinutes = patch.delay_minutes;
     if (patch.type !== undefined) drizzlePatch.type = patch.type;
     if ('text_template' in patch) drizzlePatch.textTemplate = patch.text_template ?? null;
     if ('flow_ns' in patch) drizzlePatch.flowNs = patch.flow_ns ?? null;

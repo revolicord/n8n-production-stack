@@ -322,7 +322,7 @@ export const followupTemplates = apiSchema.table(
       .references(() => funnelStages.id, { onDelete: 'cascade' }),
     tenantId: uuid('tenant_id').notNull(),
     sequenceNumber: integer('sequence_number').notNull(),
-    delayHours: integer('delay_hours').notNull(),
+    delayMinutes: integer('delay_minutes').notNull(),
     type: text('type').notNull(),
     textTemplate: text('text_template'),
     flowNs: text('flow_ns'),

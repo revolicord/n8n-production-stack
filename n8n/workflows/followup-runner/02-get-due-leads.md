@@ -26,7 +26,7 @@ SELECT
   ft.text_template,
   ft.flow_ns                         AS followup_flow_ns,
   ft.description                     AS followup_description,
-  ft_next.delay_hours                AS next_delay_hours
+  ft_next.delay_minutes              AS next_delay_minutes
 FROM api.lead_crons lc
 JOIN api.subscribers   s   ON s.id   = lc.subscriber_id
 JOIN api.tenants       t   ON t.id   = lc.tenant_id
@@ -65,11 +65,11 @@ LIMIT 50
 | `text_template` | `followup_templates.text_template` | interpolación |
 | `followup_flow_ns` | `followup_templates.flow_ns` | sendFlow |
 | `followup_description` | `followup_templates.description` | chatMemoryText |
-| `next_delay_hours` | `followup_templates(seq+1).delay_hours` | cálculo `next_followup_at` |
+| `next_delay_minutes` | `followup_templates(seq+1).delay_minutes` | cálculo `next_followup_at` |
 
 ## Notas
 
 - `ft` = template para el `next_sequence_number` actual → puede ser NULL (secuencia agotada).
-- `ft_next` = template del siguiente número → `next_delay_hours` NULL significa que no hay más follow-ups.
+- `ft_next` = template del siguiente número → `next_delay_minutes` NULL significa que no hay más follow-ups.
 - El `LIMIT 50` protege contra timeouts; ajustar junto con el intervalo del Schedule Trigger.
 - `mc_api_key` se lee de `tenants.config` (JSONB) — multi-tenant desde el origen.

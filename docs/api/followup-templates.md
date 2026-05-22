@@ -23,7 +23,7 @@ Estos endpoints permiten configurar follow-ups desde la UI de Revolicord sin toc
 | `stage_id` | UUID | FK a `funnel_stages` |
 | `tenant_id` | UUID | Multi-tenancy |
 | `sequence_number` | INT | Orden dentro de la secuencia (≥ 1). Unique por stage |
-| `delay_hours` | INT | Horas de silencio del lead antes de enviar este paso |
+| `delay_minutes` | INT | Minutos de silencio del lead antes de enviar este paso |
 | `type` | `'text'` \| `'flow'` | Tipo de mensaje |
 | `text_template` | TEXT \| null | Texto a enviar (soporta `{{name}}`). Requerido si `type='text'` |
 | `flow_ns` | TEXT \| null | Namespace de ManyChat. Requerido si `type='flow'` |
@@ -82,7 +82,7 @@ curl -s "http://localhost:3000/admin/funnel-stages/550e8400-e29b-41d4-a716-44665
       "stageId": "550e8400-...",
       "tenantId": "f47ac10b-...",
       "sequenceNumber": 1,
-      "delayHours": 24,
+      "delayMinutes": 24,
       "type": "text",
       "textTemplate": "Oye {{name}}, ¿pudiste ver el video que te mandé? 👀",
       "flowNs": null,
@@ -93,7 +93,7 @@ curl -s "http://localhost:3000/admin/funnel-stages/550e8400-e29b-41d4-a716-44665
     {
       "id": "b2c3d4e5-...",
       "sequenceNumber": 2,
-      "delayHours": 48,
+      "delayMinutes": 48,
       "type": "text",
       "textTemplate": "Hola {{name}}, no quiero molestarte pero me gustaría saber qué te pareció 🙌",
       ...
@@ -115,7 +115,7 @@ Crea un nuevo paso en la secuencia de una etapa. El `tenant_id` se toma automát
 ```json
 {
   "sequence_number": 1,
-  "delay_hours": 24,
+  "delay_minutes": 24,
   "type": "text",
   "text_template": "Oye {{name}}, ¿pudiste ver el video que te mandé? 👀",
   "description": "Follow-up #1 — 24h sin respuesta"
@@ -127,7 +127,7 @@ Para `type='flow'`:
 ```json
 {
   "sequence_number": 2,
-  "delay_hours": 48,
+  "delay_minutes": 48,
   "type": "flow",
   "flow_ns": "QC_A_VIDEO_video_gancho_25s",
   "description": "Follow-up #2 — video de refuerzo"
@@ -137,7 +137,7 @@ Para `type='flow'`:
 | Campo | Tipo | Requerido | Descripción |
 |---|---|---|---|
 | `sequence_number` | int ≥ 1 | sí | Posición en la secuencia |
-| `delay_hours` | int > 0 | sí | Horas de silencio antes de enviar |
+| `delay_minutes` | int > 0 | sí | Minutos de silencio antes de enviar |
 | `type` | `'text'` \| `'flow'` | sí | Tipo de mensaje |
 | `text_template` | string | si `type='text'` | Texto; soporta `{{name}}` |
 | `flow_ns` | string | si `type='flow'` | Namespace de ManyChat |
@@ -160,13 +160,13 @@ Para `type='flow'`:
 
 Edita una plantilla existente. Se envía solo lo que cambia (patch parcial).
 
-El handler hace merge con la fila existente antes de validar la invariante `type/field`, por lo que puedes cambiar solo `delay_hours` sin necesidad de repetir `text_template`.
+El handler hace merge con la fila existente antes de validar la invariante `type/field`, por lo que puedes cambiar solo `delay_minutes` sin necesidad de repetir `text_template`.
 
 **Body (todos opcionales):**
 
 ```json
 {
-  "delay_hours": 36,
+  "delay_minutes": 36,
   "text_template": "{{name}}, último intento 💪"
 }
 ```
@@ -190,7 +190,7 @@ Para limpiar un campo nullable, envía `null`:
 curl -s -X PUT "http://localhost:3000/admin/followup-templates/a1b2c3d4-..." \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"delay_hours": 36}'
+  -d '{"delay_minutes": 36}'
 ```
 
 ---
@@ -268,7 +268,7 @@ curl -s "http://localhost:3000/admin/leads/c0a80101-0000-0000-0000-000000000001/
    → GET /admin/leads/:subscriberId/followup-history
 
 4. Ajustar un delay sin tocar n8n:
-   → PUT /admin/followup-templates/:id  { "delay_hours": 36 }
+   → PUT /admin/followup-templates/:id  { "delay_minutes": 36 }
 
 5. Desactivar un paso sin borrar el historial:
    → DELETE /admin/followup-templates/:id

@@ -15,7 +15,7 @@ const esc = s => String(s || '').replace(/'/g, "''");
 
 const stageId    = pd.current_stage_id ? "'" + pd.current_stage_id + "'" : 'NULL';
 const templateId = pd.template_id      ? "'" + pd.template_id + "'"      : 'NULL';
-const delayHours = pd.next_delay_hours;
+const delayMinutes = pd.next_delay_minutes;
 
 // 1. Log de envío
 const logSql =
@@ -39,10 +39,10 @@ const histSql =
   "'additional_kwargs','{}'))::jsonb)";
 
 // 3. Avanzar secuencia o archivar
-const updateSql = delayHours
+const updateSql = delayMinutes
   ? "UPDATE api.lead_crons SET " +
     "next_sequence_number = next_sequence_number + 1, " +
-    "next_followup_at = NOW() + INTERVAL '" + parseInt(delayHours) + " hours', " +
+    "next_followup_at = NOW() + INTERVAL '" + parseInt(delayMinutes) + " minutes', " +
     "is_active = TRUE, archived_at = NULL, archive_reason = NULL, " +
     "updated_at = NOW() WHERE id = '" + pd.cron_id + "'"
   : "UPDATE api.lead_crons SET " +
@@ -63,8 +63,8 @@ return [{ json: { logSql, histSql, updateSql } }];
 
 ## Lógica de `updateSql`
 
-- `delayHours` **distinto de NULL** → hay template siguiente → se incrementa `next_sequence_number`, se calcula `next_followup_at = NOW() + N horas`, cron permanece activo.
-- `delayHours` **NULL** → no hay template siguiente → `is_active = FALSE`, `archive_reason = 'max_followups'`.
+- `delayMinutes` **distinto de NULL** → hay template siguiente → se incrementa `next_sequence_number`, se calcula `next_followup_at = NOW() + N minutos`, cron permanece activo.
+- `delayMinutes` **NULL** → no hay template siguiente → `is_active = FALSE`, `archive_reason = 'max_followups'`.
 
 ## Por qué se accede a `$('Loop Over Leads').first().json`
 
