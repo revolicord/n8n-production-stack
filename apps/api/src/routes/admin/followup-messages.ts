@@ -35,12 +35,22 @@ const CreateMessageBodySchema = z
     },
   );
 
-const UpdateMessageBodySchema = z.object({
+export const UpdateMessageBodySchema = z.object({
   message_type: MessageTypeEnum.optional(),
   text_content: z.string().min(1).nullable().optional(),
   media_url: z.string().url().nullable().optional(),
   sort_order: z.number().int().min(0).optional(),
 });
+
+function isMessageConsistent(
+  messageType: string,
+  textContent: string | null | undefined,
+  mediaUrl: string | null | undefined,
+): boolean {
+  if (messageType === 'text') return !!textContent;
+  if (messageType === 'image') return !!mediaUrl;
+  return false;
+}
 
 function toResponse(msg: {
   id: string;
@@ -146,6 +156,29 @@ export default async function followupMessagesRoutes(app: FastifyInstance): Prom
     }
     const body = bodyParsed.data;
     const db = getDb();
+
+    const existing = await getFollowupMessageById(db, id);
+    if (!existing) {
+      return reply
+        .code(404)
+        .send({ error: { code: 'NOT_FOUND', message: 'mensaje no encontrado' } });
+    }
+
+    // Merge con la fila existente y revalidar invariante type/field
+    const effectiveType = body.message_type ?? existing.messageType;
+    const effectiveText = 'text_content' in body ? body.text_content : existing.textContent;
+    const effectiveMedia = 'media_url' in body ? body.media_url : existing.mediaUrl;
+
+    if (!isMessageConsistent(effectiveType, effectiveText, effectiveMedia)) {
+      return reply.code(400).send({
+        error: {
+          code: 'INVALID_PAYLOAD',
+          message:
+            'text_content requerido si message_type=text; media_url requerido si message_type=image',
+        },
+      });
+    }
+
     const patch: Parameters<typeof updateFollowupMessage>[2] = {};
     if (body.message_type !== undefined) patch.messageType = body.message_type;
     if (body.text_content !== undefined) patch.textContent = body.text_content;

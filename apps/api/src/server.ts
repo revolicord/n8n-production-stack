@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import multipart from '@fastify/multipart';
 import sensible from '@fastify/sensible';
@@ -35,7 +36,13 @@ async function main() {
   });
 
   await app.register(helmet, {
-    contentSecurityPolicy: false, // API JSON, no HTML
+    contentSecurityPolicy: false, // API JSON + dashboard HTML servido desde /dashboard
+  });
+  await app.register(cors, {
+    // En producción: mismo origen (el dashboard se sirve desde el mismo Fastify).
+    // En desarrollo: refleja el Origin recibido para permitir localhost:8787 u otro puerto.
+    origin: config.NODE_ENV !== 'production',
+    credentials: true,
   });
   await app.register(multipart, {
     limits: { fileSize: 8 * 1024 * 1024 }, // 8 MB max; validado también en la ruta
