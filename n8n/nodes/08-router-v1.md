@@ -18,7 +18,8 @@
 | v4 | `reply_text_dynamic` y `reply_text_with_link` — texto del agente (`lead_in`) fluye a macros |
 | v4.1 | Sin cambios de lógica (refactor interno) |
 | v4.2 | Fix bug "MS→B busca audios donde no están": `lookup_stage` en macros para resolver slugs cross-stage |
-| **v4.3** | Fix: `withRetry` adjunta `__attempts`/`__retried` al error antes de rethrow; el catch de `execSendContent` lo usa en vez de hardcodear `attempts:3`. También añade `ECONNABORTED` a códigos retryables para que los timeouts de axios se reintenten. |
+| v4.3 | Fix: `withRetry` adjunta `__attempts`/`__retried` al error antes de rethrow; el catch de `execSendContent` lo usa en vez de hardcodear `attempts:3`. También añade `ECONNABORTED` a códigos retryables para que los timeouts de axios se reintenten. |
+| **v4.4** | Fix: `RangeError: Maximum call stack size exceeded` en `observable-object.ts` — el `json` de salida se envuelve en `JSON.parse(JSON.stringify(...))` para eliminar los ObservableObject proxies de n8n que venían de `$input` (agentActions, trace.action) antes de que n8n intente re-envolverlos. |
 
 ---
 
@@ -83,7 +84,7 @@ send_content de macro    → stageFlowsBySlug[lookup_stage][slug_id]  (stage exp
 
 ```javascript
 // ============================================================================
-// ROUTER v4.3 — fix: withRetry adjunta __attempts al error; ECONNABORTED retryable.
+// ROUTER v4.4 — fix: JSON.parse/stringify en return para strip ObservableObject proxies.
 // ============================================================================
 
 const TRANSITION_MACROS = {
@@ -374,7 +375,7 @@ for (const action of agentActions) {
 // ---------- 6. Output -------------------------------------------------------
 
 return [{
-  json: {
+  json: JSON.parse(JSON.stringify({
     plan: { reasoning, actions: agentActions },
     trace: trace,
     insert_content_sent: firstSentInsertPayload,
@@ -384,7 +385,7 @@ return [{
     callbackUrl: ctx.callbackUrl,
     callbackToken: ctx.callbackToken,
     finalStage: currentStage
-  }
+  }))
 }];
 ```
 
