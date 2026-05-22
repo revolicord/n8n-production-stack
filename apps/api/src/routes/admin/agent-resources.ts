@@ -1,7 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { getConfig } from '../../config.js';
-import { verifyBearerToken } from '../../lib/auth.js';
+import { verifyAdminAuth } from '../../lib/admin-auth.js';
 import { getDb } from '../../lib/db.js';
 import {
   createAgentResource,
@@ -58,18 +57,12 @@ function isDuplicateSlug(err: unknown): boolean {
 }
 
 export default async function agentResourcesRoutes(app: FastifyInstance): Promise<void> {
-  const config = getConfig();
-
-  function auth(authorization: string | undefined): boolean {
-    return verifyBearerToken(authorization, config.N8N_CALLBACK_TOKEN);
-  }
-
   // GET /admin/tenants/:tenantId/agent-resources
   app.get<{
     Params: { tenantId: string };
     Querystring: { category?: string };
   }>('/admin/tenants/:tenantId/agent-resources', async (req, reply) => {
-    if (!auth(req.headers.authorization)) {
+    if (!(await verifyAdminAuth(req, app))) {
       return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });
     }
     const paramParsed = UuidParamSchema.safeParse(req.params.tenantId);
@@ -93,7 +86,7 @@ export default async function agentResourcesRoutes(app: FastifyInstance): Promis
   app.post<{ Params: { tenantId: string } }>(
     '/admin/tenants/:tenantId/agent-resources',
     async (req, reply) => {
-      if (!auth(req.headers.authorization)) {
+      if (!(await verifyAdminAuth(req, app))) {
         return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });
       }
       const paramParsed = UuidParamSchema.safeParse(req.params.tenantId);
@@ -134,7 +127,7 @@ export default async function agentResourcesRoutes(app: FastifyInstance): Promis
 
   // PUT /admin/agent-resources/:id
   app.put<{ Params: { id: string } }>('/admin/agent-resources/:id', async (req, reply) => {
-    if (!auth(req.headers.authorization)) {
+    if (!(await verifyAdminAuth(req, app))) {
       return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });
     }
     const paramParsed = UuidParamSchema.safeParse(req.params.id);
@@ -180,7 +173,7 @@ export default async function agentResourcesRoutes(app: FastifyInstance): Promis
 
   // DELETE /admin/agent-resources/:id  (soft delete)
   app.delete<{ Params: { id: string } }>('/admin/agent-resources/:id', async (req, reply) => {
-    if (!auth(req.headers.authorization)) {
+    if (!(await verifyAdminAuth(req, app))) {
       return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });
     }
     const paramParsed = UuidParamSchema.safeParse(req.params.id);

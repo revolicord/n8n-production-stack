@@ -1,21 +1,14 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { getConfig } from '../../config.js';
-import { verifyBearerToken } from '../../lib/auth.js';
+import { verifyAdminAuth } from '../../lib/admin-auth.js';
 import { isAllowedMimetype, uploadAsset } from '../../lib/minio.js';
 
 const MAX_FILE_SIZE = 8 * 1024 * 1024; // 8 MB
 
 export default async function assetsRoutes(app: FastifyInstance): Promise<void> {
-  const config = getConfig();
-
-  function auth(authorization: string | undefined): boolean {
-    return verifyBearerToken(authorization, config.N8N_CALLBACK_TOKEN);
-  }
-
   // POST /admin/assets/upload
   app.post<{ Querystring: { tenant_id?: string } }>('/admin/assets/upload', async (req, reply) => {
-    if (!auth(req.headers.authorization)) {
+    if (!(await verifyAdminAuth(req, app))) {
       return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });
     }
 

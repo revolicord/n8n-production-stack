@@ -1,7 +1,7 @@
 import { TurnCompletedSchema } from '@dm-api/shared';
 import type { FastifyInstance } from 'fastify';
 import { getConfig } from '../../config.js';
-import { verifyBearerToken } from '../../lib/auth.js';
+import { verifyAdminAuth } from '../../lib/admin-auth.js';
 import { getDb } from '../../lib/db.js';
 import { getProcessBatchQueue } from '../../lib/queue.js';
 import { getRedis } from '../../lib/redis.js';
@@ -14,17 +14,7 @@ export default async function turnCompletedRoute(app: FastifyInstance): Promise<
   const config = getConfig();
 
   app.post('/admin/turn-completed', async (req, reply) => {
-    if (!verifyBearerToken(req.headers.authorization, config.N8N_CALLBACK_TOKEN)) {
-      const authHeader = req.headers.authorization;
-      const receivedToken = typeof authHeader === 'string' ? authHeader.split(/\s+/)[1] : undefined;
-      req.log.error(
-        {
-          received_length: receivedToken?.length,
-          expected_length: config.N8N_CALLBACK_TOKEN.length,
-          has_auth_header: !!authHeader,
-        },
-        'turn-completed auth failed',
-      );
+    if (!(await verifyAdminAuth(req, app))) {
       return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });
     }
 

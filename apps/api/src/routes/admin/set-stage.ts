@@ -1,8 +1,7 @@
 import { sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { getConfig } from '../../config.js';
-import { verifyBearerToken } from '../../lib/auth.js';
+import { verifyAdminAuth } from '../../lib/admin-auth.js';
 import { getDb } from '../../lib/db.js';
 import {
   createStageTransition,
@@ -64,12 +63,10 @@ const SetStageBodySchema = z
   );
 
 export default async function setStageRoute(app: FastifyInstance): Promise<void> {
-  const config = getConfig();
-
   app.post<{ Params: { subscriberId: string } }>(
     '/admin/leads/:subscriberId/stage',
     async (req, reply) => {
-      if (!verifyBearerToken(req.headers.authorization, config.N8N_CALLBACK_TOKEN)) {
+      if (!(await verifyAdminAuth(req, app))) {
         return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });
       }
 

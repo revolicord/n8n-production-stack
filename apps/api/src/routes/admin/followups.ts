@@ -1,7 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { getConfig } from '../../config.js';
-import { verifyBearerToken } from '../../lib/auth.js';
+import { verifyAdminAuth } from '../../lib/admin-auth.js';
 import { getDb } from '../../lib/db.js';
 import {
   createFollowupTemplate,
@@ -63,17 +62,11 @@ function isDuplicateSequence(err: unknown): boolean {
 }
 
 export default async function followupsRoutes(app: FastifyInstance): Promise<void> {
-  const config = getConfig();
-
-  function auth(authorization: string | undefined): boolean {
-    return verifyBearerToken(authorization, config.N8N_CALLBACK_TOKEN);
-  }
-
   // GET /admin/tenants/:tenantId/funnel-stages
   app.get<{ Params: { tenantId: string }; Querystring: { include_inactive?: string } }>(
     '/admin/tenants/:tenantId/funnel-stages',
     async (req, reply) => {
-      if (!auth(req.headers.authorization)) {
+      if (!(await verifyAdminAuth(req, app))) {
         return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });
       }
       const paramParsed = UuidParamSchema.safeParse(req.params.tenantId);
@@ -96,7 +89,7 @@ export default async function followupsRoutes(app: FastifyInstance): Promise<voi
   app.get<{ Params: { stageId: string }; Querystring: { include_inactive?: string } }>(
     '/admin/funnel-stages/:stageId/followups',
     async (req, reply) => {
-      if (!auth(req.headers.authorization)) {
+      if (!(await verifyAdminAuth(req, app))) {
         return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });
       }
 
@@ -127,7 +120,7 @@ export default async function followupsRoutes(app: FastifyInstance): Promise<voi
   app.post<{ Params: { stageId: string } }>(
     '/admin/funnel-stages/:stageId/followups',
     async (req, reply) => {
-      if (!auth(req.headers.authorization)) {
+      if (!(await verifyAdminAuth(req, app))) {
         return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });
       }
 
@@ -178,7 +171,7 @@ export default async function followupsRoutes(app: FastifyInstance): Promise<voi
 
   // PUT /admin/followup-templates/:id
   app.put<{ Params: { id: string } }>('/admin/followup-templates/:id', async (req, reply) => {
-    if (!auth(req.headers.authorization)) {
+    if (!(await verifyAdminAuth(req, app))) {
       return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });
     }
 
@@ -248,7 +241,7 @@ export default async function followupsRoutes(app: FastifyInstance): Promise<voi
 
   // DELETE /admin/followup-templates/:id
   app.delete<{ Params: { id: string } }>('/admin/followup-templates/:id', async (req, reply) => {
-    if (!auth(req.headers.authorization)) {
+    if (!(await verifyAdminAuth(req, app))) {
       return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });
     }
 
@@ -274,7 +267,7 @@ export default async function followupsRoutes(app: FastifyInstance): Promise<voi
   app.get<{ Params: { subscriberId: string } }>(
     '/admin/leads/:subscriberId/followup-history',
     async (req, reply) => {
-      if (!auth(req.headers.authorization)) {
+      if (!(await verifyAdminAuth(req, app))) {
         return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });
       }
 

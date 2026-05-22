@@ -1,7 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { getConfig } from '../../config.js';
-import { verifyBearerToken } from '../../lib/auth.js';
+import { verifyAdminAuth } from '../../lib/admin-auth.js';
 import { getDb } from '../../lib/db.js';
 import {
   createFollowupMessage,
@@ -75,17 +74,11 @@ function toResponse(msg: {
 }
 
 export default async function followupMessagesRoutes(app: FastifyInstance): Promise<void> {
-  const config = getConfig();
-
-  function auth(authorization: string | undefined): boolean {
-    return verifyBearerToken(authorization, config.N8N_CALLBACK_TOKEN);
-  }
-
   // GET /admin/followup-templates/:templateId/messages
   app.get<{ Params: { templateId: string } }>(
     '/admin/followup-templates/:templateId/messages',
     async (req, reply) => {
-      if (!auth(req.headers.authorization)) {
+      if (!(await verifyAdminAuth(req, app))) {
         return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });
       }
       const { templateId } = req.params;
@@ -104,7 +97,7 @@ export default async function followupMessagesRoutes(app: FastifyInstance): Prom
   app.post<{ Params: { templateId: string } }>(
     '/admin/followup-templates/:templateId/messages',
     async (req, reply) => {
-      if (!auth(req.headers.authorization)) {
+      if (!(await verifyAdminAuth(req, app))) {
         return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });
       }
       const { templateId } = req.params;
@@ -141,7 +134,7 @@ export default async function followupMessagesRoutes(app: FastifyInstance): Prom
 
   // PUT /admin/followup-messages/:id
   app.put<{ Params: { id: string } }>('/admin/followup-messages/:id', async (req, reply) => {
-    if (!auth(req.headers.authorization)) {
+    if (!(await verifyAdminAuth(req, app))) {
       return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });
     }
     const { id } = req.params;
@@ -196,7 +189,7 @@ export default async function followupMessagesRoutes(app: FastifyInstance): Prom
 
   // DELETE /admin/followup-messages/:id
   app.delete<{ Params: { id: string } }>('/admin/followup-messages/:id', async (req, reply) => {
-    if (!auth(req.headers.authorization)) {
+    if (!(await verifyAdminAuth(req, app))) {
       return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });
     }
     const { id } = req.params;

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
+import jwt from '@fastify/jwt';
 import multipart from '@fastify/multipart';
 import sensible from '@fastify/sensible';
 import Fastify from 'fastify';
@@ -43,6 +44,10 @@ async function main() {
     // En desarrollo: refleja el Origin recibido para permitir localhost:8787 u otro puerto.
     origin: config.NODE_ENV !== 'production',
     credentials: true,
+  });
+  await app.register(jwt, {
+    secret: config.ADMIN_JWT_SECRET,
+    sign: { expiresIn: '12h' },
   });
   await app.register(multipart, {
     limits: { fileSize: 8 * 1024 * 1024 }, // 8 MB max; validado también en la ruta
