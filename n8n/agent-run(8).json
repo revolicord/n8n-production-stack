@@ -1,0 +1,738 @@
+{
+  "name": "agent-run",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "agent-run",
+        "options": {}
+      },
+      "id": "2d00d60e-43a8-491a-9569-8ca95613cbe0",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        112
+      ],
+      "webhookId": "02f8dbff-b2ec-4078-9946-a0ae2a064f22",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- ============================================================================\n-- Get Stage Config — v2\n-- ----------------------------------------------------------------------------\n-- Cambios respecto a v1:\n--   - Añade columna `all_stages_flows`: catálogo completo de flows del tenant\n--     agrupados por stage_slug. Lo usa el Router para resolver slug_id de\n--     destinos de macros (que viven en stages distintos al actual).\n--   - El resto de columnas (flows del stage actual, valid_transitions, goal,\n--     etc.) queda igual — Build Context las sigue leyendo como antes.\n-- ============================================================================\n\nSELECT\n  fs.id           AS stage_id,\n  fs.slug,\n  fs.display_name,\n  fs.description,\n  fs.goal,\n  fs.max_followups,\n\n  -- Valid transitions del stage actual (sin cambios)\n  COALESCE(\n    (\n      SELECT json_agg(\n        json_build_object(\n          'slug',        stm.to_stage_slug,\n          'when_to_use', stm.when_to_use\n        ) ORDER BY stm.to_stage_slug\n      )\n      FROM api.stage_transitions_map stm\n      WHERE stm.tenant_id = fs.tenant_id\n        AND stm.from_stage_slug = fs.slug\n        AND stm.is_active = TRUE\n    ),\n    '[]'::json\n  ) AS valid_transitions,\n\n  -- Flows del stage actual (sin cambios — sigue alimentando content_options del agente)\n  COALESCE(\n    json_agg(\n      json_build_object(\n        'flow_ns',             sf.flow_ns,\n        'slug_id',             COALESCE(sf.slug_id, sf.human_name),\n        'human_name',          sf.human_name,\n        'media_type',          sf.media_type,\n        'content_description', sf.content_description,\n        'usage_condition',     COALESCE(sf.usage_condition, sf.description),\n        'weight',              sf.weight,\n        'variant_group',       sf.variant_group\n      )\n    ) FILTER (WHERE sf.id IS NOT NULL AND sf.is_active = TRUE AND sf.flow_ns NOT LIKE 'PENDIENTE%'),\n    '[]'::json\n  ) AS flows,\n\n  -- NUEVO: catálogo completo de flows del tenant, agrupado por stage_slug.\n  -- Estructura: { \"<stage_slug>\": [ { slug_id, flow_ns, weight, variant_group, ... }, ... ] }\n  -- El Router lo usa para resolver slug_id cuando una macro envía contenido\n  -- de un stage distinto al actual del lead.\n  (\n    SELECT json_object_agg(stage_slug, flows_arr)\n    FROM (\n      SELECT\n        fs2.slug AS stage_slug,\n        json_agg(\n          json_build_object(\n            'flow_ns',       sf2.flow_ns,\n            'slug_id',       COALESCE(sf2.slug_id, sf2.human_name),\n            'human_name',    sf2.human_name,\n            'media_type',    sf2.media_type,\n            'weight',        sf2.weight,\n            'variant_group', sf2.variant_group\n          )\n        ) AS flows_arr\n      FROM api.funnel_stages fs2\n      JOIN api.stage_flows sf2\n        ON sf2.stage_id = fs2.id\n       AND sf2.is_active = TRUE\n       AND sf2.flow_ns NOT LIKE 'PENDIENTE%'\n      WHERE fs2.tenant_id = fs.tenant_id\n        AND fs2.is_active = TRUE\n      GROUP BY fs2.slug\n    ) AS s\n  ) AS all_stages_flows\n\nFROM api.funnel_stages fs\nLEFT JOIN api.stage_flows sf ON sf.stage_id = fs.id AND sf.is_active = TRUE\nWHERE fs.tenant_id = $1::uuid\n  AND fs.slug      = $2\n  AND fs.is_active = TRUE\nGROUP BY fs.id",
+        "options": {
+          "queryReplacement": "={{ $json.body.tenant.id }},{{ $json.body.subscriber.lead_stage || 'A' }}"
+        }
+      },
+      "id": "b1d3a0d8-987d-4168-859e-6e28ebd7abdc",
+      "name": "Get Stage Config",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        224,
+        16
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "xBbNbntvO0xJs5HM",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "2b318080-00d5-4a7b-b86a-5406b6be8abd",
+      "name": "Combine Contexts",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        496,
+        32
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  lc.next_sequence_number - 1   AS followups_sent,\n  lc.updated_at                 AS last_activity,\n  lc.next_followup_at,\n  fs.display_name               AS stage_name,\n  fs.slug                       AS stage_slug,\n  fs.description                AS stage_objective,\n  fs.goal                       AS stage_goal,\n  fs.max_followups,\n  COALESCE(\n    json_agg(\n      json_build_object(\n        'seq',          lfl.sequence_number,\n        'sent_at',      lfl.sent_at,\n        'status',       lfl.status,\n        'responded_at', lfl.responded_at,\n        'text_sent',    lfl.text_sent\n      ) ORDER BY lfl.sequence_number\n    ) FILTER (WHERE lfl.id IS NOT NULL),\n    '[]'::json\n  ) AS followup_history\nFROM api.lead_crons lc\nJOIN api.funnel_stages fs ON fs.id = lc.current_stage_id\nLEFT JOIN api.lead_followup_log lfl\n  ON lfl.subscriber_id   = lc.subscriber_id\n  AND lfl.conversation_id = lc.conversation_id\nWHERE lc.subscriber_id   = $1::uuid\n  AND lc.conversation_id = $2::uuid\nGROUP BY lc.id, fs.display_name, fs.slug, fs.description, fs.goal, fs.max_followups",
+        "options": {
+          "queryReplacement": "={{ $('Webhook').first().json.body.subscriber.id }},{{ $('Webhook').first().json.body.conversation.id }}"
+        }
+      },
+      "id": "becd7c1a-d057-470b-b2bf-89bbebca4519",
+      "name": "Get Subscriber CRM Context",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        224,
+        208
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "xBbNbntvO0xJs5HM",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================================\n// BUILD CONTEXT v4\n// ----------------------------------------------------------------------------\n// Cambios respecto a v3:\n//  - Lee `all_stages_flows` de Get Stage Config y lo expone como stageFlowsBySlug.\n//    El Router lo usa para resolver slug_id contra el stage destino de una macro\n//    (no solo contra los flows del stage actual).\n//  - Todo lo demás queda exactamente igual.\n// ============================================================================\n\nfunction daysAgoText(ts) {\n  if (!ts) return null;\n  const days = Math.round((Date.now() - new Date(ts).getTime()) / 86400000);\n  const hours = Math.round((Date.now() - new Date(ts).getTime()) / 3600000);\n  if (hours < 1) return 'hace menos de 1 hora';\n  if (hours < 24) return 'hace ' + hours + ' hora(s)';\n  return 'hace ' + days + ' día(s)';\n}\n\nfunction collapseVariantGroups(flows) {\n  const groups = new Map();\n  const singletons = [];\n\n  for (const f of flows) {\n    const g = f.variant_group;\n    if (g && String(g).trim() !== '') {\n      if (!groups.has(g)) groups.set(g, []);\n      groups.get(g).push(f);\n    } else {\n      singletons.push(f);\n    }\n  }\n\n  const collapsed = [];\n\n  for (const f of singletons) {\n    collapsed.push({ exposed: f, chosenVariant: f });\n  }\n\n  for (const [, variants] of groups) {\n    const chosen = pickWeighted(variants);\n    collapsed.push({ exposed: chosen, chosenVariant: chosen });\n  }\n\n  return collapsed;\n}\n\nfunction pickWeighted(arr) {\n  if (!arr || arr.length === 0) return null;\n  const total = arr.reduce((s, x) => s + (Number(x.weight) || 1), 0);\n  let r = Math.random() * total;\n  for (const x of arr) {\n    r -= (Number(x.weight) || 1);\n    if (r <= 0) return x;\n  }\n  return arr[arr.length - 1];\n}\n\nfunction normalizeReplyType(rt) {\n  if (!rt || rt === '{{last_reply_type}}') return null;\n  return rt;\n}\n\nfunction buildMessagesText(messages) {\n  return (messages || [])\n    .map(function (m) {\n      const rt = normalizeReplyType(m.reply_type);\n      if (rt === 'thumbs_up') return '👍 [el contacto reacciono con pulgar arriba]';\n      if (m.media_urls && m.media_urls.length > 0 && !m.text) {\n        return '[contenido multimedia recibido — no se puede leer]';\n      }\n      return m.text || '[mensaje sin texto]';\n    })\n    .filter(Boolean)\n    .join('\\n');\n}\n\n// ----- Lectura de inputs ----------------------------------------------------\n\nconst raw = $('Webhook').first().json;\nconst body = raw.body || raw;\n\nconst sub = body.subscriber || {};\nconst subscriberName = sub.display_name || sub.ig_username || 'la persona';\nconst currentStageSlug = sub.lead_stage\n  || (sub.metadata && sub.metadata.stage)\n  || 'A';\n\nconst stageConfig = $('Get Stage Config').first()\n  ? $('Get Stage Config').first().json\n  : {};\n\nconst rawFlows = Array.isArray(stageConfig.flows) ? stageConfig.flows : [];\n\nconst validTransitions = Array.isArray(stageConfig.valid_transitions)\n  ? stageConfig.valid_transitions\n  : [];\n\n// NUEVO v4: catálogo completo de flows del tenant por stage_slug.\n// Lo usa el Router para resolver slug_id en macros que tocan stages distintos\n// al actual del lead.\nconst allStagesFlows = stageConfig.all_stages_flows || {};\n\nconst crm = $('Get Subscriber CRM Context').first()\n  ? $('Get Subscriber CRM Context').first().json\n  : {};\n\nconst historyItems = $('Get Content History').all()\n  ? $('Get Content History').all().map(function (x) { return x.json; })\n  : [];\n\nconst sentMap = {};\nfor (const h of historyItems) {\n  if (h && h.slug_id) {\n    sentMap[h.slug_id] = {\n      last_sent_at: h.last_sent_at,\n      ever_responded: !!h.ever_responded,\n      times_sent: Number(h.times_sent) || 0\n    };\n  }\n}\n\nconst followupsSent = crm.followups_sent || 0;\nconst maxFollowups = stageConfig.max_followups || crm.max_followups || 3;\nconst followupHistory = Array.isArray(crm.followup_history) ? crm.followup_history : [];\n\nconst igCtx = body.instagram_context || {};\nconst signals = (sub.metadata && sub.metadata.signals)\n  || (body.lead_state && body.lead_state.signals)\n  || null;\nconst calendlyUrl = (body.tenant && body.tenant.config && body.tenant.config.calendly_url) || null;\n\nconst staticPrompt = $('System Prompt').first()\n  && $('System Prompt').first().json\n  && $('System Prompt').first().json.staticPrompt\n  ? $('System Prompt').first().json.staticPrompt\n  : '';\n\n// ----- Construccion de content_options con historial -----------------------\n\nconst collapsed = collapseVariantGroups(rawFlows);\n\nconst contentOptions = collapsed.map(function (c) {\n  const slugId = c.exposed.slug_id || c.exposed.human_name;\n  const sent = sentMap[slugId];\n\n  return {\n    slug_id: slugId,\n    type: c.exposed.media_type || null,\n    description: c.exposed.content_description || null,\n    when_to_use: c.exposed.usage_condition || null,\n    last_sent: sent ? daysAgoText(sent.last_sent_at) : null,\n    lead_responded_to_it: sent ? sent.ever_responded : null,\n    times_sent: sent ? sent.times_sent : 0\n  };\n});\n\nconst selectedVariants = {};\nfor (const c of collapsed) {\n  const key = c.exposed.slug_id || c.exposed.human_name;\n  selectedVariants[key] = c.chosenVariant.flow_ns;\n}\n\n// NUEVO v4: pre-cálculo de stageFlowsBySlug.\n// Para cada stage del catálogo, colapsamos variant groups (igual que arriba) y\n// nos quedamos con UN flow_ns por slug_id. El Router consulta este objeto\n// como stageFlowsBySlug[stage_slug][slug_id] = flow_ns.\nconst stageFlowsBySlug = {};\nfor (const stageSlug in allStagesFlows) {\n  const flowsOfStage = Array.isArray(allStagesFlows[stageSlug]) ? allStagesFlows[stageSlug] : [];\n  const collapsedStage = collapseVariantGroups(flowsOfStage);\n  const map = {};\n  for (const c of collapsedStage) {\n    const key = c.exposed.slug_id || c.exposed.human_name;\n    if (key) map[key] = c.chosenVariant.flow_ns;\n  }\n  stageFlowsBySlug[stageSlug] = map;\n}\n\n// ----- Construccion del contextJson -----------------------------------------\n\nconst contextJson = {\n  lead: {\n    name: subscriberName,\n    last_seen: igCtx.last_seen || null,\n    last_interaction: igCtx.last_interaction || null\n  },\n  stage: {\n    slug: currentStageSlug,\n    goal: stageConfig.goal || crm.stage_goal || stageConfig.description || null,\n    valid_transitions: validTransitions\n  },\n  content_options: contentOptions,\n  followups: {\n    sent: followupsSent,\n    max: maxFollowups,\n    history: followupHistory.map(function (h) {\n      return {\n        seq: h.seq,\n        days_ago: h.sent_at ? Math.round((Date.now() - new Date(h.sent_at).getTime()) / 86400000) : null,\n        responded: !!h.responded_at\n      };\n    })\n  },\n  extras: {\n    calendly_url: calendlyUrl,\n    signals: signals\n  }\n};\n\n// ----- System prompt y chatInput --------------------------------------------\n\nconst systemPrompt = staticPrompt;\nconst userMessages = buildMessagesText(body.messages);\n\nconst chatInput =\n  '<context>\\n' + JSON.stringify(contextJson, null, 2) + '\\n</context>\\n\\n' +\n  '<lead_message>\\n' + userMessages + '\\n</lead_message>';\n\n// ----- Output ---------------------------------------------------------------\n\nreturn [{\n  json: {\n    chatInput: chatInput,\n    systemPrompt: systemPrompt,\n    contextJson: contextJson,\n    selectedVariants: selectedVariants,\n\n    // NUEVO v4: catálogo de slugs por stage para el Router (no para el agente).\n    // NO se incluye en chatInput ni en contextJson — es solo para downstream.\n    stageFlowsBySlug: stageFlowsBySlug,\n\n    subscriberId: sub.manychat_subscriber_id,\n    subscriberDbId: sub.id,\n    tenantDbId: (body.tenant && body.tenant.id) || '',\n    mcApiKey: (body.tenant && body.tenant.config && body.tenant.config.manychat_api_key) || '',\n    conversationId: body.conversation && body.conversation.id,\n    turnId: body.turn_id,\n    currentStage: currentStageSlug,\n    callbackUrl: body.callback_url,\n    callbackToken: body.callback_token\n  }\n}];"
+      },
+      "id": "fe31ef8f-cff7-40d7-8543-d60358245b69",
+      "name": "Build Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.chatInput }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "={{ $json.systemPrompt }}",
+          "returnIntermediateSteps": false
+        }
+      },
+      "id": "a876a6d0-9e1b-4ffc-8250-996b1f7de77b",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1056,
+        64
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "claude-sonnet-4-6",
+          "cachedResultName": "Claude Sonnet 4.6"
+        },
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "c6861f69-c74c-4142-80ab-652ec0eabc26",
+      "name": "Anthropic Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.5,
+      "position": [
+        1008,
+        400
+      ],
+      "credentials": {
+        "anthropicApi": {
+          "id": "CqaNlJsRteqVJlUs",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "=$json.subscriberId"
+      },
+      "id": "9378de84-93b2-444e-9d6c-8e666ce818ee",
+      "name": "Postgres Chat Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.3,
+      "position": [
+        1104,
+        256
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "xBbNbntvO0xJs5HM",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO api.lead_crons (\n  tenant_id, subscriber_id, conversation_id, current_stage_id,\n  next_followup_at, next_sequence_number, is_active\n)\nSELECT\n  $1::uuid, $2::uuid, $3::uuid,\n  ls.current_stage_id,\n  NOW() + ft.delay_hours * INTERVAL '1 hour',\n  1,\n  TRUE\nFROM api.lead_stages ls\nLEFT JOIN api.followup_templates ft\n  ON ft.stage_id        = ls.current_stage_id\n  AND ft.sequence_number = 1\n  AND ft.is_active       = TRUE\nWHERE ls.subscriber_id = $2::uuid\n  AND ls.tenant_id     = $1::uuid\nLIMIT 1\nON CONFLICT (tenant_id, subscriber_id, conversation_id) DO UPDATE SET\n  current_stage_id     = EXCLUDED.current_stage_id,\n  next_followup_at     = EXCLUDED.next_followup_at,\n  next_sequence_number = 1,\n  is_active            = TRUE,\n  updated_at           = NOW()",
+        "options": {
+          "queryReplacement": "={{ $('Build Context').first().json.tenantDbId }},{{ $('Build Context').first().json.subscriberDbId }},{{ $('Build Context').first().json.conversationId }}"
+        }
+      },
+      "id": "9a90ea9a-445f-4990-a37b-26e8a89596ae",
+      "name": "Upsert Lead Cron",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1712,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "xBbNbntvO0xJs5HM",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE api.lead_followup_log SET\n  status       = 'responded',\n  responded_at = NOW()\nWHERE subscriber_id   = $1::uuid\n  AND conversation_id = $2::uuid\n  AND status          = 'sent'",
+        "options": {
+          "queryReplacement": "={{ $('Build Context').first().json.subscriberDbId }},{{ $('Build Context').first().json.conversationId }}"
+        }
+      },
+      "id": "127a7421-866f-4342-ad53-86050182deb1",
+      "name": "Mark Followups Responded",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1856,
+        160
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "xBbNbntvO0xJs5HM",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "45e8d51d-953a-490e-8bc4-1d00f307888b",
+              "name": "staticPrompt",
+              "value": "ROL Eres Alex, de Quantum Creators. Tu tiempo vale oro y tienes cientos de mensajes que responder. Te comunicas enviando contenido pregrabado (videos, imágenes o audios), no escribiendo párrafos. Tu trabajo en cada turno es UNO solo: leer el mensaje del lead, leer el contexto, y devolver un PLAN en formato JSON. No ejecutas acciones. No llamas herramientas. Solo decides y describes el plan. Otro sistema lo ejecuta por ti. CÓMO RESPONDES — REGLA ABSOLUTA Tu respuesta es exclusivamente un objeto JSON válido. Sin texto antes. Sin texto después. Sin bloques de código markdown. Sin explicaciones fuera del JSON. La estructura del objeto es exactamente esta: reasoning (string, siempre presente): 1-2 frases internas explicando por qué decidiste este plan. No se envía al lead, es para auditoría. actions (array, siempre presente): lista ordenada de acciones que el sistema ejecutará en secuencia. Puede estar vacía si decides no hacer nada este turno. Cada acción es uno de estos tres tipos:  send_content — envía un contenido pregrabado al lead. { \"type\": \"send_content\", \"slug_id\": \"<copia exacta del slug_id de content_options>\", \"evidence\": \"<cita textual del lead que justifica el envío>\" } change_stage — mueve al lead a otra etapa del funnel. { \"type\": \"change_stage\", \"new_stage\": \"<MS|B|C|D|disqualified>\", \"reason\": <null o uno de no_money|not_interested|geographic|no_quality|fake_account>, \"evidence\": \"<cita textual del lead que justifica la transición>\", \"lead_in\": \"<frase opcional — ver abajo>\" } El campo lead_in es:  OBLIGATORIO cuando new_stage es \"C\": la frase humana que precede al link de Calendly. Ejemplo: \"Genial, te paso el enlace para que elijas el horario que mejor te venga:\" OBLIGATORIO cuando new_stage es \"disqualified\": la frase humana de despedida. Ejemplo: \"Vale, no es tu momento, éxitos en lo que sigues.\" IGNORADO cuando new_stage es \"MS\" o \"B\" (esas transiciones no tienen frase asociada). El sistema añade automáticamente el URL después del lead_in en el caso de C. NO incluyas tú el URL en el lead_in. El lead_in debe ser una frase corta (máx 200 caracteres), natural, sin emojis, como la escribiría un humano ocupado.   reply_text — manda una frase corta de texto al lead (sin emojis, máximo 200 caracteres). { \"type\": \"reply_text\", \"text\": \"<la frase>\" }  El orden importa: las acciones se ejecutan de izquierda a derecha. QUÉ INFORMACIÓN RECIBES En el contexto de cada turno se te entrega un bloque estructurado con: stage.slug: la etapa actual del lead. stage.goal: el objetivo de esta etapa. stage.valid_transitions: la lista de etapas a las que puedes mover al lead desde aquí. Cada una es un objeto con:  slug: el identificador de la etapa destino. when_to_use: el criterio EXACTO para usar esa transición. Esta es tu guía obligatoria.  content_options: la lista de contenidos disponibles para esta etapa. Cada uno trae:  slug_id: el identificador. Es lo que copias en send_content.slug_id, carácter por carácter. type: video, audio, imagen. description: qué es ese contenido. when_to_use: el criterio para elegirlo. last_sent: cuándo se envió por última vez en esta etapa, o null si nunca. lead_responded_to_it: true si el lead ya respondió, false si lo recibió y no respondió, null si nunca se le envió. times_sent: cuántas veces se ha enviado en la etapa actual.  extras.calendly_url: el link de Calendly. NO lo escribas tú en reply_text — el sistema lo añade automáticamente cuando emites change_stage a C con lead_in. No conoces etapas ni contenidos de memoria. Solo existen los que vienen en el contexto de este turno. Nunca inventes un slug_id ni una etapa. MEMORIA — SEGUIMIENTOS AUTOMÁTICOS Si en tu historial conversacional ves mensajes con el prefijo \"[SEGUIMIENTO AUTOMÁTICO #N]\", significa que el sistema envió esos mensajes de forma automática mientras el lead no respondía. No los menciones explícitamente; úsalos como contexto para calibrar tu tono. Si ya se han enviado varios y el lead recién responde, eso te dice que tardó en contestar — sé más caluroso y agradecido en tu reacción, no como si fuera la primera vez que escribe. CASCADAS AUTOMÁTICAS — IMPORTANTE El sistema tiene cascadas configuradas para ciertas transiciones. Cuando emites un change_stage que corresponde a una de ellas, el sistema automáticamente ejecuta acciones adicionales DESPUÉS del cambio. Tú no las pones en tu plan — solo emites la transición y el sistema hace el resto. Cascadas activas:  A→MS: tras el cambio, el sistema envía automáticamente el audio de VSL, el video de VSL, y mueve al lead a B en el mismo turno. Etapa final: B. MS→B: tras el cambio, el sistema envía automáticamente el audio de VSL y el video de VSL. Etapa final: B. B→C: tras el cambio, el sistema envía tu lead_in seguido del link de Calendly como un único reply_text. Etapa final: C. *→disqualified: tras el cambio, el sistema envía tu lead_in como reply_text de despedida.  Consecuencia práctica: nunca añadas manualmente send_content o reply_text que ya ejecuta una cascada. Si lo haces se duplican los envíos. CÓMO DECIDIR  Elegir contenido (send_content)  Paso A — filtra qué contenidos son repetidos:  last_sent != null Y lead_responded_to_it == true → AGOTADO. Ya cumplió su función. last_sent != null Y lead_responded_to_it == false → PENDIENTE. Fue enviado pero el lead no respondió. No lo repitas en el mismo turno. last_sent == null → VIRGEN. Nunca enviado en esta etapa. Es la preferida si encaja.  Paso B — compara el mensaje del lead con el when_to_use de las opciones no agotadas. Elige la que mejor encaje, dando prioridad a las VIRGEN sobre las PENDIENTE. Paso C — pon el slug_id exacto y una evidence: la cita textual del lead que justifica esa elección concreta. Si todas las opciones encajables están agotadas, o ninguna encaja con el mensaje del lead, no incluyas send_content en actions.  Cambiar de etapa (change_stage)  REGLA ESTRICTA: para cualquier change_stage, se deben cumplir las DOS condiciones siguientes. Si falla una sola, no incluyas la acción. Condición A: el destino (new_stage) debe ser uno de los slug listados en stage.valid_transitions. Condición B: el mensaje del lead debe encajar con el when_to_use del destino elegido en stage.valid_transitions. NUNCA elijas un destino solo porque está disponible. NUNCA inventes la semántica de un slug — lee su when_to_use textualmente. Reglas adicionales una vez decidida una transición:  Pon new_stage, una evidence (cita textual literal del lead) y reason. reason es null SIEMPRE, EXCEPTO cuando new_stage es disqualified: ahí es obligatorio y debe ser uno de: no_money, not_interested, geographic, no_quality, fake_account. Incluye lead_in cuando new_stage es C o disqualified (ver más arriba). Ante un \"no me interesa\", precio inviable, o ambigüedad prolongada del lead: si \"disqualified\" está en valid_transitions, transiciona con el reason correspondiente. No rebatas la objeción. No ruegues.   Texto (reply_text)  Regla general: la acción habla sola. El contenido que mandas (video, audio) ya le dice al lead qué hacer. No lo acompañes con texto explicativo. Cuándo SÍ usar reply_text:  Conversación pura: el lead pregunta o dice algo que no dispara contenido ni mueve de etapa, y merece una respuesta breve. Confirmación corta de reserva (en etapa C cuando el lead avisa que ya agendó). NUNCA uses reply_text para mandar el link de Calendly o para despedirte en disqualified — esas frases van en el campo lead_in del change_stage correspondiente.  Formato: una sola frase, seca, rápida, como un humano ocupado escribiendo desde el móvil. Cero emojis. Nunca. ETAPA B — CÓMO ACTUAR En B el lead ya recibió el audio y la VSL completos. No hay contenido pregrabado que mandar en B — content_options vendrá vacío. Tu trabajo es leer su reacción y clasificarla: Señal POSITIVA — el lead está listo para agendar. Ejemplos:  \"sí mándame el link\", \"vale\", \"ok agendamos\", \"me apunto\", \"dime cómo seguir\" \"me gustó\", \"interesante\", \"me convenció\", \"vamos\" 👍 (pulgar arriba), 🔥, ❤️, cualquier reacción positiva al contenido \"¿cómo agendo?\", \"¿dónde reservo?\"  Para señales positivas: emite UN change_stage a C con lead_in. El sistema añade el link automáticamente. Ejemplo: { \"actions\": [{ \"type\": \"change_stage\", \"new_stage\": \"C\", \"reason\": null, \"evidence\": \"<cita>\", \"lead_in\": \"<frase humana>\" }] } Señal NEGATIVA — rechazo claro. Ejemplos:  \"no me interesa\", \"no es para mí\", \"no gracias\", \"estoy bien así\" Precio inviable: \"no puedo pagar eso\", \"no tengo presupuesto\"  Para señales negativas: emite UN change_stage a disqualified con reason y lead_in. Señal AMBIGUA o silencio aparente — el lead pregunta algo, duda, o dice algo que no es ni positivo ni negativo claro. Ejemplos:  \"¿qué incluye?\", \"¿cuánto cuesta?\", \"déjame pensarlo\" preguntas técnicas, dudas operativas  Para señales ambiguas: actions = []. No hay contenidos en B para mandar reactivamente. El cron de follow-ups se encargará si el silencio persiste. EJEMPLOS DE PLANES Caso 1 — Lead en A da pulgar arriba al hook: { \"reasoning\": \"Lead reaccionó positivo al hook, toca arrancar la cascada de MS\", \"actions\": [{ \"type\": \"change_stage\", \"new_stage\": \"MS\", \"reason\": null, \"evidence\": \"👍\" }] } (El sistema añadirá audio_vsl + video_vsl + cambio a B.) Caso 2 — Lead en B reacciona con pulgar arriba o \"me gustó\" tras la VSL: { \"reasoning\": \"Reacción positiva en B tras la VSL, toca dar el link de Calendly\", \"actions\": [{ \"type\": \"change_stage\", \"new_stage\": \"C\", \"reason\": null, \"evidence\": \"👍\", \"lead_in\": \"Genial, te paso el enlace para que elijas el horario que mejor te venga:\" }] } (El sistema añade el calendly_url al final del lead_in y lo manda como un solo reply_text.) Caso 3 — Lead dice \"no me interesa, gracias\": { \"reasoning\": \"Rechazo claro, descalificar sin rebatir\", \"actions\": [{ \"type\": \"change_stage\", \"new_stage\": \"disqualified\", \"reason\": \"not_interested\", \"evidence\": \"no me interesa, gracias\", \"lead_in\": \"Entiendo, no es tu momento. Éxitos en lo que viene.\" }] } Caso 4 — Lead solo saluda en A (\"hola\"): { \"reasoning\": \"Saludo sin contexto, mejor esperar a su próxima señal\", \"actions\": [] } Caso 5 — Lead en B pregunta \"¿cuánto cuesta?\": { \"reasoning\": \"Pregunta de precio en B, no toca dar precio ni mandar contenido (B no tiene contenidos reactivos). Esperamos su próxima señal y dejamos que el cron actúe si persiste el silencio.\", \"actions\": [] } RESTRICCIONES DURAS — NUNCA LAS ROMPAS  Cero emojis en reply_text ni en lead_in. Nunca expliques el producto en texto. El contenido hace ese trabajo. Nunca des el precio. Nunca ruegues ni intentes convencer a un lead que duda. Buscas un SÍ o un NO claro. Nunca menciones que eres una IA, ni hables de herramientas, sistemas, JSON o etapas con el lead. Nunca inventes un slug_id ni una etapa que no esté en el contexto de este turno. Nunca elijas una transición sin verificar que su when_to_use encaja con el mensaje del lead. Nunca repitas un contenido cuyo lead_responded_to_it sea true, salvo que el lead lo pida explícitamente. Nunca incluyas send_content de audio_vsl o video_vsl cuando emites change_stage A→MS o MS→B. El sistema los manda solo. Nunca incluyas reply_text con el link de Calendly. El link va en el lead_in de change_stage→C y el sistema lo añade automáticamente. Nunca incluyas el URL de Calendly literal en el lead_in. El sistema lo añade después.  Tu salida es siempre y solo el objeto JSON. Nada más.",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        624,
+        112
+      ],
+      "id": "8d99c84a-ce35-4921-a5bd-3fafa1a8d40b",
+      "name": "System Prompt"
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"additionalProperties\": false,\n  \"required\": [\"reasoning\", \"actions\"],\n  \"properties\": {\n    \"reasoning\": {\n      \"type\": \"string\",\n      \"minLength\": 1,\n      \"description\": \"1-2 frases internas explicando por qué se eligió este plan. No se envía al lead.\"\n    },\n    \"actions\": {\n      \"type\": \"array\",\n      \"minItems\": 0,\n      \"maxItems\": 6,\n      \"description\": \"Lista ordenada de acciones que el Router ejecutará en secuencia. Vacío = no hacer nada este turno.\",\n      \"items\": {\n        \"oneOf\": [\n          {\n            \"type\": \"object\",\n            \"additionalProperties\": false,\n            \"required\": [\"type\", \"slug_id\", \"evidence\"],\n            \"properties\": {\n              \"type\":     { \"const\": \"send_content\" },\n              \"slug_id\":  { \"type\": \"string\", \"minLength\": 1 },\n              \"evidence\": { \"type\": \"string\", \"minLength\": 1 }\n            }\n          },\n          {\n            \"type\": \"object\",\n            \"additionalProperties\": false,\n            \"required\": [\"type\", \"new_stage\", \"reason\", \"evidence\"],\n            \"properties\": {\n              \"type\":      { \"const\": \"change_stage\" },\n              \"new_stage\": { \"type\": \"string\", \"enum\": [\"MS\", \"B\", \"C\", \"D\", \"disqualified\"] },\n              \"reason\": {\n                \"anyOf\": [\n                  { \"type\": \"null\" },\n                  { \"type\": \"string\", \"enum\": [\"no_money\", \"not_interested\", \"geographic\", \"no_quality\", \"fake_account\"] }\n                ]\n              },\n              \"evidence\": { \"type\": \"string\", \"minLength\": 1 },\n              \"lead_in\": {\n                \"type\": \"string\",\n                \"minLength\": 1,\n                \"maxLength\": 200,\n                \"description\": \"Frase humana opcional que precede al envío automático que dispara la macro de esta transición. OBLIGATORIO para new_stage='C' (frase antes del link de Calendly) y new_stage='disqualified' (frase de despedida). IGNORADO para MS y B (no tienen macro de texto). Sin emojis.\"\n              }\n            }\n          },\n          {\n            \"type\": \"object\",\n            \"additionalProperties\": false,\n            \"required\": [\"type\", \"text\"],\n            \"properties\": {\n              \"type\": { \"const\": \"reply_text\" },\n              \"text\": { \"type\": \"string\", \"minLength\": 1, \"maxLength\": 200 }\n            }\n          }\n        ]\n      }\n    }\n  }\n}",
+        "autoFix": true
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1184,
+        320
+      ],
+      "id": "69e2e6a5-1d90-4cec-82c9-a79bed05d827",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  slug_id,\n  MAX(sent_at) AS last_sent_at,\n  BOOL_OR(lead_responded) AS ever_responded,\n  COUNT(*) AS times_sent\nFROM api.lead_content_sent\nWHERE subscriber_id   = $1::uuid\n  AND conversation_id = $2::uuid\n  AND stage_slug      = $3\nGROUP BY slug_id\nORDER BY last_sent_at DESC",
+        "options": {
+          "queryReplacement": "={{ $('Webhook').first().json.body.subscriber.id }}, {{ $('Webhook').first().json.body.conversation.id }},{{ $('Webhook').first().json.body.subscriber.lead_stage || 'A' }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        368,
+        128
+      ],
+      "id": "c5fec6d0-cc3b-475e-b366-9bd9cff94907",
+      "name": "Get Content History",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "xBbNbntvO0xJs5HM",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "5d313e8e-5a52-4e9e-b268-cf9efc8b9245",
+              "leftValue": "={{ $json.insert_content_sent }}",
+              "rightValue": "null",
+              "operator": {
+                "type": "object",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1488,
+        -96
+      ],
+      "id": "b5366e0d-8ae7-4024-89a9-cbfdb6949350",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE api.lead_content_sent\nSET lead_responded = TRUE, responded_at = NOW()\nWHERE subscriber_id = $1::uuid\n  AND conversation_id = $2::uuid\n  AND lead_responded = FALSE",
+        "options": {
+          "queryReplacement": "={{ $('Webhook').first().json.body.subscriber.id }}, {{ $('Webhook').first().json.body.conversation.id }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        752,
+        16
+      ],
+      "id": "a78caa29-55ad-472e-a2fd-63b2d9f2f2da",
+      "name": "Execute a SQL query1",
+      "credentials": {
+        "postgres": {
+          "id": "xBbNbntvO0xJs5HM",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO api.lead_content_sent (\n  tenant_id, subscriber_id, conversation_id, stage_slug,\n  slug_id, flow_ns, turn_id\n) VALUES (\n  $1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7::uuid\n)",
+        "options": {
+          "queryReplacement": "={{ $json.insert_content_sent.tenant_id }}, {{ $json.insert_content_sent.subscriber_id }}, {{ $json.insert_content_sent.conversation_id }}, {{ $json.insert_content_sent.stage_slug }}, {{ $json.insert_content_sent.slug_id }}, {{ $json.insert_content_sent.flow_ns }}, {{ $json.insert_content_sent.turn_id }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1584,
+        64
+      ],
+      "id": "80c3692f-4a16-4c72-97ee-48ccca050510",
+      "name": "lead_content_sent",
+      "credentials": {
+        "postgres": {
+          "id": "xBbNbntvO0xJs5HM",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================================\n// ROUTER v4.2 — macros + retry + lookup_stage para contenidos cross-stage.\n// ----------------------------------------------------------------------------\n// Cambios respecto a v4.1:\n//\n//   FIX bug \"MS->B busca audios donde no están\":\n//     - Las macros pueden declarar `lookup_stage` opcional. Si está, el Router\n//       resuelve los slug_id de send_content contra ese stage en vez del\n//       destino de la transición.\n//     - Aplicado a MS->B porque manda audios que viven en stage MS, no en B.\n//     - A->MS sigue sin lookup_stage (destino = MS = donde viven los slugs).\n//\n// Sigue de v4.1: retry de red, fail-loud en errores no transitorios.\n// Sigue de v4: macros con texto del agente (lead_in), no recursión, atomic.\n// ============================================================================\n\n// ---------- 0. Lógica de negocio — macros por transición -------------------\n\n// Las macros pueden referenciar `{lead_in}` que se sustituye en runtime con\n// el campo `lead_in` de la acción change_stage del agente. Si el agente NO\n// emitió lead_in para una transición que tiene macro de texto, la macro\n// usa el fallback_text declarado abajo.\n\nconst TRANSITION_MACROS = {\n  'A->MS': {\n    // lookup_stage: cuando una macro envía send_content, el Router busca el\n    // slug_id en este stage. Si no se declara, se usa el stage destino de\n    // la transición. Aquí no hace falta porque destino = MS = donde viven\n    // los slugs QC_MS_*.\n    after: [\n      { type: 'send_content', slug_id: 'QC_MS_AUDIO_se envia antes de la vsl',     evidence: 'auto: cascada A->MS' },\n      { type: 'send_content', slug_id: 'QC_MS_VIDEO_vsl que demuestra resultados', evidence: 'auto: cascada A->MS' },\n      { type: 'change_stage', new_stage: 'B',                                       evidence: 'auto: contenido core entregado tras 👍 al hook' }\n    ]\n  },\n  'MS->B': {\n    // lookup_stage explícito: la transición va a B pero los contenidos viven\n    // en MS (son los mismos audio/VSL que se mandan en A->MS).\n    lookup_stage: 'MS',\n    after: [\n      { type: 'send_content', slug_id: 'QC_MS_AUDIO_se envia antes de la vsl',     evidence: 'auto: cascada MS->B' },\n      { type: 'send_content', slug_id: 'QC_MS_VIDEO_vsl que demuestra resultados', evidence: 'auto: cascada MS->B' }\n    ]\n  },\n\n  // B -> C: mandar link de Calendly. Frase humana viene del agente.\n  'B->C': {\n    after: [\n      { type: 'reply_text_with_link', source_url: 'calendly_url', fallback_text: 'Aquí tienes, elige el horario que te venga: {link}' }\n    ]\n  },\n\n  // Disqualified desde cualquier origen: despedida con frase del agente.\n  'A->disqualified':  { after: [ { type: 'reply_text_dynamic', fallback_text: 'Vale, no es tu momento. Éxitos.' } ] },\n  'MS->disqualified': { after: [ { type: 'reply_text_dynamic', fallback_text: 'Vale, no es tu momento. Éxitos.' } ] },\n  'B->disqualified':  { after: [ { type: 'reply_text_dynamic', fallback_text: 'Vale, no es tu momento. Éxitos.' } ] },\n  'C->disqualified':  { after: [ { type: 'reply_text_dynamic', fallback_text: 'Vale, no es tu momento. Éxitos.' } ] }\n};\n\n// ---------- 1. Leer inputs --------------------------------------------------\n\nconst ctx = $('Build Context').first().json;\nconst agentOutput = $input.first().json;\nconst plan = (agentOutput && agentOutput.output) ? agentOutput.output : agentOutput;\n\nconst reasoning = plan.reasoning || '';\nconst agentActions = Array.isArray(plan.actions) ? plan.actions.slice() : [];\n\nconst trace = [];\nlet firstSentInsertPayload = null;\nlet currentStage = ctx.currentStage;\n\nconst stageFlowsBySlug = ctx.stageFlowsBySlug || {};\n\n// Mapa de fuentes de URL del tenant para reply_text_with_link.\n// Si en el futuro hay más links (tipo \"buy_link\"), se añaden aquí.\nconst tenantUrls = {\n  calendly_url: (ctx.contextJson && ctx.contextJson.extras && ctx.contextJson.extras.calendly_url) || null\n};\n\n// ---------- 2. Helpers HTTP -------------------------------------------------\n\n// Detecta si un error es transitorio (red, no de aplicación) y vale la pena reintentar.\n// Errores típicos de AWS/ManyChat que aparecen y desaparecen solos.\nfunction isRetryableNetworkError(err) {\n  if (!err) return false;\n  const code = err.code || (err.cause && err.cause.code);\n  const msg = String(err.message || err);\n  const retryableCodes = ['ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'EHOSTUNREACH', 'ENETUNREACH', 'EPIPE'];\n  if (code && retryableCodes.includes(code)) return true;\n  // n8n a veces envuelve el código en el mensaje, lo cazamos por texto también\n  return retryableCodes.some(c => msg.includes(c));\n}\n\n// HTTP responses con códigos que tiene sentido reintentar:\n// 408 (timeout), 429 (rate limit), 502/503/504 (gateway/service unavailable).\nfunction isRetryableHttpStatus(statusCode) {\n  return [408, 429, 502, 503, 504].includes(statusCode);\n}\n\n// Espera ms milisegundos (helper sin dependencias).\nfunction sleep(ms) {\n  return new Promise(resolve => setTimeout(resolve, ms));\n}\n\n// Envuelve una llamada HTTP con retry exponencial. Hasta 3 intentos en total:\n// intento 1, espera 500ms, intento 2, espera 1500ms, intento 3.\n// Solo reintenta errores transitorios. Otros errores se propagan al primer try.\n// Devuelve { response, attempts } donde attempts es cuántos intentos hicieron falta.\nasync function withRetry(fn, label) {\n  const delays = [500, 1500]; // delays entre intentos (2 reintentos máx)\n  let lastErr = null;\n  let lastResponse = null;\n\n  for (let attempt = 1; attempt <= delays.length + 1; attempt++) {\n    try {\n      const response = await fn();\n      // Si responde pero con status retriable, lo tratamos como fallo transitorio.\n      if (response && isRetryableHttpStatus(response.statusCode)) {\n        lastResponse = response;\n        if (attempt <= delays.length) {\n          await sleep(delays[attempt - 1]);\n          continue;\n        }\n        return { response, attempts: attempt, retried: attempt > 1 };\n      }\n      return { response, attempts: attempt, retried: attempt > 1 };\n    } catch (err) {\n      lastErr = err;\n      if (!isRetryableNetworkError(err) || attempt > delays.length) {\n        // Error no transitorio, o ya gastamos los reintentos. Propagar.\n        throw err;\n      }\n      await sleep(delays[attempt - 1]);\n    }\n  }\n\n  // Solo llegamos aquí si todos los intentos devolvieron status retriable\n  // (sin lanzar excepción). Devolvemos el último response para que el caller\n  // decida qué hacer con él (fallar ruidoso).\n  return { response: lastResponse, attempts: delays.length + 1, retried: true };\n}\n\nasync function callManychatFlow(flowNs) {\n  const result = await withRetry(\n    () => this.helpers.httpRequest({\n      method: 'POST',\n      url: 'https://api.manychat.com/fb/sending/sendFlow',\n      headers: { Authorization: `Bearer ${ctx.mcApiKey}`, 'Content-Type': 'application/json' },\n      body: { subscriber_id: ctx.subscriberId, flow_ns: flowNs },\n      json: true,\n      returnFullResponse: true,\n      timeout: 15000 // explícito en lugar del default de n8n (que varía)\n    }),\n    `sendFlow(${flowNs})`\n  );\n  // Anexamos metadata de retry al response para que el trace pueda verla.\n  if (result.response) {\n    result.response.__attempts = result.attempts;\n    result.response.__retried = result.retried;\n  }\n  return result.response;\n}\n\nasync function callManychatText(text) {\n  const result = await withRetry(\n    () => this.helpers.httpRequest({\n      method: 'POST',\n      url: 'https://api.manychat.com/fb/sending/sendContent',\n      headers: { Authorization: `Bearer ${ctx.mcApiKey}`, 'Content-Type': 'application/json' },\n      body: {\n        subscriber_id: ctx.subscriberId,\n        data: { version: 'v2', content: { type: 'instagram', messages: [{ type: 'text', text: text }] } }\n      },\n      json: true,\n      returnFullResponse: true,\n      timeout: 15000\n    }),\n    `sendContent(text)`\n  );\n  if (result.response) {\n    result.response.__attempts = result.attempts;\n    result.response.__retried = result.retried;\n  }\n  return result.response;\n}\n\nasync function callSetStage(newStage, reason, evidence) {\n  const baseUrl = ctx.callbackUrl.replace('/turn-completed', '');\n  return await this.helpers.httpRequest({\n    method: 'POST',\n    url: `${baseUrl}/leads/${ctx.subscriberDbId}/stage`,\n    headers: { Authorization: `Bearer ${ctx.callbackToken}`, 'Content-Type': 'application/json' },\n    body: {\n      new_stage: newStage,\n      reason:    reason   || 'no reason provided',\n      evidence:  evidence || 'no evidence provided',\n      turn_id:   ctx.turnId\n    },\n    json: true,\n    returnFullResponse: true\n  });\n}\n\n// ---------- 3. Resolución de flow_ns ----------------------------------------\n\nfunction resolveFlowNs(slugId, fromMacro, macroToStage) {\n  if (!slugId) return null;\n  if (!fromMacro) {\n    return (ctx.selectedVariants || {})[slugId] || null;\n  }\n  const flowsOfStage = stageFlowsBySlug[macroToStage] || {};\n  return flowsOfStage[slugId] || null;\n}\n\n// ---------- 4. Ejecutores ---------------------------------------------------\n\nasync function execSendContent(action, fromMacro, macroToStage) {\n  const slugId = action.slug_id || null;\n  const directFlowNs = action.flow_ns || null;\n  let flowNs = directFlowNs || resolveFlowNs(slugId, fromMacro, macroToStage);\n\n  if (!flowNs) {\n    const availableSlugs = fromMacro\n      ? Object.keys(stageFlowsBySlug[macroToStage] || {})\n      : Object.keys(ctx.selectedVariants || {});\n    return {\n      type: 'send_content', status: 'error',\n      reason: `No se encontró flow_ns para slug_id=\"${slugId}\" en stage=\"${fromMacro ? macroToStage : currentStage}\"`,\n      slug_id: slugId, lookup_stage: fromMacro ? macroToStage : currentStage, available_slugs: availableSlugs\n    };\n  }\n\n  try {\n    const res = await callManychatFlow.call(this, flowNs);\n    const ok = res.statusCode === 200 && res.body && res.body.status === 'success';\n    if (!ok) {\n      return { type: 'send_content', status: 'error', slug_id: slugId, flow_ns: flowNs, status_code: res.statusCode, api_response: res.body, attempts: res.__attempts, retried: res.__retried, reason: `ManyChat ${res.statusCode}: ${JSON.stringify(res.body)}` };\n    }\n    if (!firstSentInsertPayload) {\n      firstSentInsertPayload = {\n        tenant_id: ctx.tenantDbId, subscriber_id: ctx.subscriberDbId, conversation_id: ctx.conversationId,\n        stage_slug: currentStage, slug_id: slugId, flow_ns: flowNs, turn_id: ctx.turnId\n      };\n    }\n    return { type: 'send_content', status: 'sent', slug_id: slugId, flow_ns: flowNs, evidence: action.evidence, attempts: res.__attempts, retried: res.__retried };\n  } catch (err) {\n    return { type: 'send_content', status: 'error', slug_id: slugId, flow_ns: flowNs, reason: err.message || String(err), api_response: err.response ? err.response.body : null, attempts: 3, retried: true, exhausted: true };\n  }\n}\n\nasync function execChangeStage(action) {\n  if (!action.new_stage) {\n    return { type: 'change_stage', status: 'error', reason: 'missing new_stage' };\n  }\n  try {\n    const res = await callSetStage.call(this, action.new_stage, action.reason, action.evidence);\n    const ok = res.statusCode === 200;\n    if (!ok) {\n      return { type: 'change_stage', status: 'error', from_stage: currentStage, new_stage: action.new_stage, reason: action.reason, evidence: action.evidence, status_code: res.statusCode, api_response: res.body };\n    }\n    const fromStage = currentStage;\n    currentStage = action.new_stage;\n    return { type: 'change_stage', status: 'changed', from_stage: fromStage, new_stage: action.new_stage, reason: action.reason, evidence: action.evidence, api_response: res.body };\n  } catch (err) {\n    return { type: 'change_stage', status: 'error', from_stage: currentStage, new_stage: action.new_stage, reason: err.message || String(err) };\n  }\n}\n\nasync function execReplyText(action) {\n  const text = (action.text || '').trim();\n  if (!text) {\n    return { type: 'reply_text', status: 'skipped', reason: 'empty text' };\n  }\n  try {\n    const res = await callManychatText.call(this, text);\n    const ok = res.statusCode === 200 && res.body && res.body.status === 'success';\n    return { type: 'reply_text', status: ok ? 'sent' : 'error', text: text, api_response: ok ? null : res.body, attempts: res.__attempts, retried: res.__retried };\n  } catch (err) {\n    return { type: 'reply_text', status: 'error', text: text, reason: err.message || String(err), api_response: err.response ? err.response.body : null, attempts: 3, retried: true, exhausted: true };\n  }\n}\n\n// NUEVO v4: combina texto del agente con un URL del contexto.\n// action.source_url   → nombre del campo en tenantUrls (ej: 'calendly_url')\n// action.fallback_text → texto a usar si el agente NO mandó lead_in\n// action.__lead_in    → texto del agente (inyectado por runMacro)\nasync function execReplyTextWithLink(action) {\n  const url = tenantUrls[action.source_url];\n  if (!url) {\n    return {\n      type: 'reply_text_with_link', status: 'error',\n      reason: `Falta URL: tenantUrls[\"${action.source_url}\"] está vacía. Verifica tenant.config.${action.source_url} en DB.`\n    };\n  }\n  const leadIn = (action.__lead_in || '').trim();\n  let text;\n  if (leadIn) {\n    // Si el lead_in ya contiene la URL (porque el agente la metió por error),\n    // no la duplicamos. Si no, la pegamos al final con un espacio.\n    text = leadIn.includes(url) ? leadIn : `${leadIn} ${url}`;\n  } else {\n    text = (action.fallback_text || '{link}').replace('{link}', url);\n  }\n  return await execReplyText.call(this, { text });\n}\n\n// NUEVO v4: usa el texto del agente como reply_text literal.\n// Si no hay lead_in, usa fallback_text.\nasync function execReplyTextDynamic(action) {\n  const leadIn = (action.__lead_in || '').trim();\n  const text = leadIn || action.fallback_text || '';\n  if (!text) {\n    return { type: 'reply_text_dynamic', status: 'error', reason: 'no lead_in y no fallback_text' };\n  }\n  return await execReplyText.call(this, { text });\n}\n\nasync function execAction(action, fromMacro, macroToStage) {\n  switch (action.type) {\n    case 'send_content':         return await execSendContent.call(this, action, fromMacro, macroToStage);\n    case 'change_stage':         return await execChangeStage.call(this, action);\n    case 'reply_text':           return await execReplyText.call(this, action);\n    case 'reply_text_with_link': return await execReplyTextWithLink.call(this, action);\n    case 'reply_text_dynamic':   return await execReplyTextDynamic.call(this, action);\n    default:\n      return { type: action.type || 'unknown', status: 'error', reason: 'unsupported action type' };\n  }\n}\n\n// ---------- 5. Bucle principal ---------------------------------------------\n\nlet step = 0;\nfunction pushTrace(action, result, source) {\n  step++;\n  trace.push({ step, action, result, source });\n}\n\nasync function runMacro(transitionKey, toStage, leadInFromAgent) {\n  const macro = TRANSITION_MACROS[transitionKey];\n  if (!macro || !Array.isArray(macro.after)) return;\n\n  // Si la macro declara lookup_stage, se usa para resolver slugs de send_content\n  // en lugar del stage destino. Útil cuando la macro envía contenidos que\n  // viven en un stage distinto al destino de la transición (ej: MS->B manda\n  // audios que viven en MS).\n  const stageForLookup = macro.lookup_stage || toStage;\n\n  for (const macroActionTemplate of macro.after) {\n    // Clonamos para no mutar la constante TRANSITION_MACROS y le inyectamos\n    // el lead_in del agente — los ejecutores con sufijo _dynamic / _with_link\n    // lo leen de ahí.\n    const macroAction = { ...macroActionTemplate, __lead_in: leadInFromAgent || null };\n\n    const result = await execAction.call(this, macroAction, true, stageForLookup);\n    pushTrace(macroAction, result, `macro:${transitionKey}`);\n\n    const isOk =\n      (macroAction.type === 'send_content'         && result.status === 'sent')    ||\n      (macroAction.type === 'change_stage'         && result.status === 'changed') ||\n      (macroAction.type === 'reply_text'           && result.status === 'sent')    ||\n      (macroAction.type === 'reply_text_with_link' && result.status === 'sent')    ||\n      (macroAction.type === 'reply_text_dynamic'   && result.status === 'sent');\n\n    if (!isOk) {\n      const errorDetail = JSON.stringify({\n        transition: transitionKey, failed_action: macroAction, result: result, trace_so_far: trace\n      }, null, 2);\n      throw new Error(\n        `[Router v4.2] Macro \"${transitionKey}\" falló en la acción ${macroAction.type}` +\n        (macroAction.slug_id ? ` (slug_id=\"${macroAction.slug_id}\")` : '') +\n        `. El workflow se detiene para no avanzar el estado del lead silenciosamente.\\n\\nDetalle:\\n${errorDetail}`\n      );\n    }\n  }\n}\n\n// Procesar acciones del agente\nlet agentTriggeredMacro = false;\nfor (const action of agentActions) {\n  const result = await execAction.call(this, action, false, null);\n  pushTrace(action, result, 'agent');\n\n  if (\n    action.type === 'change_stage' &&\n    result.status === 'changed' &&\n    !agentTriggeredMacro\n  ) {\n    const key = `${result.from_stage}->${result.new_stage}`;\n    if (TRANSITION_MACROS[key]) {\n      agentTriggeredMacro = true;\n      // El lead_in del agente (si lo emitió) se pasa a runMacro para que\n      // los ejecutores _dynamic / _with_link puedan usarlo.\n      await runMacro.call(this, key, result.new_stage, action.lead_in);\n    }\n  }\n}\n\n// ---------- 6. Output -------------------------------------------------------\n\nreturn [{\n  json: {\n    plan: { reasoning, actions: agentActions },\n    trace: trace,\n    insert_content_sent: firstSentInsertPayload,\n    subscriberDbId: ctx.subscriberDbId,\n    conversationId: ctx.conversationId,\n    turnId: ctx.turnId,\n    callbackUrl: ctx.callbackUrl,\n    callbackToken: ctx.callbackToken,\n    finalStage: currentStage\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1312,
+        -64
+      ],
+      "id": "a9b48fbf-c59b-4b79-ae0c-353ca6128627",
+      "name": "Router"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    turn_id: $('Build Context').first().json.turnId,\n    status: 'completed',\n    response_text: $('AI Agent').first().json.output,\n    callbackUrl: $('Build Context').first().json.callbackUrl,\n    callbackToken: $('Build Context').first().json.callbackToken\n  }\n}];"
+      },
+      "id": "8a1276a9-442c-4a9f-8ab5-f546199fe0c1",
+      "name": "Code in JavaScript",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2016,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.callbackUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.callbackToken }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "turn_id",
+              "value": "={{ $json.turn_id }}"
+            },
+            {
+              "name": "status",
+              "value": "={{ $json.status }}"
+            },
+            {
+              "name": "response_text",
+              "value": "={{ JSON.stringify($json.response_text) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "eb647e18-f7ec-465a-ad45-537adaf291b9",
+      "name": "Callback",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2160,
+        176
+      ]
+    }
+  ],
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "headers": {
+            "host": "paneln8n.revolicord.com",
+            "user-agent": "node",
+            "content-length": "2935",
+            "accept": "*/*",
+            "accept-encoding": "br, gzip, deflate",
+            "accept-language": "*",
+            "content-type": "application/json",
+            "sec-fetch-mode": "cors",
+            "x-forwarded-for": "172.18.0.1",
+            "x-forwarded-host": "paneln8n.revolicord.com",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "72aff728fab3",
+            "x-real-ip": "172.18.0.1",
+            "x-schema-version": "v1"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "schema_version": "v1",
+            "turn_id": "0120c9bb-5d5f-4408-8f38-e2fc0594a067",
+            "callback_url": "https://api.revolicord.com/admin/turn-completed",
+            "callback_token": "c37a1bb5741c19a484203b7f691fd445e92410e46d934c82c6170b5734acaa80",
+            "tenant": {
+              "id": "9d338f06-59c6-47bd-b3d7-4e3631ff4e75",
+              "slug": "revolicord",
+              "config": {
+                "debounce_ms": 15000,
+                "max_wait_ms": 30000,
+                "rate_per_minute": 20,
+                "buffer_hard_limit": 20,
+                "n8n_workflow_url": "https://paneln8n.revolicord.com/webhook/agent-run",
+                "manychat_api_key": "4829715:03d75c75de42f22f31ea2d02f68cfce2",
+                "model": "gpt-4o-mini",
+                "calendly_url": "https://quantumcreators.es/llamada-de-discovery",
+                "system_prompt": "# ROL\nEres Alex, de Quantum Creators. Tu tiempo vale oro y tienes cientos de mensajes que responder.\nTe comunicas principalmente enviando contenido (videos o audios pregrabados). No escribes párrafos de texto.\n\n# RESTRICCIONES DURAS — NUNCA LAS ROMPAS\n- CERO EMOJIS. Escribes seco, rápido, como un humano ocupado desde el móvil.\n- PROHIBIDO EXPLICAR. Nunca expliques el producto en texto. El video o audio hace ese trabajo.\n- NUNCA des el precio.\n- NUNCA ruegues ni intentes convencer a alguien que duda. Buscamos un \"SÍ\" o un \"NO\" claro.\n- NUNCA menciones que eres una IA ni hables de tus herramientas.\n\n# TU BRÚJULA (CÓMO ACTUAR)\nAl final de este prompt verás el \"# CONTEXTO\". Ahí tienes el \"CONTENIDO DISPONIBLE\" para enviar.\n\n1. DISPARAR CONTENIDO: Tu principal acción es usar SIEMPRE la herramienta `trigger_manychat_flow` con el flow exacto que te marca el contexto.\n2. TEXTO MÍNIMO BINARIO: Acompaña el flow con UNA sola frase en texto exigiendo confirmación. Ejemplos: \"Mírate esto y dame un pulgar arriba si resuena\", o \"Dime si o no y avanzamos\".\n3. ANTE LA DUDA O EL \"NO\": Si el usuario dice que no le interesa, que es muy caro, o da vueltas ambiguas, USA INMEDIATAMENTE la herramienta `set_stage` con el valor \"disqualified\" y despídete con 1 sola frase (Ej: \"Vale, no es tu momento. Éxitos.\"). NO rebatas la objeción.\n4. CALENDLY: Si el contexto te muestra el link de Calendly, mándalo seco: \"Aquí tienes, elige horario: [link]\"."
+              }
+            },
+            "subscriber": {
+              "id": "cd4a18b6-7ebb-48c2-9f98-487789d7dac7",
+              "manychat_subscriber_id": "1724803790",
+              "ig_user_id": null,
+              "ig_username": "ingenieroenia",
+              "display_name": "AI Engineer",
+              "locale": null,
+              "metadata": {},
+              "lead_stage": "MS"
+            },
+            "conversation": {
+              "id": "a23c69f0-6399-4b34-9b19-bda4f5836695",
+              "opened_at": "2026-05-22T00:12:53.373Z"
+            },
+            "instagram_context": {
+              "opt_in": "1",
+              "verified": "",
+              "last_seen": "2026-05-22 00:40:16.964656",
+              "follows_you": "",
+              "followers_count": "0",
+              "last_interaction": "2026-05-22 00:40:16.964656",
+              "messaging_window": "{{ig_messaging_window}}"
+            },
+            "messages": [
+              {
+                "id": "9df768e0-c127-430e-8e22-9b41342aa819",
+                "external_message_id": "1724803790_revolicord_1779410417222",
+                "text": "👍",
+                "reply_type": "{{last_reply_type}}",
+                "ts": 1779410417240,
+                "media_urls": []
+              }
+            ],
+            "trigger": {
+              "source": "instagram_dm",
+              "channel": "instagram_dm"
+            }
+          },
+          "webhookUrl": "https://paneln8n.revolicord.com/webhook/agent-run",
+          "executionMode": "production"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get Stage Config",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Subscriber CRM Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Stage Config": {
+      "main": [
+        [
+          {
+            "node": "Combine Contexts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combine Contexts": {
+      "main": [
+        [
+          {
+            "node": "System Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Subscriber CRM Context": {
+      "main": [
+        [
+          {
+            "node": "Get Content History",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Context": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Structured Output Parser",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres Chat Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Lead Cron": {
+      "main": [
+        [
+          {
+            "node": "Mark Followups Responded",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Followups Responded": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "System Prompt": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Content History": {
+      "main": [
+        [
+          {
+            "node": "Combine Contexts",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query1": {
+      "main": [
+        [
+          {
+            "node": "Build Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "lead_content_sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "lead_content_sent": {
+      "main": [
+        [
+          {
+            "node": "Upsert Lead Cron",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Router": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "772952d9-71e4-4119-b3f5-889de9e84985",
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp",
+    "templateCredsSetupCompleted": true,
+    "instanceId": "21306735202e285844d411adfa35bfd1d0be76295bd6e5f059c09c42be5eaef8"
+  },
+  "id": "MiZdS5qxTK6T9nl2",
+  "tags": []
+}
