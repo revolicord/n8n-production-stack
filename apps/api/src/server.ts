@@ -1,9 +1,12 @@
 import { randomUUID } from 'node:crypto';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import jwt from '@fastify/jwt';
 import multipart from '@fastify/multipart';
 import sensible from '@fastify/sensible';
+import staticPlugin from '@fastify/static';
 import Fastify from 'fastify';
 import { getConfig } from './config.js';
 import { closeQueue } from './lib/queue.js';
@@ -53,6 +56,15 @@ async function main() {
     limits: { fileSize: 8 * 1024 * 1024 }, // 8 MB max; validado también en la ruta
   });
   await app.register(sensible);
+
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = dirname(__filename);
+  await app.register(staticPlugin, {
+    root: resolve(__dirname, '..', 'public'),
+    prefix: '/dashboard/',
+    decorateReply: false,
+  });
+  app.get('/dashboard', (_req, reply) => reply.redirect('/dashboard/'));
 
   app.addHook('onSend', async (req, reply, payload) => {
     reply.header('x-correlation-id', req.id);

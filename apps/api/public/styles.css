@@ -1,0 +1,49 @@
+/* Minimal overrides — layout handled by Tailwind CDN */
+
+/* Smooth scrollbar in sidebar */
+#sidebar {
+  scrollbar-width: thin;
+  scrollbar-color: #14b8a6 #1a1a1a;
+}
+#sidebar::-webkit-scrollbar {
+  width: 4px;
+}
+#sidebar::-webkit-scrollbar-track {
+  background: #1a1a1a;
+}
+#sidebar::-webkit-scrollbar-thumb {
+  background: #14b8a6;
+  border-radius: 2px;
+}
+
+/* Textarea resize only vertical */
+textarea {
+  resize: vertical;
+}
+
+/* Thumbnail preview */
+.thumb {
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+/* Toast fade-in */
+@keyframes fadein {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.toast {
+  animation: fadein 0.2s ease;
+}
+
+/* Active sidebar item */
+.sidebar-item.active {
+  background: #14b8a614;
+  border-left: 3px solid #14b8a6;
+}

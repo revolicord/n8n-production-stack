@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quantum Dashboard</title>
+  <link rel="icon" href="/dashboard/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/dashboard/styles.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: { teal: { 400: '#2dd4bf', 500: '#14b8a6', 600: '#0d9488' } },
+        },
+      },
+    };
+  </script>
+</head>
+<body class="bg-[#0d0d0d] text-gray-200 min-h-screen">
+
+<!-- Login overlay -->
+<div id="login-overlay" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80">
+  <div class="bg-[#1a1a1a] border border-gray-800 rounded-xl p-8 w-full max-w-sm shadow-2xl">
+    <div class="flex items-center gap-3 mb-6">
+      <img src="/dashboard/favicon.svg" class="w-8 h-8" alt="logo">
+      <h1 class="text-lg font-semibold text-white">Quantum Dashboard</h1>
+    </div>
+    <form id="login-form">
+      <label class="block text-xs text-gray-400 mb-1">Contraseña de administrador</label>
+      <input id="login-password" type="password" autocomplete="current-password"
+        class="w-full bg-[#111] border border-gray-700 rounded px-3 py-2 text-sm text-white focus:border-teal-500 focus:outline-none mb-4"
+        placeholder="••••••••" required>
+      <button type="submit"
+        class="w-full bg-teal-600 hover:bg-teal-500 text-white font-medium rounded py-2 text-sm transition-colors">
+        Entrar
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- App shell -->
+<div id="app" class="hidden flex h-screen overflow-hidden">
+
+  <!-- Sidebar -->
+  <aside class="w-56 bg-[#111] border-r border-gray-800 flex flex-col flex-shrink-0">
+    <div class="flex items-center gap-2 px-4 py-4 border-b border-gray-800">
+      <img src="/dashboard/favicon.svg" class="w-6 h-6" alt="">
+      <span class="text-sm font-semibold text-white">Quantum</span>
+    </div>
+
+    <!-- Tenant selector (hidden if single tenant) -->
+    <div class="px-3 pt-3 pb-1">
+      <select id="tenant-select"
+        class="w-full bg-[#0d0d0d] border border-gray-700 rounded px-2 py-1 text-xs text-gray-300 focus:outline-none focus:border-teal-500">
+      </select>
+    </div>
+
+    <nav id="sidebar-nav" class="flex-1 overflow-y-auto py-2" role="navigation">
+      <!-- Populated by renderSidebar() -->
+    </nav>
+
+    <div class="px-4 py-3 border-t border-gray-800">
+      <button id="logout-btn"
+        class="text-xs text-gray-500 hover:text-gray-300 transition-colors">
+        Cerrar sesión
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main panel -->
+  <main id="main-panel" class="flex-1 overflow-y-auto">
+    <p class="text-gray-500 text-sm p-8">Cargando…</p>
+  </main>
+</div>
+
+<script src="/dashboard/app.js"></script>
+</body>
+</html>
