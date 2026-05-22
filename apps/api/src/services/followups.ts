@@ -1,6 +1,7 @@
 import {
   type DbClient,
   type FollowupTemplate,
+  type FunnelStage,
   type LeadFollowupLog,
   followupTemplates,
   funnelStages,
@@ -108,6 +109,17 @@ export async function deactivateFollowupTemplate(
     .where(eq(followupTemplates.id, id))
     .returning();
   return rows[0] ?? null;
+}
+
+export async function listFunnelStages(
+  db: DbClient,
+  args: { tenantId: string; includeInactive?: boolean },
+): Promise<FunnelStage[]> {
+  const condition = args.includeInactive
+    ? eq(funnelStages.tenantId, args.tenantId)
+    : and(eq(funnelStages.tenantId, args.tenantId), eq(funnelStages.isActive, true));
+
+  return db.select().from(funnelStages).where(condition).orderBy(asc(funnelStages.position));
 }
 
 export async function listLeadFollowupHistory(

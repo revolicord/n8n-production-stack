@@ -9,6 +9,7 @@ import {
   getFollowupTemplateById,
   getFunnelStageById,
   listFollowupTemplatesByStage,
+  listFunnelStages,
   listLeadFollowupHistory,
   updateFollowupTemplate,
 } from '../../services/followups.js';
@@ -67,6 +68,29 @@ export default async function followupsRoutes(app: FastifyInstance): Promise<voi
   function auth(authorization: string | undefined): boolean {
     return verifyBearerToken(authorization, config.N8N_CALLBACK_TOKEN);
   }
+
+  // GET /admin/tenants/:tenantId/funnel-stages
+  app.get<{ Params: { tenantId: string }; Querystring: { include_inactive?: string } }>(
+    '/admin/tenants/:tenantId/funnel-stages',
+    async (req, reply) => {
+      if (!auth(req.headers.authorization)) {
+        return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });
+      }
+      const paramParsed = UuidParamSchema.safeParse(req.params.tenantId);
+      if (!paramParsed.success) {
+        return reply
+          .code(400)
+          .send({ error: { code: 'INVALID_PAYLOAD', details: paramParsed.error.issues } });
+      }
+      const includeInactive = req.query.include_inactive === 'true';
+      const stages = await listFunnelStages(getDb(), {
+        tenantId: paramParsed.data,
+        includeInactive,
+      });
+      req.log.info({ tenant_id: paramParsed.data, count: stages.length }, 'funnel stages listed');
+      return reply.code(200).send({ stages });
+    },
+  );
 
   // GET /admin/funnel-stages/:stageId/followups
   app.get<{ Params: { stageId: string }; Querystring: { include_inactive?: string } }>(
