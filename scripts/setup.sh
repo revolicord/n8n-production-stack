@@ -216,6 +216,8 @@ info "Stack enviado. Esperando que los servicios arranquen..."
 sleep 8
 docker stack services n8n
 
+bash "$(dirname "$0")/init-minio-bucket.sh" || warn "init-minio-bucket falló — corrígelo a mano con: bash scripts/init-minio-bucket.sh"
+
 section "INSTALACIÓN COMPLETA"
 echo ""
 echo -e "  Panel n8n:      ${GREEN}https://${N8N_HOST}${NC}"

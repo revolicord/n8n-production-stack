@@ -54,6 +54,18 @@ El script `setup.sh`:
 - Instala Traefik v3.3 con Let's Encrypt
 - Despliega el stack completo
 
+## MinIO bucket público
+
+El script `setup.sh` crea automáticamente el bucket `assets` con descarga anónima.
+Para crearlo manualmente (idempotente, seguro re-ejecutar):
+
+```bash
+bash scripts/init-minio-bucket.sh
+```
+
+El bucket permite descarga pública sin auth, pero sólo escribe quién tenga las
+credenciales MinIO (la API, vía `MINIO_ROOT_USER`/`MINIO_ROOT_PASSWORD`).
+
 ## Reinstalar / actualizar (cuando ya está corriendo)
 
 ```bash
