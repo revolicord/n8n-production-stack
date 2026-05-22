@@ -350,7 +350,7 @@ async function runMacro(transitionKey, toStage, leadInFromAgent) {
     if (!isOk) {
       const errorDetail = JSON.stringify({ transition: transitionKey, failed_action: macroAction, result, trace_so_far: trace }, null, 2);
       throw new Error(
-        `[Router v4.2] Macro "${transitionKey}" falló en la acción ${macroAction.type}` +
+        `[Router v4.4] Macro "${transitionKey}" falló en la acción ${macroAction.type}` +
         (macroAction.slug_id ? ` (slug_id="${macroAction.slug_id}")` : '') +
         `. El workflow se detiene para no avanzar el estado del lead silenciosamente.\n\nDetalle:\n${errorDetail}`
       );
