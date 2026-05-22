@@ -64,6 +64,13 @@
       "when": 1748131200000,
       "tag": "0009_delay_minutes",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1748217600000,
+      "tag": "0010_agent_resources",
+      "breakpoints": true
     }
   ]
 }

@@ -474,6 +474,38 @@ export const stageTransitionsMap = apiSchema.table(
 );
 
 // ───────────────────────────────────────────────────────────────
+// agent_resources — snippets de texto/imagen que el agente consulta on-demand (ADR-0019)
+// No son secuenciados ni están atados a una etapa: el agente los consulta por categoría.
+// ───────────────────────────────────────────────────────────────
+export const agentResources = apiSchema.table(
+  'agent_resources',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    category: text('category').notNull(), // 'cierre' | 'objecion' | 'general'
+    slug: text('slug').notNull(),
+    displayName: text('display_name').notNull(),
+    triggerHint: text('trigger_hint'),
+    textContent: text('text_content'),
+    mediaUrl: text('media_url'),
+    sortOrder: integer('sort_order').notNull().default(0),
+    isActive: boolean('is_active').notNull().default(true),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    tenantSlugUnique: uniqueIndex('agent_resources_tenant_slug_unique').on(t.tenantId, t.slug),
+    tenantCategoryIdx: index('agent_resources_tenant_category_idx').on(
+      t.tenantId,
+      t.category,
+      t.isActive,
+    ),
+  }),
+);
+
+// ───────────────────────────────────────────────────────────────
 // Inferred types
 // ───────────────────────────────────────────────────────────────
 export type Tenant = typeof tenants.$inferSelect;
@@ -507,3 +539,5 @@ export type LeadContentSent = typeof leadContentSent.$inferSelect;
 export type NewLeadContentSent = typeof leadContentSent.$inferInsert;
 export type StageTransitionsMap = typeof stageTransitionsMap.$inferSelect;
 export type NewStageTransitionsMap = typeof stageTransitionsMap.$inferInsert;
+export type AgentResource = typeof agentResources.$inferSelect;
+export type NewAgentResource = typeof agentResources.$inferInsert;
