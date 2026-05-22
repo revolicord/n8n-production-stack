@@ -1,8 +1,10 @@
-# Nodo: Groq Chat Model
+# Nodo: Anthropic Chat Model
 
-**Tipo:** `@n8n/n8n-nodes-langchain.lmChatGroq`  
-**typeVersion:** 1  
-**Conexión:** `ai_languageModel` → `AI Agent`
+> **Nota:** este archivo se llamaba "Groq Chat Model" hasta que el workflow migró a Anthropic Claude. Groq (`llama-3.3-70b-versatile`) fue reemplazado en la v3+ del workflow.
+
+**Tipo:** `@n8n/n8n-nodes-langchain.lmChatAnthropic`  
+**typeVersion:** 1.5  
+**Conexión:** `ai_languageModel` → `AI Agent` y `Structured Output Parser`
 
 ---
 
@@ -10,13 +12,24 @@
 
 | Campo | Valor |
 |-------|-------|
-| Model | `llama-3.3-70b-versatile` |
-| Credencial | Groq API (crear en console.groq.com — free tier) |
+| Model | `claude-sonnet-4-6` |
+| Temperature | `0.3` |
+| Credencial | `Anthropic account` (id: `CqaNlJsRteqVJlUs`) |
 
 ---
 
 ## Notas
 
-- `llama-3.3-70b-versatile` soporta tool calling vía API de Groq, pero requiere que el system prompt sea explícito sobre cómo usar las tools (ver `system-prompt.md`).
-- Si el modelo emite `<function=name>{...}` como texto plano en vez de ejecutar la tool, el problema es el prompt, no el modelo. Groq sí ejecuta tools correctamente cuando el prompt es claro.
-- Alternativas probadas si sigue fallando: `llama-3.1-8b-instant` (más ligero, mejor tool use en casos simples), o migrar a Claude Haiku 4.5 cuando haya créditos Anthropic.
+- El modelo está hardcoded en el nodo. El campo `tenant.config.model` del payload (ej. `"gpt-4o-mini"`) se ignora.
+- Temperature 0.3 provee salidas deterministas suficientes para el JSON plan sin ser completamente rígido.
+- El nodo alimenta tanto al `AI Agent` (languageModel) como al `Structured Output Parser` (también languageModel) — n8n conecta ambos desde el mismo nodo.
+- Para cambiar modelo: editar este nodo en la UI de n8n y actualizar el campo `model`.
+
+---
+
+## Por qué Anthropic y no Groq
+
+Groq (`llama-3.3-70b-versatile`) fue descartado porque:
+- El Structured Output Parser con `autoFix: true` requiere un modelo con JSON mode robusto.
+- Claude Sonnet 4.6 produce JSON válido consistentemente incluso con el schema complejo de `actions` array.
+- Latencia aceptable para el caso de uso (turnos de DM, no tiempo real).

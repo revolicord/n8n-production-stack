@@ -17,6 +17,7 @@ SELECT
   fs.display_name               AS stage_name,
   fs.slug                       AS stage_slug,
   fs.description                AS stage_objective,
+  fs.goal                       AS stage_goal,
   fs.max_followups,
   COALESCE(
     json_agg(
@@ -35,17 +36,21 @@ JOIN api.funnel_stages fs ON fs.id = lc.current_stage_id
 LEFT JOIN api.lead_followup_log lfl
   ON lfl.subscriber_id   = lc.subscriber_id
   AND lfl.conversation_id = lc.conversation_id
-WHERE lc.subscriber_id   = '{{ $json.body.subscriber.id }}'
-  AND lc.conversation_id = '{{ $json.body.conversation.id }}'
-GROUP BY lc.id, fs.display_name, fs.slug, fs.description, fs.max_followups;
+WHERE lc.subscriber_id   = $1::uuid
+  AND lc.conversation_id = $2::uuid
+GROUP BY lc.id, fs.display_name, fs.slug, fs.description, fs.goal, fs.max_followups
 ```
 
-## Parámetros
+## Parámetros (queryReplacement — comma-separated)
 
-| Variable n8n | Fuente |
-|---|---|
-| `subscriber.id` | UUID interno del subscriber en `body.subscriber.id` |
-| `conversation.id` | UUID de la conversación en `body.conversation.id` |
+```
+={{ $('Webhook').first().json.body.subscriber.id }},{{ $('Webhook').first().json.body.conversation.id }}
+```
+
+| $N | Campo | Fuente |
+|----|-------|--------|
+| $1 | `subscriber_id` UUID | `body.subscriber.id` |
+| $2 | `conversation_id` UUID | `body.conversation.id` |
 
 ## Salida esperada (lead con 2 seguimientos sin respuesta)
 
@@ -57,6 +62,7 @@ GROUP BY lc.id, fs.display_name, fs.slug, fs.description, fs.max_followups;
   "stage_name": "Enganche",
   "stage_slug": "A",
   "stage_objective": "Video de enganche 25s — primer contacto, pedir pulgar arriba",
+  "stage_goal": "Conseguir que el lead vea el video y reaccione con pulgar arriba",
   "max_followups": 3,
   "followup_history": [
     { "seq": 1, "sent_at": "...", "status": "sent", "responded_at": null, "text_sent": "[SEGUIMIENTO AUTOMÁTICO #1] ..." },

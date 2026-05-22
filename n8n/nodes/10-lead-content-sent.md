@@ -34,31 +34,34 @@ INSERT INTO api.lead_content_sent (
 | $6 | `flow_ns` string | `insert_content_sent.flow_ns` (ej. `content20260511...`) |
 | $7 | `turn_id` UUID | `insert_content_sent.turn_id` |
 
-> **⚠️ Bug en el JSON vivo:** el `queryReplacement` está en formato roto con `=$1 = value $2 = value ...` para los 7 parámetros. El formato correcto es comma-separated como se muestra arriba. Corregir en la UI de n8n.
+> **✅ Corregido en v8:** el `queryReplacement` está en formato comma-separated correcto.
 
 ## Fuente del objeto `insert_content_sent`
 
-El Router produce este objeto solo cuando `send_content` tuvo status `'sent'`:
+El Router v4.2 produce este objeto para el **primer** `send_content` exitoso del turno (variable `firstSentInsertPayload`):
 
 ```javascript
-insert_content_sent: results.send_content && results.send_content.status === 'sent'
-  ? results.send_content.insert_payload
-  : null
-```
-
-El `insert_payload` se construye en el Router:
-
-```javascript
-insert_payload: {
-  tenant_id:       ctx.tenantDbId,
-  subscriber_id:   ctx.subscriberDbId,
-  conversation_id: ctx.conversationId,
-  stage_slug:      ctx.currentStage,
-  slug_id:         slugId,
-  flow_ns:         flowNs,
-  turn_id:         ctx.turnId
+// Router v4.2 — dentro de execSendContent:
+if (!firstSentInsertPayload) {
+  firstSentInsertPayload = {
+    tenant_id:       ctx.tenantDbId,
+    subscriber_id:   ctx.subscriberDbId,
+    conversation_id: ctx.conversationId,
+    stage_slug:      currentStage,   // stage en el momento del envío (puede haber cambiado)
+    slug_id:         slugId,
+    flow_ns:         flowNs,
+    turn_id:         ctx.turnId
+  };
 }
+
+// Output del Router:
+return [{ json: {
+  insert_content_sent: firstSentInsertPayload,   // null si no hubo send_content exitoso
+  ...
+}}];
 ```
+
+> Si el turno envía múltiples `send_content` (ej: cascada A→MS), solo se registra el primero. Las posteriores se ejecutan pero no se insertan de nuevo.
 
 ## Conexiones
 

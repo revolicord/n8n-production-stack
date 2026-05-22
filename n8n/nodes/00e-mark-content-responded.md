@@ -28,7 +28,7 @@ WHERE subscriber_id = $1::uuid
 | $1 | `subscriber_id` UUID | `body.subscriber.id` |
 | $2 | `conversation_id` UUID | `body.conversation.id` |
 
-> **⚠️ Bug en el JSON vivo:** el `queryReplacement` está en formato roto `=$1 = {{ ... }} $2 = {{ ... }}`. El formato correcto es comma-separated como se muestra arriba. Corregir en la UI de n8n.
+> **✅ Corregido en v7:** el `queryReplacement` está en formato comma-separated correcto.
 
 ## Por qué ejecutar ANTES de Build Context
 

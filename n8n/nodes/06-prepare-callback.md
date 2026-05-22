@@ -1,7 +1,7 @@
 # Nodo: Prepare Callback
 
 **Tipo:** Code (JavaScript)  
-**Posición en cadena:** Después de `enviar texto`, antes de `Callback`  
+**Posición en cadena:** Después de `Mark Followups Responded` (rama con contenido) o `If` rama TRUE (sin contenido), antes de `Callback`  
 **Propósito:** Aplanar todos los valores necesarios en `$json` para que el nodo Callback no necesite referencias cruzadas `$('Node Name')` dentro del JSON body.
 
 ---

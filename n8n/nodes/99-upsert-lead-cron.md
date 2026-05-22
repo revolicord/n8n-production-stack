@@ -91,9 +91,11 @@ Cuando el lead manda un mensaje, todos los follow-ups automáticos enviados (`st
 
 ## Cuándo se ejecutan
 
-Estos nodos solo se alcanzan si el Router logró enviar contenido multimedia (rama false del nodo `If`). Si el agente decidió solo `reply_text` o `change_stage`, esta cadena no se ejecuta.
+Estos nodos solo se alcanzan si el Router logró enviar al menos un `send_content` exitoso (rama false del nodo `If` — `insert_content_sent` no nulo). Si el turno solo tuvo `reply_text`, `change_stage`, o no se ejecutó ninguna acción, esta cadena no se ejecuta y el turno cierra directamente por la rama TRUE del `If`.
 
-> **⚠️ Bug:** Al finalizar `Mark Followups Responded`, la cadena termina sin llamar al endpoint `turn-completed` del API. El turn lock nunca se libera. Pendiente añadir nodo HTTP Request al final.
+> En Router v4.2, si el turno dispara múltiples `send_content` (ej: cascada A→MS envía audio + VSL), solo el **primero** exitoso genera `insert_content_sent`. Los demás se ejecutan pero no crean filas adicionales aquí.
+
+> **✅ Resuelto en v7:** Al finalizar `Mark Followups Responded`, la cadena continúa a `Code in JavaScript` → `Callback` que llama `POST callbackUrl`. El turn lock se libera correctamente.
 
 ---
 

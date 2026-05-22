@@ -34,7 +34,7 @@ ORDER BY last_sent_at DESC
 | $2 | `conversation_id` UUID | `body.conversation.id` |
 | $3 | `stage_slug` string | `body.subscriber.lead_stage` (fallback `'A'`) |
 
-> **⚠️ Bug en el JSON vivo:** el `queryReplacement` está en formato roto `=$1 = {{ ... }} $2 = {{ ... }} $3 = {{ ... }}`. El formato correcto es comma-separated como se muestra arriba. Corregir en la UI de n8n.
+> **✅ Corregido en v7:** el `queryReplacement` está en formato comma-separated correcto.
 
 ## Salida esperada (N filas, una por slug_id enviado en esta etapa)
 

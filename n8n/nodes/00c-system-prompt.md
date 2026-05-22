@@ -1,7 +1,7 @@
 # Nodo: System Prompt
 
 **Tipo:** Set (Edit Fields)
-**Posición en cadena:** 0c — entre `Get Subscriber CRM Context` y `Build Context`
+**Posición en cadena:** 0c — entre `Combine Contexts` y `Execute a SQL query1`
 **ADR:** —
 **Propósito:** Servir el system prompt estático del agente. Vive en el workflow para permitir iteración rápida en la UI de n8n sin tocar Postgres ni re-deploy.
 

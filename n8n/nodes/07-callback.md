@@ -27,9 +27,11 @@
 
 | Parameter Name | Value |
 |---------------|-------|
-| `turn_id` | `{{ $json.turn_id }}` |
-| `status` | `{{ $json.status }}` |
-| `response_text` | `{{ $json.response_text }}` |
+| `turn_id` | `={{ $json.turn_id }}` |
+| `status` | `={{ $json.status }}` |
+| `response_text` | `={{ JSON.stringify($json.response_text) }}` |
+
+> `response_text` viene de `$('AI Agent').first().json.output` — un objeto (el plan de acciones). `JSON.stringify` lo serializa a string antes de enviarlo al API.
 
 ---
 

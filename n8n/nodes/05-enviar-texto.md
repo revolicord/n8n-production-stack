@@ -1,53 +1,43 @@
-# Nodo: enviar texto
+# Nodo: enviar texto ⚠️ DEPRECADO — eliminado en v3+
 
-**Tipo:** HTTP Request  
-**typeVersion:** 4.4  
-**Propósito:** Enviar la respuesta del agente al usuario vía ManyChat sendContent (un solo API call).
+> **Este nodo ya no existe en el workflow `agent-run`.** Fue eliminado cuando el AI Agent migró de herramientas a Structured Output Parser (v3). El envío de texto ahora ocurre dentro del **Router** vía `callManychatText()` para acciones `reply_text`.
 
 ---
 
-## Configuración
+## Contexto histórico (v1 / v2)
 
-| Campo | Valor |
-|-------|-------|
-| Method | `POST` |
-| URL | `https://api.manychat.com/fb/sending/sendContent` |
-| Authentication | None (header manual) |
+En las versiones anteriores, el AI Agent tenía una herramienta `trigger_manychat_flow` y el output del agente era texto libre. Este nodo HTTP Request enviaba ese texto al lead vía `sendContent`.
 
-### Headers
+**Flujo antiguo (v1/v2):**
+```
+AI Agent → enviar texto (HTTP sendContent) → Prepare Callback → Callback
+```
 
-| Name | Value |
-|------|-------|
-| `Authorization` | `Bearer {{ $('Build Context').first().json.mcApiKey }}` |
-
-### Body
-
-**Specify Body:** `JSON`  
-**Content-Type:** `application/json`
-
-```json
-{
-  "subscriber_id": "{{ $('Build Context').first().json.subscriberId }}",
-  "data": {
-    "version": "v2",
-    "content": {
-      "messages": [{ "type": "text", "text": "{{ $json.output }}" }]
-    }
-  }
-}
+**Flujo actual (v3+):**
+```
+AI Agent → Router (ejecuta acciones: sendFlow, sendContent, set-stage) → If → ... → Callback
 ```
 
 ---
 
-## Notas
+## Migración
 
-- `$json.output` es la salida del nodo `AI Agent` (nodo inmediatamente anterior).
-- **Sin `message_tag`** — Instagram DM no acepta `HUMAN_AGENT` (solo válido para Facebook Messenger).
-- Si la respuesta supera 1000 caracteres, Instagram puede rechazarla. El system prompt instruye al LLM a ser conciso (máx. 2-3 oraciones) para evitar esto.
-- Si en el futuro se necesitan múltiples burbujas, el array `messages` puede tener varios objetos `{ "type": "text", "text": "..." }`.
+Si necesitas enviar texto al lead, el Router lo hace con:
 
----
+```javascript
+async function callManychatText(text) {
+  return await this.helpers.httpRequest({
+    method: 'POST',
+    url: 'https://api.manychat.com/fb/sending/sendContent',
+    headers: { Authorization: `Bearer ${ctx.mcApiKey}`, 'Content-Type': 'application/json' },
+    body: {
+      subscriber_id: ctx.subscriberId,
+      data: { version: 'v2', content: { type: 'instagram', messages: [{ type: 'text', text }] } }
+    },
+    json: true,
+    returnFullResponse: true
+  });
+}
+```
 
-## Referencias
-
-- ADR-0007: Decisión de usar sendContent directo vs setCustomFields+sendFlow
+Ver `08-router-v1.md` para la implementación completa.

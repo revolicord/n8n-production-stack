@@ -75,65 +75,73 @@
 {
   "type": "object",
   "additionalProperties": false,
-  "required": ["reasoning", "send_content", "change_stage", "reply_text"],
+  "required": ["reasoning", "actions"],
   "properties": {
     "reasoning": {
       "type": "string",
-      "minLength": 1
+      "minLength": 1,
+      "description": "1-2 frases internas explicando por qué se eligió este plan. No se envía al lead."
     },
-    "send_content": {
-      "anyOf": [
-        { "type": "null" },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["slug_id", "evidence"],
-          "properties": {
-            "slug_id": { "type": "string", "minLength": 1 },
-            "evidence": { "type": "string", "minLength": 1 }
+    "actions": {
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 6,
+      "description": "Lista ordenada de acciones que el Router ejecutará en secuencia. Vacío = no hacer nada este turno.",
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["type", "slug_id", "evidence"],
+            "properties": {
+              "type":     { "const": "send_content" },
+              "slug_id":  { "type": "string", "minLength": 1 },
+              "evidence": { "type": "string", "minLength": 1 }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["type", "new_stage", "reason", "evidence"],
+            "properties": {
+              "type":      { "const": "change_stage" },
+              "new_stage": { "type": "string", "enum": ["MS", "B", "C", "D", "disqualified"] },
+              "reason": {
+                "anyOf": [
+                  { "type": "null" },
+                  { "type": "string", "enum": ["no_money", "not_interested", "geographic", "no_quality", "fake_account"] }
+                ]
+              },
+              "evidence": { "type": "string", "minLength": 1 },
+              "lead_in": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "description": "Frase humana opcional. OBLIGATORIO para new_stage='C' (precede al link de Calendly) y new_stage='disqualified' (despedida). IGNORADO para MS y B."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["type", "text"],
+            "properties": {
+              "type": { "const": "reply_text" },
+              "text": { "type": "string", "minLength": 1, "maxLength": 200 }
+            }
           }
-        }
-      ]
-    },
-    "change_stage": {
-      "anyOf": [
-        { "type": "null" },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["new_stage", "reason", "evidence"],
-          "properties": {
-            "new_stage": {
-              "type": "string",
-              "enum": ["MS", "B", "C", "D", "disqualified"]
-            },
-            "reason": {
-              "anyOf": [
-                { "type": "null" },
-                {
-                  "type": "string",
-                  "enum": ["no_money", "not_interested", "geographic", "no_quality", "fake_account"]
-                }
-              ]
-            },
-            "evidence": { "type": "string", "minLength": 1 }
-          }
-        }
-      ]
-    },
-    "reply_text": {
-      "anyOf": [
-        { "type": "null" },
-        { "type": "string", "minLength": 1, "maxLength": 200 }
-      ]
+        ]
+      }
     }
   }
 }
 ```
 
-> **Nota sobre `new_stage`:** el enum no incluye `"A"` — el agente nunca puede retroceder a la etapa inicial. Las transiciones permitidas dinámicamente vienen en `stage.valid_transitions` del contexto; el schema es la valla dura de tipos.
+> **Arquitectura de acciones:** el agente ya no devuelve campos planos (`send_content`, `change_stage`, `reply_text`). Devuelve un array `actions` ordenado. El Router itera las acciones en orden y las ejecuta secuencialmente. Puede haber múltiples acciones de distintos tipos en un mismo turno (ej: `send_content` + `reply_text`).
 
-> **`reason` solo requerido en `disqualified`:** para cualquier otra transición, `reason` es `null`. Para `disqualified`, debe ser uno de los 5 valores del enum.
+> **`lead_in` en `change_stage`:** campo opcional en el schema pero OBLIGATORIO lógicamente para transiciones a `C` (frase antes del calendly) y `disqualified` (frase de despedida). El Router lo usa en macros `reply_text_dynamic` / `reply_text_with_link`.
+
+> **`reason` en `change_stage`:** null para todas las transiciones excepto `disqualified`, donde debe ser uno de: `no_money`, `not_interested`, `geographic`, `no_quality`, `fake_account`.
 
 ---
 
@@ -144,13 +152,33 @@ El AI Agent (con Structured Output Parser) emite un objeto JSON en `$json.output
 ```json
 {
   "output": {
-    "reasoning": "El lead acaba de enviar un pulgar arriba. Eso indica que quiso reaccionar. Etapa A, primera interacción — enviamos el video hook.",
-    "send_content": {
-      "slug_id": "QC_A_VIDEO_HOOK",
-      "evidence": "👍"
-    },
-    "change_stage": null,
-    "reply_text": null
+    "reasoning": "Lead en etapa A reaccionó positivo al hook. Emitimos change_stage A→MS para arrancar la cascada que enviará audio + VSL.",
+    "actions": [
+      {
+        "type": "change_stage",
+        "new_stage": "MS",
+        "reason": null,
+        "evidence": "👍"
+      }
+    ]
+  }
+}
+```
+
+Otro ejemplo (lead en B responde positivo → ir a C con calendly):
+```json
+{
+  "output": {
+    "reasoning": "Reacción positiva tras la VSL. Transicionar a C y proveer link de Calendly.",
+    "actions": [
+      {
+        "type": "change_stage",
+        "new_stage": "C",
+        "reason": null,
+        "evidence": "sí mándame el link",
+        "lead_in": "Genial, te paso el enlace para que elijas el horario que mejor te venga:"
+      }
+    ]
   }
 }
 ```
@@ -158,6 +186,7 @@ El AI Agent (con Structured Output Parser) emite un objeto JSON en `$json.output
 El Router lee esto como:
 ```javascript
 const plan = agentOutput.output || agentOutput;
+const agentActions = Array.isArray(plan.actions) ? plan.actions.slice() : [];
 ```
 
 ---

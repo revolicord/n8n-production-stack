@@ -1,22 +1,21 @@
 # Nodo: Build Context
 
 **Tipo:** Code (JavaScript)  
-**Versión:** v3  
+**Versión:** v4  
 **Posición en cadena:** Después de `Execute a SQL query1`, antes de `AI Agent`  
 **ADR:** ADR-0010, ADR-0013  
-**Propósito:** Leer todos los inputs (Webhook, Get Stage Config, Get Subscriber CRM Context, Get Content History, System Prompt), construir el `chatInput` estructurado con `<context>` y `<lead_message>`, y propagar los metadatos necesarios para el Router.
+**Propósito:** Leer todos los inputs (Webhook, Get Stage Config, Get Subscriber CRM Context, Get Content History, System Prompt), construir el `chatInput` estructurado con `<context>` y `<lead_message>`, y propagar los metadatos necesarios para el Router. En v4 también computa `stageFlowsBySlug` desde `all_stages_flows` para que el Router resuelva slugs cross-stage.
 
 ---
 
-## Diferencias clave v2 → v3
+## Diferencias clave v3 → v4
 
-| v2 | v3 |
+| v3 | v4 |
 |----|----|
-| Agente con herramientas (`trigger_manychat_flow`, `set_stage`) | Agente con Structured Output Parser (JSON plan) |
-| Build Context elige 1 flow y lo presenta en texto plano | Build Context muestra TODOS los `content_options` enriquecidos con historial |
-| `chatInput` = texto limpio de mensajes | `chatInput` = bloque `<context>…</context><lead_message>…</lead_message>` |
-| Sin `selectedVariants` | Exporta `selectedVariants` para lookup en Router |
-| Sin `contextJson` | Exporta `contextJson` completo para auditoría |
+| No lee `all_stages_flows` | Lee `stageConfig.all_stages_flows` (nuevo en Get Stage Config v2) |
+| Sin `stageFlowsBySlug` en output | Exporta `stageFlowsBySlug`: mapa `{ stage_slug: { slug_id: flow_ns } }` |
+| Router resuelve slugs solo en el stage actual | Router puede resolver slugs en cualquier stage del tenant vía `stageFlowsBySlug` |
+| `stageFlowsBySlug` no existe | Pre-colapsa variant groups por stage para el Router |
 
 ---
 
@@ -32,11 +31,13 @@ El agente recibe la lista completa de `content_options` (una por grupo, ya colap
 
 ```javascript
 // ============================================================================
-// BUILD CONTEXT v3
+// BUILD CONTEXT v4
 // ----------------------------------------------------------------------------
-// Cambios respecto a v2:
-//  - Lee Get Content History y enriquece content_options con last_sent.
-//  - Lee valid_transitions como objetos { slug, when_to_use } (no slugs sueltos).
+// Cambios respecto a v3:
+//  - Lee `all_stages_flows` de Get Stage Config y lo expone como stageFlowsBySlug.
+//    El Router lo usa para resolver slug_id contra el stage destino de una macro
+//    (no solo contra los flows del stage actual).
+//  - Todo lo demás queda exactamente igual.
 // ============================================================================
 
 function daysAgoText(ts) {
@@ -123,23 +124,23 @@ const stageConfig = $('Get Stage Config').first()
 
 const rawFlows = Array.isArray(stageConfig.flows) ? stageConfig.flows : [];
 
-// valid_transitions ahora viene como [{ slug, when_to_use }, ...]
 const validTransitions = Array.isArray(stageConfig.valid_transitions)
   ? stageConfig.valid_transitions
   : [];
+
+// NUEVO v4: catálogo completo de flows del tenant por stage_slug.
+// Lo usa el Router para resolver slug_id en macros que tocan stages distintos
+// al actual del lead.
+const allStagesFlows = stageConfig.all_stages_flows || {};
 
 const crm = $('Get Subscriber CRM Context').first()
   ? $('Get Subscriber CRM Context').first().json
   : {};
 
-// NUEVO: Content History
-// Get Content History devuelve N filas, una por slug_id ya enviado.
-// Llegamos a un array de items con { slug_id, last_sent_at, ever_responded, times_sent }.
 const historyItems = $('Get Content History').all()
   ? $('Get Content History').all().map(function (x) { return x.json; })
   : [];
 
-// Mapa { slug_id: { last_sent_at, ever_responded, times_sent } }
 const sentMap = {};
 for (const h of historyItems) {
   if (h && h.slug_id) {
@@ -155,7 +156,6 @@ const followupsSent = crm.followups_sent || 0;
 const maxFollowups = stageConfig.max_followups || crm.max_followups || 3;
 const followupHistory = Array.isArray(crm.followup_history) ? crm.followup_history : [];
 
-// La API lo envía desde subscribers.instagram_context (migración 0005). {} si nunca llegó.
 const igCtx = body.instagram_context || {};
 const signals = (sub.metadata && sub.metadata.signals)
   || (body.lead_state && body.lead_state.signals)
@@ -191,6 +191,22 @@ const selectedVariants = {};
 for (const c of collapsed) {
   const key = c.exposed.slug_id || c.exposed.human_name;
   selectedVariants[key] = c.chosenVariant.flow_ns;
+}
+
+// NUEVO v4: pre-cálculo de stageFlowsBySlug.
+// Para cada stage del catálogo, colapsamos variant groups y nos quedamos con
+// UN flow_ns por slug_id. El Router consulta este objeto como
+// stageFlowsBySlug[stage_slug][slug_id] = flow_ns.
+const stageFlowsBySlug = {};
+for (const stageSlug in allStagesFlows) {
+  const flowsOfStage = Array.isArray(allStagesFlows[stageSlug]) ? allStagesFlows[stageSlug] : [];
+  const collapsedStage = collapseVariantGroups(flowsOfStage);
+  const map = {};
+  for (const c of collapsedStage) {
+    const key = c.exposed.slug_id || c.exposed.human_name;
+    if (key) map[key] = c.chosenVariant.flow_ns;
+  }
+  stageFlowsBySlug[stageSlug] = map;
 }
 
 // ----- Construccion del contextJson -----------------------------------------
@@ -242,6 +258,10 @@ return [{
     contextJson: contextJson,
     selectedVariants: selectedVariants,
 
+    // NUEVO v4: catálogo de slugs por stage para el Router (no para el agente).
+    // NO se incluye en chatInput ni en contextJson — es solo para downstream.
+    stageFlowsBySlug: stageFlowsBySlug,
+
     subscriberId: sub.manychat_subscriber_id,
     subscriberDbId: sub.id,
     tenantDbId: (body.tenant && body.tenant.id) || '',
@@ -264,7 +284,8 @@ return [{
 | `chatInput` | string | Bloque `<context>…</context><lead_message>…</lead_message>` — va al AI Agent |
 | `systemPrompt` | string | Prompt estático del Set node — va al AI Agent como System Message |
 | `contextJson` | object | El objeto de contexto completo (para auditoría) |
-| `selectedVariants` | object | Mapa `{ slug_id: flow_ns }` — usado por Router para lookup |
+| `selectedVariants` | object | Mapa `{ slug_id: flow_ns }` del stage actual — lookup directo en Router para acciones del agente |
+| `stageFlowsBySlug` | object | Mapa `{ stage_slug: { slug_id: flow_ns } }` de todos los stages — usado por Router para resolver slugs cross-stage en macros (ej. `MS→B` manda audio que vive en MS) |
 | `subscriberId` | string | `manychat_subscriber_id` numérico — para llamadas a ManyChat API |
 | `subscriberDbId` | UUID | `subscriber.id` interno de la DB — para queries Postgres |
 | `tenantDbId` | UUID | `tenant.id` — para queries Postgres |
