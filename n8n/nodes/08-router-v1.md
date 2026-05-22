@@ -17,7 +17,8 @@
 | v3 | Retry de red exponencial; fail-loud en errores no transitorios |
 | v4 | `reply_text_dynamic` y `reply_text_with_link` — texto del agente (`lead_in`) fluye a macros |
 | v4.1 | Sin cambios de lógica (refactor interno) |
-| **v4.2** | Fix bug "MS→B busca audios donde no están": `lookup_stage` en macros para resolver slugs cross-stage |
+| v4.2 | Fix bug "MS→B busca audios donde no están": `lookup_stage` en macros para resolver slugs cross-stage |
+| **v4.3** | Fix: `withRetry` adjunta `__attempts`/`__retried` al error antes de rethrow; el catch de `execSendContent` lo usa en vez de hardcodear `attempts:3`. También añade `ECONNABORTED` a códigos retryables para que los timeouts de axios se reintenten. |
 
 ---
 
@@ -82,7 +83,7 @@ send_content de macro    → stageFlowsBySlug[lookup_stage][slug_id]  (stage exp
 
 ```javascript
 // ============================================================================
-// ROUTER v4.2 — macros + retry + lookup_stage para contenidos cross-stage.
+// ROUTER v4.3 — fix: withRetry adjunta __attempts al error; ECONNABORTED retryable.
 // ============================================================================
 
 const TRANSITION_MACROS = {
@@ -136,7 +137,7 @@ function isRetryableNetworkError(err) {
   if (!err) return false;
   const code = err.code || (err.cause && err.cause.code);
   const msg = String(err.message || err);
-  const retryableCodes = ['ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'EHOSTUNREACH', 'ENETUNREACH', 'EPIPE'];
+  const retryableCodes = ['ETIMEDOUT', 'ECONNABORTED', 'ECONNRESET', 'ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'EHOSTUNREACH', 'ENETUNREACH', 'EPIPE'];
   if (code && retryableCodes.includes(code)) return true;
   return retryableCodes.some(c => msg.includes(c));
 }
@@ -165,9 +166,19 @@ async function withRetry(fn, label) {
       return { response, attempts: attempt, retried: attempt > 1 };
     } catch (err) {
       lastErr = err;
-      if (!isRetryableNetworkError(err) || attempt > delays.length) throw err;
+      const shouldRetry = isRetryableNetworkError(err) && attempt <= delays.length;
+      if (!shouldRetry) {
+        err.__attempts = attempt;
+        err.__retried = attempt > 1;
+        throw err;
+      }
       await sleep(delays[attempt - 1]);
     }
+  }
+  if (lastErr) {
+    lastErr.__attempts = delays.length + 1;
+    lastErr.__retried = true;
+    throw lastErr;
   }
   return { response: lastResponse, attempts: delays.length + 1, retried: true };
 }
@@ -248,7 +259,7 @@ async function execSendContent(action, fromMacro, macroToStage) {
     }
     return { type: 'send_content', status: 'sent', slug_id: slugId, flow_ns: flowNs, evidence: action.evidence, attempts: res.__attempts, retried: res.__retried };
   } catch (err) {
-    return { type: 'send_content', status: 'error', slug_id: slugId, flow_ns: flowNs, reason: err.message || String(err), api_response: err.response ? err.response.body : null, attempts: 3, retried: true, exhausted: true };
+    return { type: 'send_content', status: 'error', slug_id: slugId, flow_ns: flowNs, reason: err.message || String(err), api_response: err.response ? err.response.body : null, attempts: err.__attempts || 1, retried: err.__retried || false, exhausted: true };
   }
 }
 
