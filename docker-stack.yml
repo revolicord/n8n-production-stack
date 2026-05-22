@@ -152,7 +152,10 @@ services:
         done &&
         mc mb --ignore-existing local/n8n-data &&
         mc anonymous set none local/n8n-data &&
-        echo 'Bucket n8n-data listo.'
+        echo 'Bucket n8n-data listo.' &&
+        mc mb --ignore-existing local/assets &&
+        mc anonymous set download local/assets &&
+        echo 'Bucket assets listo (public read).'
       "
     deploy:
       restart_policy:
@@ -347,6 +350,11 @@ services:
       ADMIN_JWT_SECRET: ${ADMIN_JWT_SECRET}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       WORKER_CONCURRENCY: 10
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      MINIO_BUCKET_ASSETS: ${MINIO_BUCKET_ASSETS:-assets}
+      MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL}
     healthcheck:
       test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:3000/healthz || exit 1']
       interval: 30s
@@ -396,6 +404,11 @@ services:
       ADMIN_JWT_SECRET: ${ADMIN_JWT_SECRET}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       WORKER_CONCURRENCY: 10
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      MINIO_BUCKET_ASSETS: ${MINIO_BUCKET_ASSETS:-assets}
+      MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL}
     deploy:
       replicas: 1
       restart_policy:

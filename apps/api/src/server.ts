@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import helmet from '@fastify/helmet';
+import multipart from '@fastify/multipart';
 import sensible from '@fastify/sensible';
 import Fastify from 'fastify';
 import { getConfig } from './config.js';
@@ -35,6 +36,9 @@ async function main() {
 
   await app.register(helmet, {
     contentSecurityPolicy: false, // API JSON, no HTML
+  });
+  await app.register(multipart, {
+    limits: { fileSize: 8 * 1024 * 1024 }, // 8 MB max; validado también en la ruta
   });
   await app.register(sensible);
 

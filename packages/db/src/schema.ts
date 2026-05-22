@@ -339,6 +339,29 @@ export const followupTemplates = apiSchema.table(
 );
 
 // ───────────────────────────────────────────────────────────────
+// followup_messages — mensajes individuales de un template type='content' (ADR-0015)
+// ───────────────────────────────────────────────────────────────
+export const followupMessages = apiSchema.table(
+  'followup_messages',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    templateId: uuid('template_id')
+      .notNull()
+      .references(() => followupTemplates.id, { onDelete: 'cascade' }),
+    tenantId: uuid('tenant_id').notNull(),
+    messageType: text('message_type').notNull(), // 'text' | 'image'
+    textContent: text('text_content'),
+    mediaUrl: text('media_url'),
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  },
+  (t) => ({
+    tplOrderUnique: uniqueIndex('followup_messages_tpl_order_unique').on(t.templateId, t.sortOrder),
+    templateIdx: index('followup_messages_template_idx').on(t.templateId),
+  }),
+);
+
+// ───────────────────────────────────────────────────────────────
 // lead_followup_log — registro inmutable de follow-ups enviados (ADR-0015)
 // ───────────────────────────────────────────────────────────────
 export const leadFollowupLog = apiSchema.table(
@@ -474,6 +497,8 @@ export type StageFlow = typeof stageFlows.$inferSelect;
 export type NewStageFlow = typeof stageFlows.$inferInsert;
 export type FollowupTemplate = typeof followupTemplates.$inferSelect;
 export type NewFollowupTemplate = typeof followupTemplates.$inferInsert;
+export type FollowupMessage = typeof followupMessages.$inferSelect;
+export type NewFollowupMessage = typeof followupMessages.$inferInsert;
 export type LeadFollowupLog = typeof leadFollowupLog.$inferSelect;
 export type NewLeadFollowupLog = typeof leadFollowupLog.$inferInsert;
 export type LeadCron = typeof leadCrons.$inferSelect;

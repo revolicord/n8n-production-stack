@@ -14,7 +14,7 @@ import {
 } from '../../services/followups.js';
 import { getSubscriberByUuid } from '../../services/subscribers.js';
 
-const FollowupTypeEnum = z.enum(['text', 'flow']);
+const FollowupTypeEnum = z.enum(['text', 'flow', 'content']);
 
 function isTypeConsistent(
   type: string,
@@ -23,6 +23,7 @@ function isTypeConsistent(
 ): boolean {
   if (type === 'text') return !!textTemplate;
   if (type === 'flow') return !!flowNs;
+  if (type === 'content') return true; // mensajes viven en followup_messages
   return false;
 }
 

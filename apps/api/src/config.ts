@@ -23,6 +23,12 @@ const ConfigSchema = z.object({
   LOCK_TTL_MS: z.coerce.number().int().positive().default(90000),
   RATE_PER_MINUTE: z.coerce.number().int().positive().default(20),
   BUFFER_HARD_LIMIT: z.coerce.number().int().positive().default(20),
+
+  MINIO_ENDPOINT: z.string().url(),
+  MINIO_ACCESS_KEY: z.string().min(1),
+  MINIO_SECRET_KEY: z.string().min(1),
+  MINIO_BUCKET_ASSETS: z.string().default('assets'),
+  MINIO_PUBLIC_URL: z.string().url(),
 });
 
 export type AppConfig = z.infer<typeof ConfigSchema>;
