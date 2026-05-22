@@ -94,9 +94,8 @@ async function boot() {
   await loadTenants();
   await loadStages();
   renderSidebar();
-  if (STATE.stages.length > 0) {
-    await selectStage(STATE.stages[0].id);
-  }
+  const stageB = STATE.stages.find((s) => s.slug === 'B');
+  if (stageB) await selectStage(stageB.id);
 }
 
 async function loadTenants() {
@@ -127,7 +126,8 @@ async function loadTenants() {
     STATE.dirty.clear();
     await loadStages();
     renderSidebar();
-    if (STATE.stages.length > 0) await selectStage(STATE.stages[0].id);
+    const stageB = STATE.stages.find((s) => s.slug === 'B');
+    if (stageB) await selectStage(stageB.id);
   });
   if (ts.length === 1) sel.parentElement.classList.add('hidden');
 }
@@ -179,38 +179,28 @@ async function selectSection(section) {
 // ── Sidebar ──────────────────────────────────────────────────────────────────
 function renderSidebar() {
   const sidebar = document.getElementById('sidebar-nav');
-  // stages use camelCase: s.displayName (not s.name)
-  const stageItems = STATE.stages
-    .map(
-      (s) => `
-    <button data-stage="${s.id}"
-      class="sidebar-item w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors"
-      onclick="selectStage('${s.id}')">
-      Etapa ${escHtml(s.displayName)}
-    </button>
-  `,
-    )
-    .join('');
+  const stageB = STATE.stages.find((s) => s.slug === 'B');
+  const stageC = STATE.stages.find((s) => s.slug === 'C');
+
+  const btnClass =
+    'sidebar-item w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors';
+  const divider = '<div class="border-t border-gray-800 mx-3 my-1"></div>';
+
+  const stageBBtn = stageB
+    ? `<button data-stage="${stageB.id}" class="${btnClass}" onclick="selectStage('${stageB.id}')">Fase B</button>`
+    : '';
+  const stageCBtn = stageC
+    ? `<button data-stage="${stageC.id}" class="${btnClass}" onclick="selectStage('${stageC.id}')">Fase C</button>`
+    : '';
 
   sidebar.innerHTML = `
-    <div class="text-xs uppercase tracking-widest text-gray-500 px-4 pt-4 pb-1">Cadencia</div>
-    ${stageItems}
-    <div class="text-xs uppercase tracking-widest text-gray-500 px-4 pt-4 pb-1">Recursos Agente</div>
-    <button data-section="cierre"
-      class="sidebar-item w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors"
-      onclick="selectSection('cierre')">
-      Cierres
-    </button>
-    <button data-section="objecion"
-      class="sidebar-item w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors"
-      onclick="selectSection('objecion')">
-      Objeciones
-    </button>
-    <button data-section="general"
-      class="sidebar-item w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors"
-      onclick="selectSection('general')">
-      General
-    </button>
+    <button data-section="general" class="${btnClass}" onclick="selectSection('general')">General</button>
+    ${divider}
+    ${stageBBtn}
+    ${stageCBtn}
+    ${divider}
+    <button data-section="cierre" class="${btnClass}" onclick="selectSection('cierre')">Cierres</button>
+    <button data-section="objecion" class="${btnClass}" onclick="selectSection('objecion')">Objeciones</button>
   `;
 }
 
@@ -234,12 +224,18 @@ function renderStagePanel(main) {
     return;
   }
 
-  // stage.displayName (camelCase from Drizzle)
-  const cards = STATE.templates.map((t) => templateCard(t, stage)).join('');
+  const title =
+    stage.slug === 'B'
+      ? 'Fase B'
+      : stage.slug === 'C'
+        ? 'Fase C'
+        : `Etapa ${escHtml(stage.displayName)}`;
+  const visible = STATE.templates.filter((t) => t.sequenceNumber >= 1 && t.sequenceNumber <= 8);
+  const cards = visible.map((t) => templateCard(t, stage)).join('');
   main.innerHTML = `
     <div class="p-6">
       <div class="flex items-center justify-between mb-6">
-        <h2 class="text-lg font-semibold text-white">Etapa ${escHtml(stage.displayName)} — Follow-ups</h2>
+        <h2 class="text-lg font-semibold text-white">${title} — Follow-ups</h2>
         <button onclick="saveAllFollowups()" class="px-4 py-1.5 bg-teal-600 hover:bg-teal-500 text-white text-sm rounded transition-colors">
           Guardar cambios
         </button>
