@@ -11,7 +11,7 @@
 | Campo | Valor |
 |-------|-------|
 | Session ID type | `customKey` |
-| Session Key | `={{ $('Build Context').first().json.subscriberId }}` |
+| Session Key | `=$json.subscriberId` |
 | Credencial | Postgres (mismo servidor que el API) |
 
 ---

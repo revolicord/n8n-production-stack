@@ -1,7 +1,7 @@
 # Nodo: Router
 
 **Tipo:** Code (JavaScript)  
-**Versión:** v4.2  
+**Versión:** v4.5  
 **Nombre en UI:** `Router`  
 **Posición en cadena:** Después de `AI Agent`, antes de `If`  
 **Propósito:** Ejecutar el plan emitido por el AI Agent — iterar el array `actions`, llamar a ManyChat API (`sendFlow`, `sendContent`) y al API interno (`set-stage`), disparar macros de transición con cascadas, y propagar `insert_content_sent` para el nodo `If`.
