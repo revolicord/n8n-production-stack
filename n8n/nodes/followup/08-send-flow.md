@@ -7,7 +7,7 @@
 
 ## Propósito
 
-Dispara un flow de ManyChat para el suscriptor. Se usa cuando `followup_type` es `flow` o `content`.
+Dispara un flow de ManyChat para el suscriptor. Se usa cuando `followup_type` es `flow`.
 
 ---
 
@@ -58,3 +58,9 @@ Dispara un flow de ManyChat para el suscriptor. Se usa cuando `followup_type` es
 ## Conexión posterior
 
 → **After Send (input 1)**
+
+---
+
+## Nota de versión (ADR-0020)
+
+Antes de ADR-0020 este nodo recibía también `type='content'`, lo que generaba un `sendFlow` con `flow_ns=NULL` → error silencioso. Ahora `content` va por su propia rama: **Build Content Messages** → **sendContentMessages**.
