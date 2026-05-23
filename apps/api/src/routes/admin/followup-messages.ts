@@ -21,6 +21,7 @@ const CreateMessageBodySchema = z
     text_content: z.string().min(1).optional(),
     media_url: z.string().url().optional(),
     sort_order: z.number().int().min(0).optional(),
+    ai_image_context: z.string().min(1).optional(),
   })
   .refine(
     (d) => {
@@ -39,6 +40,7 @@ export const UpdateMessageBodySchema = z.object({
   text_content: z.string().min(1).nullable().optional(),
   media_url: z.string().url().nullable().optional(),
   sort_order: z.number().int().min(0).optional(),
+  ai_image_context: z.string().min(1).nullable().optional(),
 });
 
 function isMessageConsistent(
@@ -59,6 +61,7 @@ function toResponse(msg: {
   textContent: string | null;
   mediaUrl: string | null;
   sortOrder: number;
+  aiImageContext: string | null;
   createdAt: Date | null;
 }) {
   return {
@@ -69,6 +72,7 @@ function toResponse(msg: {
     text_content: msg.textContent,
     media_url: msg.mediaUrl,
     sort_order: msg.sortOrder,
+    ai_image_context: msg.aiImageContext,
     created_at: msg.createdAt,
   };
 }
@@ -127,6 +131,7 @@ export default async function followupMessagesRoutes(app: FastifyInstance): Prom
         textContent: body.text_content ?? null,
         mediaUrl: body.media_url ?? null,
         sortOrder: body.sort_order ?? 0,
+        aiImageContext: body.ai_image_context ?? null,
       });
       return reply.code(201).send(toResponse(msg));
     },
@@ -177,6 +182,7 @@ export default async function followupMessagesRoutes(app: FastifyInstance): Prom
     if (body.text_content !== undefined) patch.textContent = body.text_content;
     if (body.media_url !== undefined) patch.mediaUrl = body.media_url;
     if (body.sort_order !== undefined) patch.sortOrder = body.sort_order;
+    if (body.ai_image_context !== undefined) patch.aiImageContext = body.ai_image_context;
 
     const updated = await updateFollowupMessage(db, id, patch);
     if (!updated) {

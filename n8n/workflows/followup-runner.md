@@ -47,7 +47,9 @@ SELECT
   ft.text_template,
   ft.flow_ns                         AS followup_flow_ns,
   ft.description                     AS followup_description,
-  ft_next.delay_minutes              AS next_delay_minutes
+  ft_next.delay_minutes              AS next_delay_minutes,
+  msgs.content_text,
+  msgs.image_context
 FROM api.lead_crons lc
 JOIN api.subscribers    s   ON s.id    = lc.subscriber_id
 JOIN api.tenants        t   ON t.id    = lc.tenant_id
@@ -60,6 +62,13 @@ LEFT JOIN api.followup_templates ft_next ON
   ft_next.stage_id       = lc.current_stage_id
   AND ft_next.sequence_number = lc.next_sequence_number + 1
   AND ft_next.is_active  = TRUE
+LEFT JOIN LATERAL (
+  SELECT
+    max(CASE WHEN fm.message_type = 'text'  THEN fm.text_content     END) AS content_text,
+    max(CASE WHEN fm.message_type = 'image' THEN fm.ai_image_context END) AS image_context
+  FROM api.followup_messages fm
+  WHERE fm.template_id = ft.id
+) msgs ON TRUE
 WHERE lc.is_active        = TRUE
   AND lc.next_followup_at IS NOT NULL
   AND lc.next_followup_at <= NOW()
@@ -149,11 +158,23 @@ Inserta el follow-up en la memoria conversacional del agente para que lo vea en 
 
 ```javascript
 // Código para construir el contenido del mensaje de memoria
-const textoParaMemoria = $json.followup_type === 'text'
-  ? $json.text_template.replace('{{name}}', $json.display_name ?? '')
-  : `[flow: ${$json.followup_flow_ns}] — ${$json.followup_description ?? ''}`;
+let textoParaMemoria;
+if ($json.followup_type === 'text') {
+  textoParaMemoria = ($json.text_template ?? '').replace('{{name}}', $json.display_name ?? '');
+} else if ($json.followup_type === 'flow') {
+  textoParaMemoria = `[flow: ${$json.followup_flow_ns}] — ${$json.followup_description ?? ''}`;
+} else if ($json.followup_type === 'content') {
+  const imagePart = $json.image_context
+    ? `[IMAGEN ENVIADA: ${$json.image_context}] `
+    : '[IMAGEN ENVIADA] ';
+  const textPart = ($json.content_text ?? '').replace('{{name}}', $json.display_name ?? '');
+  textoParaMemoria = `${imagePart}${textPart}`.trim();
+} else {
+  textoParaMemoria = $json.followup_description ?? '';
+}
 
 const contenidoMemoria = `[SEGUIMIENTO AUTOMÁTICO #${$json.next_sequence_number}] ${textoParaMemoria}`;
+// Ejemplo para content: "[SEGUIMIENTO AUTOMÁTICO #3] [IMAGEN ENVIADA: Meme de esqueleto esperando en silla] Oye Carlos, sigo aquí..."
 ```
 
 ```sql

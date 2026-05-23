@@ -353,6 +353,7 @@ export const followupMessages = apiSchema.table(
     textContent: text('text_content'),
     mediaUrl: text('media_url'),
     sortOrder: integer('sort_order').notNull().default(0),
+    aiImageContext: text('ai_image_context'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   },
   (t) => ({

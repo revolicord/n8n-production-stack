@@ -356,6 +356,14 @@ function messageCard(templateId, m) {
               <input type="file" accept="image/*" class="text-xs text-gray-400 file:mr-2 file:text-xs file:bg-teal-700 file:text-white file:border-0 file:rounded file:px-2 file:py-1"
                 onchange="uploadMessageImage(event, '${templateId}', '${m.id}')">
             </div>
+            <div class="mt-2">
+              <label class="text-xs text-gray-500 block mb-1">Descripción para la IA (no se envía al lead)</label>
+              <textarea rows="2"
+                class="w-full bg-[#111] border border-gray-700 rounded px-2 py-1 text-xs text-gray-300 focus:border-teal-500 focus:outline-none"
+                placeholder="Ej: Meme de esqueleto esperando en una silla"
+                onchange="saveImageContext('${templateId}', '${m.id}', this.value)"
+              >${escHtml(m.ai_image_context ?? '')}</textarea>
+            </div>
           </div>`
           : `<textarea rows="2"
               class="w-full bg-[#111] border border-gray-700 rounded px-2 py-1 text-sm text-gray-200 focus:border-teal-500 focus:outline-none"
@@ -676,6 +684,17 @@ async function saveMessageText(_templateId, messageId, text) {
   }
 }
 
+async function saveImageContext(_templateId, messageId, context) {
+  try {
+    await api(`/admin/followup-messages/${messageId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ ai_image_context: context || null }),
+    });
+  } catch (e) {
+    toast(`Error guardando descripción: ${e.message}`, false);
+  }
+}
+
 async function uploadMessageImage(event, _templateId, messageId) {
   const file = event.target.files[0];
   if (!file) return;
@@ -830,6 +849,7 @@ window.saveContentText = saveContentText;
 window.uploadContentImage = uploadContentImage;
 window.uploadAndConvertToContent = uploadAndConvertToContent;
 window.saveMessageText = saveMessageText;
+window.saveImageContext = saveImageContext;
 window.uploadMessageImage = uploadMessageImage;
 window.deleteMessage = deleteMessage;
 window.addMessage = addMessage;

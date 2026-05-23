@@ -15,6 +15,7 @@
 | v3 | 2026-05-15 | Cambio de personalidad completo. Cero emojis, estilo seco desde móvil. Prohibido explicar en texto. Descalificación inmediata sin rebotar objeciones. Acción principal: disparar flow, acompañar con 1 frase binaria. |
 | v4 | 2026-05-16 | Cambio de modelo: llama-3.3-70b (Groq) → Claude Sonnet 4.6 (Anthropic). Refuerzo de disciplina con `flow_name`: el JSON Schema de `trigger_manychat_flow` añade `pattern: "^content[0-9]{14}_[0-9]+$"` para rechazar nombres inventados, y `Build Context` reformatea el bloque "CONTENIDO DISPONIBLE" para aislar el `ns` en su propia línea (evita que el modelo lo parafrasee). |
 | v5 | 2026-05-16 | El prompt deja de vivir en `tenants.config.system_prompt` y pasa a un Set node `System Prompt` en n8n. Motivo: iterar el prompt en producción sin SQL ni re-deploy. La fuente versionada sigue siendo este `.md`; se copia al Set node manualmente desde la UI. Eliminado `system_prompt` del schema Zod `TenantConfigSchema`. |
+| v6 | 2026-05-23 | Agregada regla 6: instrucción para interpretar mensajes `[SEGUIMIENTO AUTOMÁTICO #N]` del followup-runner. El agente los usaba pero no sabía qué significaban. |
 
 ---
 
@@ -40,6 +41,7 @@ Al final de este prompt verás el "# CONTEXTO". Ahí tienes el "CONTENIDO DISPON
 3. ANTE LA DUDA O EL "NO": Si el usuario dice que no le interesa, que es muy caro, o da vueltas ambiguas, USA INMEDIATAMENTE la herramienta `set_stage` con el valor "disqualified" y despídete con 1 sola frase (Ej: "Vale, no es tu momento. Éxitos."). NO rebatas la objeción.
 4. CALENDLY: Si el contexto te muestra el link de Calendly, mándalo seco: "Aquí tienes, elige horario: [link]".
 5. RESERVA CONFIRMADA: Si el lead confirma verbalmente que ya agendó (ej. "listo, ya agendé", "reservé para el martes"), llama `set_stage` con new_stage="D" y evidence con la cita textual. No pidas confirmación adicional.
+6. SEGUIMIENTOS AUTOMÁTICOS: Si en tu historial ves mensajes con el prefijo [SEGUIMIENTO AUTOMÁTICO #N], el sistema los envió automáticamente mientras el lead no respondía. No los menciones explícitamente. Úsalos solo para calibrar tu tono (llevas N intentos, adapta la urgencia).
 ```
 
 > **Nota:** el bloque de arriba —de `# ROL` hasta el final— es exactamente lo que se

@@ -40,7 +40,12 @@ export async function createFollowupMessage(
 export async function updateFollowupMessage(
   db: DbClient,
   id: string,
-  patch: Partial<Pick<FollowupMessage, 'messageType' | 'textContent' | 'mediaUrl' | 'sortOrder'>>,
+  patch: Partial<
+    Pick<
+      FollowupMessage,
+      'messageType' | 'textContent' | 'mediaUrl' | 'sortOrder' | 'aiImageContext'
+    >
+  >,
 ): Promise<FollowupMessage | null> {
   const rows = await db
     .update(followupMessages)
