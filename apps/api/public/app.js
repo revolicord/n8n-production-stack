@@ -317,6 +317,18 @@ function contentCardBody(t) {
           class="text-xs text-gray-400 file:mr-2 file:text-xs file:bg-teal-700 file:text-white file:border-0 file:rounded file:px-2 file:py-1"
           onchange="uploadContentImage(event, '${t.id}', '${imgMsg?.id ?? ''}')">
       </div>
+      ${
+        imgMsg
+          ? `<div class="mt-2">
+        <label class="text-xs text-gray-500 block mb-1">Descripción de la imagen para la IA (no se envía al lead)</label>
+        <textarea rows="2"
+          class="w-full bg-[#111] border border-gray-700 rounded px-2 py-1 text-xs text-gray-300 focus:border-teal-500 focus:outline-none"
+          placeholder="Ej: Meme de esqueleto esperando en una silla"
+          onchange="saveImageContext('${t.id}', '${imgMsg.id}', this.value)"
+        >${escHtml(imgMsg.ai_image_context ?? '')}</textarea>
+      </div>`
+          : ''
+      }
     </div>
     ${msgs.length > 2 ? `<details class="mt-3"><summary class="text-xs text-gray-500 cursor-pointer">Ver todos los mensajes (${msgs.length})</summary>${messagesSection(t)}</details>` : ''}
   `;
