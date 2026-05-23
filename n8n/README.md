@@ -85,6 +85,8 @@ Webhook ──┬──► Get Stage Config (Postgres) ────────�
 | `flows-catalog.md` | Mapeo slug_id → flow_ns de ManyChat + etapa |
 | `stages.md` | Definición de etapas y transiciones válidas |
 | `system-prompt.md` | System prompt base (fuente de verdad, copiar al Set node) |
+| `followup-runner.md` | Documentación del workflow followup-runner (v2) |
+| `nodes/followup/` | Docs por nodo del followup-runner (14 archivos) |
 
 ---
 
