@@ -22,11 +22,11 @@ BEGIN
 -- ──────────────────────────────────────────────────────────────
 INSERT INTO api.funnel_stages (tenant_id, slug, display_name, position, description, max_followups)
 VALUES
-  (v_tenant_id, 'A',  'Enganche',         1, 'Video de enganche 25s — primer contacto, pedir pulgar arriba',          3),
-  (v_tenant_id, 'MS', 'VSL',              2, 'VSL 1:58 — enviar cuando confirmó ver el Video 1',                     3),
-  (v_tenant_id, 'B',  'Calendly',         3, 'Enviar link de Calendly por texto — no hay flow multimedia',            2),
-  (v_tenant_id, 'C',  'Llamada agendada', 4, 'Lead con llamada agendada — esperar o confirmar',                      1),
-  (v_tenant_id, 'D',  'Cliente',          5, 'Cerrado — sin follow-ups automáticos',                                  0)
+  (v_tenant_id, 'A',  'Inicial',    1, 'Video de enganche 25s — primer contacto, pedir pulgar arriba', 3),
+  (v_tenant_id, 'MS', 'Media Seen', 2, 'VSL 1:58 — enviar cuando confirmó ver el Video 1',            3),
+  (v_tenant_id, 'B',  'Engaged',    3, 'Enviar link de Calendly por texto — no hay flow multimedia',  2),
+  (v_tenant_id, 'C',  'Calendly',   4, 'Lead con llamada agendada — esperar o confirmar',              1),
+  (v_tenant_id, 'D',  'Agendado',   5, 'Cerrado — sin follow-ups automáticos',                         0)
 ON CONFLICT (tenant_id, slug) DO NOTHING;
 
 -- Recuperar IDs
