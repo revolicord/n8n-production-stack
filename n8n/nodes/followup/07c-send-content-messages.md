@@ -1,7 +1,7 @@
 # Nodo: sendContentMessages
 
 **Tipo:** HTTP Request  
-**ID:** `b5c6d7e8-f9a0-4123-b5c6-d7e8f9a01234`  
+**ID:** `083e41d3-2a8e-4dcc-b260-878898d94791`  
 **Posición en flujo:** después de Build Content Messages → After Send (input 2)
 
 ---
@@ -21,12 +21,12 @@ Envía imagen + texto al suscriptor vía `sendContent` de ManyChat cuando el tem
   "sendHeaders": true,
   "headerParameters": {
     "parameters": [
-      { "name": "Authorization", "value": "=\"Bearer \" + $json.mc_api_key" }
+      { "name": "Authorization", "value": "=Bearer {{ $json.mc_api_key }}" }
     ]
   },
   "sendBody": true,
   "specifyBody": "json",
-  "jsonBody": "=JSON.stringify({ subscriber_id: $json.manychat_subscriber_id, data: { version: 'v2', content: { type: 'instagram', messages: $json.mcMessages } } })"
+  "jsonBody": "={{ { subscriber_id: $json.manychat_subscriber_id, data: { version: \"v2\", content: { type: \"instagram\", messages: $json.mcMessages } } } }}"
 }
 ```
 

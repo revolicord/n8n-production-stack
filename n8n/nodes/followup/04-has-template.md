@@ -1,7 +1,8 @@
 # Nodo: Has Template?
 
 **Tipo:** If  
-**Posición en flujo:** 5 de 15 (después de Loop Over Leads)
+**ID:** `26600806-3b2a-44c9-b611-7266269701f1`  
+**Posición en flujo:** 5 de 17 (después de Loop Over Leads)
 
 ---
 

@@ -1,7 +1,8 @@
 # Nodo: Get Due Leads
 
 **Tipo:** Postgres — Execute Query  
-**Posición en flujo:** 2 de 15 (después del trigger, antes de Prepare Data)
+**ID:** `272716da-6682-416e-9c8f-81318e4554d8`  
+**Posición en flujo:** 2 de 17 (después del trigger, antes de Prepare Data)
 
 ---
 
@@ -33,7 +34,19 @@ SELECT
     ft.description                     AS followup_description,
     ft_next.delay_minutes              AS next_delay_minutes,
     msgs.content_text,
-    msgs.image_context
+    msgs.image_context,
+    COALESCE(
+      (SELECT json_agg(
+        json_build_object(
+          'message_type', fm.message_type,
+          'text_content',  fm.text_content,
+          'media_url',     fm.media_url,
+          'sort_order',    fm.sort_order
+        ) ORDER BY fm.sort_order ASC)
+       FROM api.followup_messages fm
+       WHERE fm.template_id = ft.id
+      ), '[]'::json
+    ) AS followup_messages
   FROM api.lead_crons lc
   JOIN api.subscribers    s   ON s.id = lc.subscriber_id
   JOIN api.tenants        t   ON t.id = lc.tenant_id
@@ -87,6 +100,7 @@ SELECT
 | `next_delay_minutes` | `ft_next.delay_minutes` | Delay en minutos al siguiente follow-up |
 | `content_text` | `followup_messages` (LATERAL) | Texto del mensaje tipo `content` |
 | `image_context` | `followup_messages` (LATERAL) | Contexto AI de la imagen enviada |
+| `followup_messages` | `followup_messages` (json_agg) | Array JSON ordenado de `{message_type, text_content, media_url, sort_order}` para templates tipo `content` |
 
 ---
 

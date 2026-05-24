@@ -1,6 +1,7 @@
 # Nodo: Build SQL
 
 **Tipo:** Code (JavaScript)  
+**ID:** `f4ce7fd7-e544-4057-b6c2-26ad6d2000a4`  
 **Posición en flujo:** después de After Send → Insert followup log
 
 ---

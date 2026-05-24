@@ -1,7 +1,8 @@
 # Nodo: Prepare Data
 
 **Tipo:** Code (JavaScript)  
-**Posición en flujo:** 3 de 15 (después de Get Due Leads, antes de Loop Over Leads)
+**ID:** `bd2a127b-4bf9-48bf-966a-afb8cd6eb5d3`  
+**Posición en flujo:** 3 de 17 (después de Get Due Leads, antes de Loop Over Leads)
 
 ---
 

@@ -1,6 +1,7 @@
 # Nodo: After Send
 
 **Tipo:** Merge  
+**ID:** `1489e94c-0e0d-431e-96ac-e56b913ff947`  
 **Posición en flujo:** converge sendContent (input 0), sendFlow (input 1) y sendContentMessages (input 2) → Build SQL
 
 ---
@@ -15,11 +16,11 @@ Punto de convergencia después del envío a ManyChat. Reúne las tres ramas (tex
 
 ```json
 {
-  "parameters": {}
+  "numberInputs": 3
 }
 ```
 
-Modo por defecto: **Append** — pasa todos los items de ambas entradas.
+Modo por defecto: **Append** — pasa todos los items de las tres entradas.
 
 ---
 

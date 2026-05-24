@@ -1,7 +1,7 @@
 # Nodo: Build Content Messages
 
 **Tipo:** Code (JavaScript)  
-**ID:** `a4b5c6d7-e8f9-4012-a4b5-c6d7e8f90123`  
+**ID:** `d10737c1-aaae-48b5-b051-4190ad596232`  
 **Posición en flujo:** output 2 del Switch (content) → sendContentMessages
 
 ---
@@ -27,7 +27,12 @@ const mcMessages = rawMessages
     return { type: 'text', text };
   });
 
-return [{ json: { ...item, mcMessages } }];
+const textSent = rawMessages
+  .filter(m => m.message_type === 'text')
+  .map(m => (m.text_content ?? '').replace(/\{\{name\}\}/g, displayName))
+  .join(' | ');
+
+return [{ json: { ...item, mcMessages, textSent } }];
 ```
 
 ---

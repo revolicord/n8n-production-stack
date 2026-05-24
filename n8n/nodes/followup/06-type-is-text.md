@@ -1,7 +1,8 @@
 # Nodo: Type is text? (Switch)
 
 **Tipo:** Switch  
-**Posición en flujo:** 7 de 16 (después de Has Template? true)
+**ID:** `44dd4d15-cfca-46d5-bef9-6c8deff1cb07`  
+**Posición en flujo:** 7 de 17 (después de Has Template? true)
 
 ---
 

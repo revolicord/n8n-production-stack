@@ -1,6 +1,7 @@
 # Nodo: Insert chat history1
 
 **Tipo:** Postgres — Execute Query  
+**ID:** `a8a7ce2c-689a-480b-999d-450c3d26a756`  
 **Posición en flujo:** después de Insert n8n_chat_histories (Code) → Update lead_crons
 
 ---

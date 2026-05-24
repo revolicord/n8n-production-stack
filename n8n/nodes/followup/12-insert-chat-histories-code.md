@@ -1,6 +1,7 @@
 # Nodo: Insert n8n_chat_histories (Code)
 
 **Tipo:** Code (JavaScript)  
+**ID:** `f4399c4d-de61-4c82-a5f4-9dcfa1ef1232`  
 **Posición en flujo:** después de Insert followup log → Insert chat history1
 
 ---

@@ -1,7 +1,8 @@
 # Nodo: Loop Over Leads
 
 **Tipo:** Split in Batches  
-**Posición en flujo:** 4 de 15 (después de Prepare Data)
+**ID:** `587835cb-d91d-4444-b562-08ef71887e63`  
+**Posición en flujo:** 4 de 17 (después de Prepare Data)
 
 ---
 

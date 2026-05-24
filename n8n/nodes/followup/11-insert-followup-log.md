@@ -1,6 +1,7 @@
 # Nodo: Insert followup log
 
 **Tipo:** Postgres — Execute Query  
+**ID:** `20cfd56d-963e-497d-a452-643d31dfc45b`  
 **Posición en flujo:** después de Build SQL → Insert n8n_chat_histories
 
 ---

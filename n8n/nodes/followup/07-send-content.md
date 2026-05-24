@@ -1,6 +1,7 @@
 # Nodo: sendContent
 
 **Tipo:** HTTP Request  
+**ID:** `11923b3e-5f8d-4d1b-88b0-f52eab5df3fe`  
 **Posición en flujo:** rama text de Type is text? → After Send
 
 ---

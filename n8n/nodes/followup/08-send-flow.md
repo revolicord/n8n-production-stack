@@ -1,7 +1,8 @@
 # Nodo: sendFlow
 
 **Tipo:** HTTP Request  
-**Posición en flujo:** rama false de Type is text? → After Send
+**ID:** `f6d932bd-f2f5-4433-a1c7-f656e9402a5c`  
+**Posición en flujo:** rama flow de Type is text? → After Send (input 1)
 
 ---
 
