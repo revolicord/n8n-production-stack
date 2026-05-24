@@ -1,13 +1,13 @@
 # Nodo: After Send
 
 **Tipo:** Merge  
-**Posición en flujo:** converge sendContent (input 0) y sendFlow (input 1) → Build SQL
+**Posición en flujo:** converge sendContent (input 0), sendFlow (input 1) y sendContentMessages (input 2) → Build SQL
 
 ---
 
 ## Propósito
 
-Punto de convergencia después del envío a ManyChat. Reúne ambas ramas (text y flow) en un único flujo para ejecutar el logging y actualización.
+Punto de convergencia después del envío a ManyChat. Reúne las tres ramas (text, flow, content) en un único flujo para ejecutar el logging y actualización.
 
 ---
 

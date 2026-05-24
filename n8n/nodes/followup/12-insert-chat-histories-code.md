@@ -16,25 +16,31 @@ El tipo `content` incluye el contexto de imagen (`image_context`) — esto no er
 ## Código
 
 ```javascript
+const lead = $('Loop Over Leads').first().json;
+const buildSqlOutput = $('Build SQL').first().json;
 let textoParaMemoria;
 
-if ($json.followup_type === 'text') {
-  textoParaMemoria = ($json.text_template ?? '').replace('{{name}}', $json.display_name ?? '');
-} else if ($json.followup_type === 'flow') {
-  textoParaMemoria = `[flow: ${$json.followup_flow_ns}] — ${$json.followup_description ?? ''}`;
-} else if ($json.followup_type === 'content') {
-  const imagePart = $json.image_context
-    ? `[IMAGEN ENVIADA: ${$json.image_context}] `
+if (lead.followup_type === 'text') {
+  textoParaMemoria = (lead.text_template ?? '').replace(/\{\{name\}\}/g, lead.display_name ?? '');
+} else if (lead.followup_type === 'flow') {
+  textoParaMemoria = '[flow: ' + (lead.followup_flow_ns ?? '') + '] — ' + (lead.followup_description ?? '');
+} else if (lead.followup_type === 'content') {
+  const imagePart = lead.image_context
+    ? '[IMAGEN ENVIADA: ' + lead.image_context + '] '
     : '[IMAGEN ENVIADA] ';
-  const textPart = ($json.content_text ?? '').replace('{{name}}', $json.display_name ?? '');
-  textoParaMemoria = `${imagePart}${textPart}`.trim();
+  const textPart = (lead.content_text ?? '').replace(/\{\{name\}\}/g, lead.display_name ?? '');
+  textoParaMemoria = (imagePart + textPart).trim();
 } else {
-  textoParaMemoria = $json.followup_description ?? '';
+  textoParaMemoria = lead.followup_description ?? '';
 }
 
-const contenidoMemoria = `[SEGUIMIENTO AUTOMÁTICO #${$json.next_sequence_number}] ${textoParaMemoria}`;
+const contenidoMemoria = '[SEGUIMIENTO AUTOMÁTICO #' + lead.next_sequence_number + '] ' + textoParaMemoria;
 
-return { contenidoMemoria };
+return [{ json: {
+  manychat_subscriber_id: lead.manychat_subscriber_id,
+  contenidoMemoria,
+  updateSql: buildSqlOutput.updateSql
+} }];
 ```
 
 ---
@@ -58,21 +64,9 @@ return { contenidoMemoria };
 
 | Campo | Descripción |
 |-------|-------------|
-| `contenidoMemoria` | String con prefijo `[SEGUIMIENTO AUTOMÁTICO #N]` + contenido listo para insertar en `n8n_chat_histories` |
-
----
-
-## Nota de referencia downstream
-
-El nodo **Insert chat history1** (Postgres) referencia este nodo como:
-```
-$('Insert n8n_chat_histories').json.manychat_subscriber_id
-$('Insert n8n_chat_histories').json.contenidoMemoria
-```
-
-Esto significa que el item completo del lead también está disponible via `$('Insert n8n_chat_histories').json` — el nodo Code pasa todos los campos del item más `contenidoMemoria`.
-
-> **Aclaración:** El `return { contenidoMemoria }` retorna solo ese campo. Para que `manychat_subscriber_id` también esté disponible en el siguiente nodo, el Code debe retornar `{ ...item.json, contenidoMemoria }` o el nodo Postgres debe leerlo del contexto anterior. Verificar en la UI si el queryReplacement usa `$('Insert n8n_chat_histories')` como si tuviera todos los campos del lead o solo `contenidoMemoria`.
+| `manychat_subscriber_id` | ID del suscriptor (tomado de `Loop Over Leads`) para el INSERT en `n8n_chat_histories` |
+| `contenidoMemoria` | String con prefijo `[SEGUIMIENTO AUTOMÁTICO #N]` + contenido listo para insertar |
+| `updateSql` | SQL de UPDATE para `lead_crons` (tomado de `Build SQL`), propagado al nodo `Update lead_crons` |
 
 ---
 

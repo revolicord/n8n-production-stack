@@ -30,7 +30,7 @@ VALUES (
 ## Query Replacement
 
 ```
-={{ $('Insert n8n_chat_histories').json.manychat_subscriber_id }}, {{ $('Insert n8n_chat_histories').json.contenidoMemoria }}
+={{ $json.manychat_subscriber_id }}, {{ $json.contenidoMemoria }}
 ```
 
 ---

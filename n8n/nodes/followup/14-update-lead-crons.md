@@ -18,12 +18,12 @@ Actualiza el cron del lead después de enviar el follow-up. Hay dos casos:
 ```json
 {
   "operation": "executeQuery",
-  "query": "{{ $json.updateSql }}",
+  "query": "{{ $('Insert n8n_chat_histories').item.json.updateSql }}",
   "options": {}
 }
 ```
 
-El SQL se pasa como string dinámico generado por **Build SQL**.
+El SQL se referencia desde el nodo **Insert n8n_chat_histories** (Code) porque el nodo inmediato anterior (`Insert chat history1`, Postgres) no propaga `updateSql` en su salida.
 
 ---
 
