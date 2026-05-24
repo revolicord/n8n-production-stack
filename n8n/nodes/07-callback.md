@@ -1,6 +1,7 @@
 # Nodo: Callback
 
 **Tipo:** HTTP Request  
+**ID:** `eb647e18-f7ec-465a-ad45-537adaf291b9`  
 **typeVersion:** 4.4  
 **Propósito:** Notificar al API que el turno completó, liberar el lock y disparar drain si hay mensajes pendientes.
 

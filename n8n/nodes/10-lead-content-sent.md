@@ -1,6 +1,7 @@
 # Nodo: lead_content_sent (INSERT)
 
 **Tipo:** Postgres  
+**ID:** `80c3692f-4a16-4c72-97ee-48ccca050510`  
 **Nombre en UI:** `lead_content_sent`  
 **Posición en cadena:** Después del nodo `If` (rama false), antes de `Upsert Lead Cron`  
 **Propósito:** Registrar en `api.lead_content_sent` que se envió un flow multimedia al lead en este turno. Esto alimenta el historial que `Get Content History` leerá en el próximo turno.

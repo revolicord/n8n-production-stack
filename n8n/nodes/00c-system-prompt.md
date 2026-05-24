@@ -1,6 +1,7 @@
 # Nodo: System Prompt
 
 **Tipo:** Set (Edit Fields)
+**ID:** `0cdfbb99-b7a4-426d-98ca-d6db3785de71`  
 **Posición en cadena:** 0c — entre `Combine Contexts` y `Execute a SQL query1`
 **ADR:** —
 **Propósito:** Servir el system prompt estático del agente. Vive en el workflow para permitir iteración rápida en la UI de n8n sin tocar Postgres ni re-deploy.

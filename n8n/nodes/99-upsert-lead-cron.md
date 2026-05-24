@@ -1,6 +1,8 @@
 # Nodos: Upsert Lead Cron + Mark Followups Responded
 
 **Tipo:** Postgres (dos nodos separados en el workflow)  
+**ID (Upsert Lead Cron):** `9a90ea9a-445f-4990-a37b-26e8a89596ae`  
+**ID (Mark Followups Responded):** `127a7421-866f-4342-ad53-86050182deb1`  
 **Posición en cadena:** Después de `lead_content_sent` INSERT  
 **ADR:** ADR-0011  
 **Propósito:** Programar o resetear el próximo follow-up del lead (`Upsert Lead Cron`), y marcar los follow-ups automáticos previos como respondidos (`Mark Followups Responded`).

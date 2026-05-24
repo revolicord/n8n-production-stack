@@ -1,6 +1,7 @@
 # Nodo: Build Context
 
 **Tipo:** Code (JavaScript)  
+**ID:** `fe31ef8f-cff7-40d7-8543-d60358245b69`  
 **Versión:** v4  
 **Posición en cadena:** Después de `Execute a SQL query1`, antes de `AI Agent`  
 **ADR:** ADR-0010, ADR-0013  

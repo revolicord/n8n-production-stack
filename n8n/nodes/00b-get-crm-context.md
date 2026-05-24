@@ -1,6 +1,7 @@
 # Nodo: Get Subscriber CRM Context
 
 **Tipo:** Postgres  
+**ID:** `becd7c1a-d057-470b-b2bf-89bbebca4519`  
 **Posición en cadena:** 0b — en paralelo con `Get Stage Config`, antes de `Build Context`  
 **ADR:** ADR-0013  
 **Propósito:** Leer el estado CRM del lead (seguimientos enviados, historial, etapa) desde `lead_crons` + `lead_followup_log`. Provee el bloque cuantificado que complementa la memoria conversacional.

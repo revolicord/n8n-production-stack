@@ -1,6 +1,7 @@
 # Nodo: Get Stage Config
 
 **Tipo:** Postgres  
+**ID:** `b1d3a0d8-987d-4168-859e-6e28ebd7abdc`  
 **Versión:** v2  
 **Posición en cadena:** 0 — en paralelo con `Get Subscriber CRM Context`  
 **ADR:** ADR-0010  

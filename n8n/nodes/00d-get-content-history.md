@@ -1,6 +1,7 @@
 # Nodo: Get Content History
 
 **Tipo:** Postgres  
+**ID:** `c5fec6d0-cc3b-475e-b366-9bd9cff94907`  
 **Posición en cadena:** 0d — después de `Get Subscriber CRM Context`, antes de `Combine Contexts`  
 **Propósito:** Leer el historial de contenido ya enviado al lead en la etapa actual. Permite que Build Context enriquezca cada `content_option` con `last_sent`, `lead_responded_to_it` y `times_sent`, para que el agente evite reenviar contenido agotado.
 

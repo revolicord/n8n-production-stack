@@ -1,6 +1,7 @@
 # Nodo: If (insert_content_sent vacío?)
 
 **Tipo:** If  
+**ID:** `b5366e0d-8ae7-4024-89a9-cbfdb6949350`  
 **Posición en cadena:** Después de `Router`, antes de `lead_content_sent`  
 **Propósito:** Bifurcar según si el Router decidió y logró enviar contenido multimedia. Si `send_content` fue `null` o falló, no hay nada que insertar en `lead_content_sent` — se omite la rama de persistencia.
 

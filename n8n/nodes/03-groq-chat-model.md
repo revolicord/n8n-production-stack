@@ -3,6 +3,7 @@
 > **Nota:** este archivo se llamaba "Groq Chat Model" hasta que el workflow migró a Anthropic Claude. Groq (`llama-3.3-70b-versatile`) fue reemplazado en la v3+ del workflow.
 
 **Tipo:** `@n8n/n8n-nodes-langchain.lmChatAnthropic`  
+**ID:** `c6861f69-c74c-4142-80ab-652ec0eabc26`  
 **typeVersion:** 1.5  
 **Conexión:** `ai_languageModel` → `AI Agent` y `Structured Output Parser`
 

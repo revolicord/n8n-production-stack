@@ -1,6 +1,7 @@
 # Nodo: Router
 
 **Tipo:** Code (JavaScript)  
+**ID:** `a9b48fbf-c59b-4b79-ae0c-353ca6128627`  
 **Versión:** v4.5  
 **Nombre en UI:** `Router`  
 **Posición en cadena:** Después de `AI Agent`, antes de `If`  

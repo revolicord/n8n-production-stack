@@ -1,6 +1,7 @@
 # Nodo: Execute a SQL query1 (mark content responded)
 
 **Tipo:** Postgres  
+**ID:** `a78caa29-55ad-472e-a2fd-63b2d9f2f2da`  
 **Posición en cadena:** Entre `System Prompt` y `Build Context`  
 **Nombre en UI:** `Execute a SQL query1`  
 **Propósito:** Antes de que el AI analice el turno, marcar como `lead_responded = TRUE` todos los registros de `lead_content_sent` del subscriber en esta conversación que aún no tenían respuesta. Esto garantiza que cuando Build Context calcule `lead_responded_to_it`, use el estado actualizado: el lead acaba de mandar un mensaje, lo que implica que respondió a cualquier contenido pendiente.

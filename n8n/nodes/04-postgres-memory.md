@@ -1,6 +1,7 @@
 # Nodo: Postgres Chat Memory
 
 **Tipo:** `@n8n/n8n-nodes-langchain.memoryPostgresChat`  
+**ID:** `9378de84-93b2-444e-9d6c-8e666ce818ee`  
 **typeVersion:** 1.3  
 **Conexión:** `ai_memory` → `AI Agent`
 
@@ -11,7 +12,8 @@
 | Campo | Valor |
 |-------|-------|
 | Session ID type | `customKey` |
-| Session Key | `=$json.subscriberId` |
+| Session Key | `={{ $('Build Context').item.json.subscriberDbId }}` |
+| Context Window Length | `20` |
 | Credencial | Postgres (mismo servidor que el API) |
 
 ---

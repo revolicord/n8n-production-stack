@@ -1,6 +1,7 @@
 # Nodo: AI Agent
 
 **Tipo:** `@n8n/n8n-nodes-langchain.agent`  
+**ID:** `a876a6d0-9e1b-4ffc-8250-996b1f7de77b`  
 **typeVersion:** 3.1  
 **Versión del sistema:** v3 (sin herramientas — Structured Output)
 
@@ -53,7 +54,7 @@
 | Campo | Valor |
 |-------|-------|
 | Session ID Type | `customKey` |
-| Session Key | `=$json.subscriberId` (expresión: `$json.subscriberId`) |
+| Session Key | `={{ $('Build Context').item.json.subscriberDbId }}` |
 
 > `subscriberId` = `manychat_subscriber_id` numérico (ej. `"1724803790"`), no el UUID interno. Esto aisla la memoria conversacional por subscriber de ManyChat.
 

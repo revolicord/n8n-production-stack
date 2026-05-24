@@ -1,6 +1,7 @@
 # Nodo: Prepare Callback
 
 **Tipo:** Code (JavaScript)  
+**ID:** `8a1276a9-442c-4a9f-8ab5-f546199fe0c1`  
 **Posición en cadena:** Después de `Mark Followups Responded` (rama con contenido) o `If` rama TRUE (sin contenido), antes de `Callback`  
 **Propósito:** Aplanar todos los valores necesarios en `$json` para que el nodo Callback no necesite referencias cruzadas `$('Node Name')` dentro del JSON body.
 
