@@ -14,7 +14,8 @@
       "**/coverage",
       "**/.turbo",
       "**/*.tsbuildinfo",
-      "packages/db/drizzle/**"
+      "packages/db/drizzle/**",
+      "**/.next/**"
     ]
   },
   "formatter": {
