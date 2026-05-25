@@ -303,6 +303,13 @@ function contentCardBody(t) {
     ? `<img src="${escHtml(imgMsg.media_url)}" class="mt-2 max-h-24 w-auto rounded" alt="preview">`
     : '';
   const imgLabel = imgMsg?.media_url ? 'Meme configurado ✓' : 'Sin imagen';
+  const imgStatus = imgMsg?.media_url
+    ? `<span class="text-xs text-teal-400">imagen cargada ✓</span>`
+    : '';
+  const clearBtn = imgMsg?.media_url
+    ? `<button onclick="clearContentImage('${t.id}', '${imgMsg.id}')"
+        class="text-xs text-red-400 hover:text-red-300 transition-colors">Quitar</button>`
+    : '';
 
   return `
     <textarea id="text-${t.id}" rows="3"
@@ -316,6 +323,8 @@ function contentCardBody(t) {
         <input type="file" accept="image/*"
           class="text-xs text-gray-400 file:mr-2 file:text-xs file:bg-teal-700 file:text-white file:border-0 file:rounded file:px-2 file:py-1"
           onchange="uploadContentImage(event, '${t.id}', '${imgMsg?.id ?? ''}')">
+        ${imgStatus}
+        ${clearBtn}
       </div>
       ${
         imgMsg
@@ -353,6 +362,13 @@ function messageCard(templateId, m) {
   const thumb = m.media_url
     ? `<img src="${escHtml(m.media_url)}" class="thumb mt-2 max-h-24 w-auto" alt="preview">`
     : '';
+  const imgStatus =
+    m.media_url && isImage ? `<span class="text-xs text-teal-400">imagen cargada ✓</span>` : '';
+  const clearBtn =
+    m.media_url && isImage
+      ? `<button onclick="clearMessageImage('${templateId}', '${m.id}')"
+        class="text-xs text-red-400 hover:text-red-300 transition-colors">Quitar</button>`
+      : '';
   return `
     <div id="msg-${m.id}" class="border border-gray-700 rounded p-3 mb-2 relative">
       <div class="flex items-center justify-between mb-2">
@@ -367,6 +383,8 @@ function messageCard(templateId, m) {
             <div class="flex items-center gap-2 mt-2">
               <input type="file" accept="image/*" class="text-xs text-gray-400 file:mr-2 file:text-xs file:bg-teal-700 file:text-white file:border-0 file:rounded file:px-2 file:py-1"
                 onchange="uploadMessageImage(event, '${templateId}', '${m.id}')">
+              ${imgStatus}
+              ${clearBtn}
             </div>
             <div class="mt-2">
               <label class="text-xs text-gray-500 block mb-1">Descripción para la IA (no se envía al lead)</label>
@@ -413,6 +431,13 @@ function resourceCard(r) {
   const thumb = r.media_url
     ? `<img src="${escHtml(r.media_url)}" class="thumb mt-2 max-h-24 w-auto" alt="preview">`
     : '';
+  const imgStatus = r.media_url
+    ? `<span class="text-xs text-teal-400">imagen cargada ✓</span>`
+    : '';
+  const clearBtn = r.media_url
+    ? `<button onclick="clearResourceImage('${r.id}')"
+        class="text-xs text-red-400 hover:text-red-300 transition-colors">Quitar</button>`
+    : '';
   return `
     <div id="res-${r.id}" class="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 mb-4">
       <div class="flex items-center justify-between mb-2">
@@ -430,6 +455,8 @@ function resourceCard(r) {
       <div class="flex items-center gap-2 mt-2">
         <input type="file" accept="image/*" class="text-xs text-gray-400 file:mr-2 file:text-xs file:bg-teal-700 file:text-white file:border-0 file:rounded file:px-2 file:py-1"
           onchange="uploadResourceImage(event, '${r.id}')">
+        ${imgStatus}
+        ${clearBtn}
       </div>
     </div>
   `;
@@ -807,6 +834,44 @@ async function uploadResourceImage(event, resourceId) {
   }
 }
 
+// ── Clear image functions ────────────────────────────────────────────────────
+async function clearContentImage(_templateId, msgId) {
+  if (!confirm('¿Quitar la imagen?')) return;
+  try {
+    await api(`/admin/followup-messages/${msgId}`, { method: 'DELETE' });
+    toast('Imagen eliminada');
+    await selectStage(STATE.activeStageId);
+  } catch (e) {
+    toast(`Error eliminando imagen: ${e.message}`, false);
+  }
+}
+
+async function clearMessageImage(templateId, msgId) {
+  if (!confirm('¿Quitar la imagen?')) return;
+  try {
+    await api(`/admin/followup-messages/${msgId}`, { method: 'DELETE' });
+    STATE.messages[templateId] = (STATE.messages[templateId] ?? []).filter((m) => m.id !== msgId);
+    toast('Imagen eliminada');
+    renderMain();
+  } catch (e) {
+    toast(`Error eliminando imagen: ${e.message}`, false);
+  }
+}
+
+async function clearResourceImage(resourceId) {
+  if (!confirm('¿Quitar la imagen?')) return;
+  try {
+    await api(`/admin/agent-resources/${resourceId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ media_url: null }),
+    });
+    toast('Imagen eliminada');
+    await selectSection(STATE.activeSection);
+  } catch (e) {
+    toast(`Error eliminando imagen: ${e.message}`, false);
+  }
+}
+
 // ── Asset upload ─────────────────────────────────────────────────────────────
 async function uploadAsset(file) {
   const form = new FormData();
@@ -868,3 +933,6 @@ window.addMessage = addMessage;
 window.addResource = addResource;
 window.deactivateResource = deactivateResource;
 window.uploadResourceImage = uploadResourceImage;
+window.clearContentImage = clearContentImage;
+window.clearMessageImage = clearMessageImage;
+window.clearResourceImage = clearResourceImage;
