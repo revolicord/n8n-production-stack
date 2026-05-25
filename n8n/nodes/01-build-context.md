@@ -2,21 +2,25 @@
 
 **Tipo:** Code (JavaScript)  
 **ID:** `fe31ef8f-cff7-40d7-8543-d60358245b69`  
-**Versión:** v4  
+**Versión:** v5  
 **Posición en cadena:** Después de `Execute a SQL query1`, antes de `AI Agent`  
 **ADR:** ADR-0010, ADR-0013  
-**Propósito:** Leer todos los inputs (Webhook, Get Stage Config, Get Subscriber CRM Context, Get Content History, System Prompt), construir el `chatInput` estructurado con `<context>` y `<lead_message>`, y propagar los metadatos necesarios para el Router. En v4 también computa `stageFlowsBySlug` desde `all_stages_flows` para que el Router resuelva slugs cross-stage.
+**Propósito:** Leer todos los inputs (Webhook, Get Stage Config, Get Subscriber CRM Context, Get Content History, System Prompt), construir el `chatInput` estructurado con `<context>` y `<lead_message>`, y propagar los metadatos necesarios para el Router. En v4 también computa `stageFlowsBySlug` desde `all_stages_flows` para que el Router resuelva slugs cross-stage. En v5 agrega historial de envío por `variant_group` en vez de por `slug_id` individual.
 
 ---
 
-## Diferencias clave v3 → v4
+## Diferencias clave v3 → v4 → v5
 
-| v3 | v4 |
-|----|----|
-| No lee `all_stages_flows` | Lee `stageConfig.all_stages_flows` (nuevo en Get Stage Config v2) |
-| Sin `stageFlowsBySlug` en output | Exporta `stageFlowsBySlug`: mapa `{ stage_slug: { slug_id: flow_ns } }` |
-| Router resuelve slugs solo en el stage actual | Router puede resolver slugs en cualquier stage del tenant vía `stageFlowsBySlug` |
-| `stageFlowsBySlug` no existe | Pre-colapsa variant groups por stage para el Router |
+| v3 | v4 | v5 |
+|----|----|----|
+| No lee `all_stages_flows` | Lee `stageConfig.all_stages_flows` | Sin cambio |
+| Sin `stageFlowsBySlug` en output | Exporta `stageFlowsBySlug` | Sin cambio |
+| Router resuelve slugs solo en el stage actual | Router puede resolver slugs en cualquier stage | Sin cambio |
+| `stageFlowsBySlug` no existe | Pre-colapsa variant groups por stage | Sin cambio |
+| `collapseVariantGroups` no expone variantes del grupo | Sin cambio | `collapseVariantGroups` expone `allVariants` por grupo |
+| Historial de `content_options` usa `sentMap[slug_id]` (variante elegida) | Sin cambio | **Historial agrega sentMap de TODAS las variantes del grupo** — fix bug de re-envío entre variantes |
+
+**Bug que corrige v5:** si en el turno N se envió la variante v2 de un grupo, y en el turno N+1 `collapseVariantGroups` elige v1, el agente veía `times_sent: 0` para v1 y reenviaba el video. Con v5, agrega el historial de todo el grupo y ve `times_sent: 1`.
 
 ---
 
@@ -32,13 +36,13 @@ El agente recibe la lista completa de `content_options` (una por grupo, ya colap
 
 ```javascript
 // ============================================================================
-// BUILD CONTEXT v4
+// BUILD CONTEXT v5
 // ----------------------------------------------------------------------------
-// Cambios respecto a v3:
-//  - Lee `all_stages_flows` de Get Stage Config y lo expone como stageFlowsBySlug.
-//    El Router lo usa para resolver slug_id contra el stage destino de una macro
-//    (no solo contra los flows del stage actual).
-//  - Todo lo demás queda exactamente igual.
+// Cambios respecto a v4:
+//  - collapseVariantGroups incluye `allVariants` en cada grupo.
+//  - content_options agrega historial de TODAS las variantes del grupo, no
+//    solo de la elegida. Esto evita que el agente reenvíe contenido de un
+//    grupo si ya se envió una variante distinta en un turno anterior.
 // ============================================================================
 
 function daysAgoText(ts) {
@@ -72,7 +76,7 @@ function collapseVariantGroups(flows) {
 
   for (const [, variants] of groups) {
     const chosen = pickWeighted(variants);
-    collapsed.push({ exposed: chosen, chosenVariant: chosen });
+    collapsed.push({ exposed: chosen, chosenVariant: chosen, allVariants: variants });
   }
 
   return collapsed;
@@ -175,7 +179,21 @@ const collapsed = collapseVariantGroups(rawFlows);
 
 const contentOptions = collapsed.map(function (c) {
   const slugId = c.exposed.slug_id || c.exposed.human_name;
-  const sent = sentMap[slugId];
+
+  // v5: agregar historial de TODAS las variantes del grupo para que el agente
+  // no reenvíe un grupo cuya variante distinta ya fue enviada en otro turno.
+  const groupVariants = c.allVariants || [c.exposed];
+  const groupEntries = groupVariants
+    .map(function (v) { return sentMap[v.slug_id || v.human_name]; })
+    .filter(Boolean);
+
+  const sent = groupEntries.length > 0 ? {
+    last_sent_at: groupEntries.reduce(function (max, s) {
+      return s.last_sent_at > max ? s.last_sent_at : max;
+    }, groupEntries[0].last_sent_at),
+    ever_responded: groupEntries.some(function (s) { return s.ever_responded; }),
+    times_sent: groupEntries.reduce(function (sum, s) { return sum + s.times_sent; }, 0)
+  } : null;
 
   return {
     slug_id: slugId,
