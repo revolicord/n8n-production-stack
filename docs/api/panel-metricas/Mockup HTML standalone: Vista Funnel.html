@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Quantum Dashboard · Vista Funnel</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0a0a0a; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; color: #e5e7eb; min-height: 100vh; padding: 24px; }
+  .qf-shell { max-width: 1400px; margin: 0 auto; background: #0d0d0d; color: #e5e7eb; border-radius: 12px; overflow: hidden; border: 1px solid #1f2937; }
+  .qf-row { display: flex; height: 880px; }
+  .qf-side { width: 200px; background: #111; border-right: 1px solid #1f2937; display: flex; flex-direction: column; flex-shrink: 0; }
+  .qf-side-head { padding: 14px 14px 12px; border-bottom: 1px solid #1f2937; display: flex; align-items: center; gap: 8px; }
+  .qf-logo { width: 22px; height: 22px; background: #0f6e56; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #5dcaa5; font-size: 14px; font-weight: 500; }
+  .qf-brand { font-size: 13px; font-weight: 500; color: #fff; }
+  .qf-tenant { padding: 12px 12px 8px; }
+  .qf-tenant-box { width: 100%; background: #0d0d0d; border: 1px solid #374151; border-radius: 6px; padding: 5px 8px; color: #d1d5db; font-size: 11px; }
+  .qf-nav { flex: 1; padding: 8px 0; }
+  .qf-nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 16px; font-size: 12.5px; color: #9ca3af; cursor: pointer; transition: all 120ms; border-left: 2px solid transparent; }
+  .qf-nav-item:hover { color: #fff; background: rgba(255,255,255,0.03); }
+  .qf-nav-item.active { color: #5dcaa5; background: rgba(13,148,136,0.08); border-left-color: #14b8a6; }
+  .qf-nav-item .icon { font-size: 15px; display: inline-block; width: 15px; text-align: center; }
+  .qf-divider { border-top: 1px solid #1f2937; margin: 6px 12px; }
+  .qf-nav-section { padding: 6px 16px 2px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #4b5563; font-weight: 500; }
+  .qf-foot { padding: 12px 16px; border-top: 1px solid #1f2937; font-size: 11px; color: #6b7280; cursor: pointer; }
+  .qf-main { flex: 1; overflow-y: auto; padding: 20px 24px; }
+  .qf-topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+  .qf-title { font-size: 18px; font-weight: 500; color: #fff; }
+  .qf-sub { font-size: 11.5px; color: #6b7280; margin-top: 2px; }
+  .qf-period { display: flex; gap: 4px; background: #111; border: 1px solid #1f2937; border-radius: 7px; padding: 3px; }
+  .qf-period button { background: transparent; border: 0; color: #9ca3af; font-size: 11.5px; padding: 4px 10px; border-radius: 5px; cursor: pointer; font-family: inherit; }
+  .qf-period button.on { background: #0f6e56; color: #fff; }
+  .qf-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 14px; }
+  .qf-card { background: #111; border: 1px solid #1f2937; border-radius: 8px; padding: 16px; }
+  .qf-section-title { font-size: 12px; font-weight: 500; color: #d1d5db; margin: 0 0 14px; display: flex; align-items: center; gap: 7px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .qf-section-title .icon { color: #14b8a6; font-size: 14px; }
+  .qf-stage-row { display: grid; grid-template-columns: 50px 1fr 90px; gap: 12px; align-items: center; margin-bottom: 4px; }
+  .qf-stage-name { display: flex; flex-direction: column; gap: 2px; }
+  .qf-stage-letter { font-size: 16px; font-weight: 500; color: #14b8a6; line-height: 1; }
+  .qf-stage-label { font-size: 9.5px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.06em; }
+  .qf-stage-bar { height: 36px; background: #0a0a0a; border-radius: 5px; overflow: hidden; position: relative; }
+  .qf-stage-fill { height: 100%; background: linear-gradient(90deg, #0f6e56 0%, #14b8a6 100%); display: flex; align-items: center; padding: 0 10px; font-size: 13px; color: #fff; font-weight: 500; }
+  .qf-stage-meta { text-align: right; font-size: 11px; color: #9ca3af; }
+  .qf-stage-meta strong { color: #fff; font-weight: 500; }
+  .qf-drop { display: grid; grid-template-columns: 50px 1fr 90px; gap: 12px; align-items: center; padding: 2px 0; }
+  .qf-drop-line { display: flex; align-items: center; gap: 8px; padding-left: 4px; }
+  .qf-drop-line .icon { color: #f87171; font-size: 14px; }
+  .qf-drop-text { font-size: 10.5px; color: #6b7280; }
+  .qf-drop-text b { color: #f87171; font-weight: 500; }
+  .qf-active-now { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 18px; }
+  .qf-active { background: #0a0a0a; border: 1px solid #1f2937; border-radius: 6px; padding: 9px 10px; cursor: pointer; transition: all 120ms; }
+  .qf-active:hover { border-color: #14b8a6; background: rgba(13,148,136,0.04); }
+  .qf-active-letter { font-size: 10px; color: #14b8a6; font-weight: 500; letter-spacing: 0.06em; }
+  .qf-active-count { font-size: 19px; font-weight: 500; color: #fff; line-height: 1; margin: 4px 0 2px; letter-spacing: -0.01em; }
+  .qf-active-hint { font-size: 9.5px; color: #6b7280; }
+  .qf-insight { display: flex; gap: 10px; padding: 11px 12px; background: #0a0a0a; border: 1px solid #1f2937; border-radius: 7px; margin-bottom: 8px; font-size: 11.5px; line-height: 1.5; align-items: flex-start; }
+  .qf-insight-icon { width: 24px; height: 24px; border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 14px; }
+  .qf-iw { background: rgba(251,191,36,0.12); color: #fbbf24; }
+  .qf-io { background: rgba(93,202,165,0.12); color: #5dcaa5; }
+  .qf-ii { background: rgba(96,165,250,0.12); color: #60a5fa; }
+  .qf-ip { background: rgba(192,132,252,0.12); color: #c084fc; }
+  .qf-insight-body { flex: 1; }
+  .qf-insight-title { color: #fff; font-weight: 500; margin-bottom: 2px; }
+  .qf-insight-text { color: #9ca3af; }
+  .qf-insight-action { font-size: 10.5px; color: #14b8a6; cursor: pointer; margin-top: 4px; display: inline-block; }
+  .qf-prediction { background: linear-gradient(135deg, rgba(13,148,136,0.15) 0%, rgba(13,148,136,0.05) 100%); border: 1px solid rgba(20,184,166,0.3); border-radius: 8px; padding: 16px; margin-top: 14px; }
+  .qf-pred-label { font-size: 10.5px; color: #5dcaa5; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 500; }
+  .qf-pred-val { font-size: 28px; font-weight: 500; color: #fff; line-height: 1; margin: 8px 0 6px; letter-spacing: -0.02em; }
+  .qf-pred-sub { font-size: 11px; color: #9ca3af; }
+</style>
+</head>
+<body>
+<div class="qf-shell">
+  <div class="qf-row">
+    <aside class="qf-side">
+      <div class="qf-side-head">
+        <div class="qf-logo">Q</div>
+        <span class="qf-brand">Quantum</span>
+      </div>
+      <div class="qf-tenant">
+        <div class="qf-tenant-box">Quantum Creators ▾</div>
+      </div>
+      <nav class="qf-nav">
+        <div class="qf-nav-item"><span class="icon">▦</span>Vista anual</div>
+        <div class="qf-nav-item"><span class="icon">▤</span>Vista mensual</div>
+        <div class="qf-nav-item active"><span class="icon">▼</span>Funnel</div>
+        <div class="qf-nav-item"><span class="icon">●</span>Prospectos</div>
+        <div class="qf-divider"></div>
+        <div class="qf-nav-section">Análisis</div>
+        <div class="qf-nav-item"><span class="icon">◷</span>Velocidad</div>
+        <div class="qf-nav-item"><span class="icon">◑</span>Cohortes</div>
+        <div class="qf-divider"></div>
+        <div class="qf-nav-item"><span class="icon">⚙</span>Settings</div>
+      </nav>
+      <div class="qf-foot">Cerrar sesión</div>
+    </aside>
+
+    <div class="qf-main">
+      <div class="qf-topbar">
+        <div>
+          <div class="qf-title">Funnel</div>
+          <div class="qf-sub">Estado del pipeline · datos en tiempo real desde Instagram</div>
+        </div>
+        <div class="qf-period">
+          <button>7 días</button>
+          <button>30 días</button>
+          <button class="on">Mayo</button>
+          <button>2026</button>
+        </div>
+      </div>
+
+      <div style="margin-bottom: 8px;">
+        <div style="font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; font-weight: 500;">Prospectos activos ahora</div>
+        <div class="qf-active-now">
+          <div class="qf-active"><div class="qf-active-letter">A</div><div class="qf-active-count">87</div><div class="qf-active-hint">esperando MS</div></div>
+          <div class="qf-active"><div class="qf-active-letter">MS</div><div class="qf-active-count">42</div><div class="qf-active-hint">esperando B</div></div>
+          <div class="qf-active"><div class="qf-active-letter">B</div><div class="qf-active-count">23</div><div class="qf-active-hint">en conversación</div></div>
+          <div class="qf-active"><div class="qf-active-letter">C</div><div class="qf-active-count">8</div><div class="qf-active-hint">link enviado</div></div>
+          <div class="qf-active"><div class="qf-active-letter">D</div><div class="qf-active-count">3</div><div class="qf-active-hint">por confirmar</div></div>
+        </div>
+      </div>
+
+      <div class="qf-grid">
+        <div class="qf-card">
+          <h3 class="qf-section-title"><span class="icon">▼</span>Conversión etapa por etapa · mayo</h3>
+
+          <div class="qf-stage-row">
+            <div class="qf-stage-name"><div class="qf-stage-letter">A</div><div class="qf-stage-label">Initiated</div></div>
+            <div class="qf-stage-bar"><div class="qf-stage-fill" style="width: 100%;">312</div></div>
+            <div class="qf-stage-meta"><strong>100%</strong><br>del total</div>
+          </div>
+          <div class="qf-drop"><span></span><div class="qf-drop-line"><span class="icon">↓</span><span class="qf-drop-text">conversión <b>43%</b> · 178 perdidos en MS</span></div><span></span></div>
+
+          <div class="qf-stage-row">
+            <div class="qf-stage-name"><div class="qf-stage-letter">MS</div><div class="qf-stage-label">Media seen</div></div>
+            <div class="qf-stage-bar"><div class="qf-stage-fill" style="width: 43%;">134</div></div>
+            <div class="qf-stage-meta"><strong>43%</strong><br>retención</div>
+          </div>
+          <div class="qf-drop"><span></span><div class="qf-drop-line"><span class="icon">↓</span><span class="qf-drop-text">conversión <b>43%</b> · 76 perdidos en B</span></div><span></span></div>
+
+          <div class="qf-stage-row">
+            <div class="qf-stage-name"><div class="qf-stage-letter">B</div><div class="qf-stage-label">Engaged</div></div>
+            <div class="qf-stage-bar"><div class="qf-stage-fill" style="width: 18.5%;">58</div></div>
+            <div class="qf-stage-meta"><strong>19%</strong><br>retención</div>
+          </div>
+          <div class="qf-drop"><span></span><div class="qf-drop-line"><span class="icon">↓</span><span class="qf-drop-text">conversión <b>28%</b> · 42 perdidos en C</span></div><span></span></div>
+
+          <div class="qf-stage-row">
+            <div class="qf-stage-name"><div class="qf-stage-letter">C</div><div class="qf-stage-label">Calendly</div></div>
+            <div class="qf-stage-bar"><div class="qf-stage-fill" style="width: 5.1%;">16</div></div>
+            <div class="qf-stage-meta"><strong>5.1%</strong><br>retención</div>
+          </div>
+          <div class="qf-drop"><span></span><div class="qf-drop-line"><span class="icon">↓</span><span class="qf-drop-text">conversión <b>31%</b> · 11 perdidos en D</span></div><span></span></div>
+
+          <div class="qf-stage-row">
+            <div class="qf-stage-name"><div class="qf-stage-letter">D</div><div class="qf-stage-label">Booked</div></div>
+            <div class="qf-stage-bar"><div class="qf-stage-fill" style="width: 1.6%;">5</div></div>
+            <div class="qf-stage-meta"><strong>1.6%</strong><br>retención</div>
+          </div>
+
+          <div class="qf-prediction">
+            <div class="qf-pred-label">✦ Predicción de cierre</div>
+            <div class="qf-pred-val">~7 bookings</div>
+            <div class="qf-pred-sub">proyectado fin de mayo · al ritmo actual, +14% sobre abril</div>
+          </div>
+        </div>
+
+        <div class="qf-card">
+          <h3 class="qf-section-title"><span class="icon">◉</span>Insights del agente</h3>
+
+          <div class="qf-insight">
+            <div class="qf-insight-icon qf-iw">⚠</div>
+            <div class="qf-insight-body">
+              <div class="qf-insight-title">Cuello de botella en B→C</div>
+              <div class="qf-insight-text">Tu conversión a Calendly cayó 12% vs el promedio anual</div>
+              <span class="qf-insight-action">Ver follow-ups de Fase B →</span>
+            </div>
+          </div>
+
+          <div class="qf-insight">
+            <div class="qf-insight-icon qf-io">▲</div>
+            <div class="qf-insight-body">
+              <div class="qf-insight-title">MSR está alto</div>
+              <div class="qf-insight-text">43% de Initiated están viendo tu contenido, 8% sobre tu media</div>
+            </div>
+          </div>
+
+          <div class="qf-insight">
+            <div class="qf-insight-icon qf-ip">◎</div>
+            <div class="qf-insight-body">
+              <div class="qf-insight-title">23 prospectos en B esperando respuesta</div>
+              <div class="qf-insight-text">14 llevan más de 48h sin avanzar, podrían enfriarse</div>
+              <span class="qf-insight-action">Ver lista →</span>
+            </div>
+          </div>
+
+          <div class="qf-insight">
+            <div class="qf-insight-icon qf-ii">◷</div>
+            <div class="qf-insight-body">
+              <div class="qf-insight-title">Velocidad mejorando</div>
+              <div class="qf-insight-text">A → D promedio: 6.5 días, mejor que tu media de 7.8 días</div>
+            </div>
+          </div>
+
+          <div class="qf-insight">
+            <div class="qf-insight-icon qf-ip">▤</div>
+            <div class="qf-insight-body">
+              <div class="qf-insight-title">Mejor día para iniciar: martes</div>
+              <div class="qf-insight-text">Los prospectos iniciados en martes convierten 1.4x más a B</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
