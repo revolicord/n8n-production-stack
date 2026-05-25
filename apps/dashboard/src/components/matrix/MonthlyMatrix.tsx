@@ -26,7 +26,7 @@ export function MonthlyMatrix({ series }: MonthlyMatrixProps) {
     { key: 'd', label: 'D', counts: series.months.map((m) => m.counts.d), total: series.totals.d },
   ];
 
-  const ratioRows = [
+  const vsARatios = [
     {
       key: 'msr',
       label: 'MSR',
@@ -50,6 +50,42 @@ export function MonthlyMatrix({ series }: MonthlyMatrixProps) {
       label: 'ABR',
       values: series.months.map((m) => m.ratios.abr),
       avg: series.avgRatios.abr,
+    },
+  ];
+
+  const stepRatios = [
+    {
+      key: 'aToMs',
+      label: 'A→MS',
+      values: series.months.map((m) => m.ratios.aToMs),
+      avg: series.avgRatios.aToMs,
+    },
+    {
+      key: 'msToB',
+      label: 'MS→B',
+      values: series.months.map((m) => m.ratios.msToB),
+      avg: series.avgRatios.msToB,
+    },
+    {
+      key: 'bToC',
+      label: 'B→C',
+      values: series.months.map((m) => m.ratios.bToC),
+      avg: series.avgRatios.bToC,
+    },
+    {
+      key: 'cToD',
+      label: 'C→D',
+      values: series.months.map((m) => m.ratios.cToD),
+      avg: series.avgRatios.cToD,
+    },
+  ];
+
+  const closingRatios = [
+    {
+      key: 'car',
+      label: 'CAR',
+      values: series.months.map((m) => m.ratios.cToD),
+      avg: series.avgRatios.cToD,
     },
   ];
 
@@ -111,7 +147,7 @@ export function MonthlyMatrix({ series }: MonthlyMatrixProps) {
             </tr>
           ))}
 
-          {ratioRows.map((r, idx) => (
+          {vsARatios.map((r, idx) => (
             <tr key={r.key} className={idx === 0 ? 'border-t border-qc-border' : ''}>
               <td className="text-left px-1.5 py-1.5 text-qc-textMuted font-medium">{r.label}</td>
               {r.values.map((v, col) => (
@@ -131,6 +167,56 @@ export function MonthlyMatrix({ series }: MonthlyMatrixProps) {
                 </td>
               ))}
               <td className="text-right px-1.5 py-1.5 bg-qc-teal700/10 text-qc-teal50 font-medium">
+                {fmtPct(r.avg, 0)}
+              </td>
+            </tr>
+          ))}
+
+          {stepRatios.map((r, idx) => (
+            <tr key={r.key} className={idx === 0 ? 'border-t border-qc-border' : ''}>
+              <td className="text-left px-1.5 py-1.5 text-qc-textSubtle font-medium">{r.label}</td>
+              {r.values.map((v, col) => (
+                <td
+                  // biome-ignore lint/suspicious/noArrayIndexKey: position is stable
+                  key={col}
+                  onMouseEnter={() => setHoveredCol(col)}
+                  onMouseLeave={() => setHoveredCol(null)}
+                  className={`${cellCls(col, r.key)} text-qc-textSubtle cursor-pointer`}
+                >
+                  <Link
+                    href={`/month/${series.year}/${String(col + 1).padStart(2, '0')}`}
+                    className="block w-full text-right"
+                  >
+                    {fmtPct(v, 0)}
+                  </Link>
+                </td>
+              ))}
+              <td className="text-right px-1.5 py-1.5 bg-qc-teal700/10 text-qc-teal50 font-medium">
+                {fmtPct(r.avg, 0)}
+              </td>
+            </tr>
+          ))}
+
+          {closingRatios.map((r) => (
+            <tr key={r.key} className="border-t border-qc-border">
+              <td className="text-left px-1.5 py-1.5 text-qc-teal300 font-semibold">{r.label}</td>
+              {r.values.map((v, col) => (
+                <td
+                  // biome-ignore lint/suspicious/noArrayIndexKey: position is stable
+                  key={col}
+                  onMouseEnter={() => setHoveredCol(col)}
+                  onMouseLeave={() => setHoveredCol(null)}
+                  className={`${cellCls(col, r.key)} text-qc-teal300 font-medium cursor-pointer`}
+                >
+                  <Link
+                    href={`/month/${series.year}/${String(col + 1).padStart(2, '0')}`}
+                    className="block w-full text-right"
+                  >
+                    {fmtPct(v, 0)}
+                  </Link>
+                </td>
+              ))}
+              <td className="text-right px-1.5 py-1.5 bg-qc-teal700/10 text-qc-teal300 font-semibold">
                 {fmtPct(r.avg, 0)}
               </td>
             </tr>
