@@ -1,5 +1,5 @@
-.PHONY: help deploy status logs-main logs-webhook logs-worker logs-api logs-api-worker \
-        scale-workers scale-api backup update down rebuild-api migrate seed-tenant
+.PHONY: help deploy status logs-main logs-webhook logs-worker logs-api logs-api-worker logs-dashboard \
+        scale-workers scale-api backup update down rebuild-api rebuild-dashboard migrate seed-tenant
 
 STACK=n8n
 
@@ -35,9 +35,16 @@ logs-api: ## Logs de la API DM Setter
 logs-api-worker: ## Logs del worker BullMQ
 	docker service logs -f $(STACK)_api-worker
 
+logs-dashboard: ## Logs del dashboard analítico
+	docker service logs -f $(STACK)_dashboard
+
 scale-api: ## Escalar API: make scale-api N=2
 	docker service scale $(STACK)_api=$(N)
 	docker service scale $(STACK)_api-worker=$(N)
+
+rebuild-dashboard: ## Reconstruir imagen dm-dashboard:local y refrescar servicio
+	docker build -t dm-dashboard:local -f apps/dashboard/Dockerfile .
+	docker service update --force --image dm-dashboard:local $(STACK)_dashboard
 
 rebuild-api: ## Reconstruir imagen dm-api:local y refrescar servicios
 	docker build -t dm-api:local -f apps/api/Dockerfile .

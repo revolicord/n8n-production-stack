@@ -20,6 +20,10 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    "incremental": true
+    "incremental": true,
+    "paths": {
+      "@dm-api/db": ["./packages/db/src/index.ts"],
+      "@dm-api/db/*": ["./packages/db/src/*"]
+    }
   }
 }

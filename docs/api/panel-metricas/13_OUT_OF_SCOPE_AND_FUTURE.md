@@ -245,6 +245,26 @@ Y crashear loud si falta algo.
 
 ---
 
+### C.8. `postgres` (postgres.js) se bundlea dentro del server chunk de Next
+
+**Hoy:** pese a `serverExternalPackages: ['postgres']` en `next.config.mjs`, el driver
+acaba *bundleado* en `.next/server/chunks/*.js` (probable interacción con
+`transpilePackages: ['@dm-api/db']`). En esa forma **no serializa un `Date` crudo**
+como parámetro y lanza `ERR_INVALID_ARG_TYPE: ... Received an instance of Date`
+(rompió `dashboard.revolicord.com`, digest `2421498275`, 2026-05-25).
+
+**Mitigación aplicada:** nunca pasar `Date` crudo a un `sql` template. Interpolar
+siempre `${d.toISOString()}::timestamptz`. Las queries por **columnas Drizzle** ya son
+seguras porque `mapToDriverValue` aplica `.toISOString()` automáticamente. Regla:
+en `sql` crudo de `lib/metrics/*`, fechas → `toISOString()`, no `Date`.
+
+**Saldar cuando:** se quiera robustez de fondo. Lograr que `postgres` quede realmente
+externo (verificar que la directiva surte efecto con `@dm-api/db` en `transpilePackages`,
+o importar el driver de forma que Next no lo incluya en el bundle) para que un `Date`
+crudo futuro no vuelva a romper.
+
+---
+
 ## Categoría D — Decisiones revisitables
 
 Estas son decisiones tomadas para Sprint 0–3 que pueden necesitar revisión más adelante.

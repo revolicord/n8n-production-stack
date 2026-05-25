@@ -420,6 +420,47 @@ services:
           - node.role == manager
 
   # ==========================================================
+  # DASHBOARD — Next.js 15 analytics panel (dashboard.revolicord.com)
+  # ==========================================================
+  dashboard:
+    image: ${DASHBOARD_IMAGE:-dm-dashboard:local}
+    networks:
+      - n8n_internal
+      - traefik_public
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://n8n:${POSTGRES_PASSWORD}@postgres:5432/n8n
+      PANEL_PASSWORD: ${PANEL_PASSWORD}
+      PANEL_JWT_SECRET: ${PANEL_JWT_SECRET}
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:3000/ || exit 1']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+      placement:
+        constraints:
+          - node.role == manager
+      labels:
+        - "traefik.enable=true"
+        - "traefik.docker.network=${TRAEFIK_NETWORK}"
+        - "traefik.http.routers.dashboard.rule=Host(`${DASHBOARD_HOST}`)"
+        - "traefik.http.routers.dashboard.entrypoints=websecure"
+        - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
+        - "traefik.http.routers.dashboard.service=dashboard-svc"
+        - "traefik.http.services.dashboard-svc.loadbalancer.server.port=3000"
+        - "traefik.http.routers.dashboard-http.rule=Host(`${DASHBOARD_HOST}`)"
+        - "traefik.http.routers.dashboard-http.entrypoints=web"
+        - "traefik.http.routers.dashboard-http.middlewares=dashboard-https-redirect"
+        - "traefik.http.middlewares.dashboard-https-redirect.redirectscheme.scheme=https"
+        - "traefik.http.middlewares.dashboard-https-redirect.redirectscheme.permanent=true"
+
+  # ==========================================================
   # API MIGRATE — one-shot: aplica drizzle migrations
   # Crea schema 'api' + extension pgcrypto antes de migrar
   # ==========================================================
