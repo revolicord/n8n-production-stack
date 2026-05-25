@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Quantum Dashboard · Vista Anual</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0a0a0a; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; color: #e5e7eb; min-height: 100vh; padding: 24px; }
+  .qc-shell { max-width: 1400px; margin: 0 auto; background: #0d0d0d; color: #e5e7eb; border-radius: 12px; overflow: hidden; border: 1px solid #1f2937; }
+  .qc-row { display: flex; height: 800px; }
+  .qc-side { width: 200px; background: #111; border-right: 1px solid #1f2937; display: flex; flex-direction: column; flex-shrink: 0; }
+  .qc-side-head { padding: 14px 14px 12px; border-bottom: 1px solid #1f2937; display: flex; align-items: center; gap: 8px; }
+  .qc-logo { width: 22px; height: 22px; background: #0f6e56; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #5dcaa5; font-size: 14px; font-weight: 500; }
+  .qc-brand { font-size: 13px; font-weight: 500; color: #fff; }
+  .qc-tenant { padding: 12px 12px 8px; }
+  .qc-tenant-box { width: 100%; background: #0d0d0d; border: 1px solid #374151; border-radius: 6px; padding: 5px 8px; color: #d1d5db; font-size: 11px; }
+  .qc-nav { flex: 1; padding: 8px 0; overflow-y: auto; }
+  .qc-nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 16px; font-size: 12.5px; color: #9ca3af; cursor: pointer; transition: all 120ms; border-left: 2px solid transparent; }
+  .qc-nav-item:hover { color: #fff; background: rgba(255,255,255,0.03); }
+  .qc-nav-item.active { color: #5dcaa5; background: rgba(13,148,136,0.08); border-left-color: #14b8a6; }
+  .qc-nav-item .icon { font-size: 15px; display: inline-block; width: 15px; text-align: center; }
+  .qc-divider { border-top: 1px solid #1f2937; margin: 6px 12px; }
+  .qc-nav-section { padding: 6px 16px 2px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #4b5563; font-weight: 500; }
+  .qc-foot { padding: 12px 16px; border-top: 1px solid #1f2937; font-size: 11px; color: #6b7280; cursor: pointer; }
+  .qc-main { flex: 1; overflow-y: auto; padding: 20px 24px; }
+  .qc-topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+  .qc-title { font-size: 18px; font-weight: 500; color: #fff; display: flex; align-items: center; gap: 10px; }
+  .qc-pill { font-size: 10.5px; background: rgba(13,148,136,0.15); color: #5dcaa5; padding: 3px 8px; border-radius: 999px; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; }
+  .qc-period { display: flex; gap: 4px; background: #111; border: 1px solid #1f2937; border-radius: 7px; padding: 3px; }
+  .qc-period button { background: transparent; border: 0; color: #9ca3af; font-size: 11.5px; padding: 4px 10px; border-radius: 5px; cursor: pointer; font-family: inherit; }
+  .qc-period button.on { background: #0f6e56; color: #fff; }
+  .qc-kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 22px; }
+  .qc-kpi { background: #111; border: 1px solid #1f2937; border-radius: 8px; padding: 12px 14px; }
+  .qc-kpi-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+  .qc-kpi-label { font-size: 10.5px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 500; }
+  .qc-kpi-letter { font-size: 9.5px; color: #14b8a6; font-weight: 500; background: rgba(13,148,136,0.12); padding: 2px 6px; border-radius: 4px; }
+  .qc-kpi-val { font-size: 24px; font-weight: 500; color: #fff; line-height: 1; margin-bottom: 4px; letter-spacing: -0.01em; }
+  .qc-kpi-delta { display: flex; align-items: center; gap: 4px; font-size: 10.5px; }
+  .qc-up { color: #5dcaa5; }
+  .qc-down { color: #f87171; }
+  .qc-spark { margin-top: 6px; }
+  .qc-section-title { font-size: 13px; font-weight: 500; color: #d1d5db; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
+  .qc-section-title .icon { color: #14b8a6; font-size: 14px; }
+  .qc-card { background: #111; border: 1px solid #1f2937; border-radius: 8px; padding: 14px; margin-bottom: 18px; }
+  .qc-matrix { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .qc-matrix th, .qc-matrix td { padding: 5px 6px; text-align: right; border-bottom: 1px solid #1a1a1a; }
+  .qc-matrix th { color: #6b7280; font-weight: 500; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .qc-matrix th:first-child, .qc-matrix td:first-child { text-align: left; color: #9ca3af; font-weight: 500; }
+  .qc-matrix td { color: #d1d5db; cursor: pointer; transition: background 100ms; }
+  .qc-matrix td:hover { background: rgba(20,184,166,0.08); color: #fff; }
+  .qc-matrix th.tot, .qc-matrix td.tot { background: rgba(13,148,136,0.08); color: #5dcaa5; font-weight: 500; }
+  .qc-matrix td.metric-ratio { color: #9ca3af; }
+  .qc-matrix tr.sep td { border-top: 1px solid #1f2937; }
+  .qc-funnel { display: grid; grid-template-columns: 1fr 280px; gap: 16px; }
+  .qc-funnel-vis { display: flex; flex-direction: column; gap: 4px; }
+  .qc-fbar { display: flex; align-items: center; gap: 10px; }
+  .qc-fbar-label { width: 110px; font-size: 11.5px; color: #9ca3af; }
+  .qc-fbar-track { flex: 1; height: 28px; background: #0a0a0a; border-radius: 4px; position: relative; overflow: hidden; }
+  .qc-fbar-fill { height: 100%; background: linear-gradient(90deg, #0f6e56 0%, #14b8a6 100%); border-radius: 4px; display: flex; align-items: center; padding: 0 8px; font-size: 11.5px; color: #fff; font-weight: 500; }
+  .qc-fdrop { font-size: 10.5px; color: #6b7280; padding-left: 120px; padding-bottom: 2px; }
+  .qc-fdrop b { color: #f87171; font-weight: 500; }
+  .qc-insights h4 { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.06em; margin: 0 0 10px; font-weight: 500; }
+  .qc-insight { display: flex; gap: 8px; padding: 8px 10px; background: #0a0a0a; border: 1px solid #1f2937; border-radius: 6px; margin-bottom: 6px; font-size: 11.5px; line-height: 1.45; }
+  .qc-insight .icon { font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+  .qc-insight-warn .icon { color: #fbbf24; }
+  .qc-insight-ok .icon { color: #5dcaa5; }
+  .qc-insight-info .icon { color: #60a5fa; }
+  .qc-insight-text { color: #d1d5db; }
+</style>
+</head>
+<body>
+<div class="qc-shell">
+  <div class="qc-row">
+    <aside class="qc-side">
+      <div class="qc-side-head">
+        <div class="qc-logo">Q</div>
+        <span class="qc-brand">Quantum</span>
+      </div>
+      <div class="qc-tenant">
+        <div class="qc-tenant-box">Quantum Creators ▾</div>
+      </div>
+      <nav class="qc-nav">
+        <div class="qc-nav-item active"><span class="icon">▦</span>Vista anual</div>
+        <div class="qc-nav-item"><span class="icon">▤</span>Vista mensual</div>
+        <div class="qc-nav-item"><span class="icon">▼</span>Funnel</div>
+        <div class="qc-nav-item"><span class="icon">●</span>Prospectos</div>
+        <div class="qc-divider"></div>
+        <div class="qc-nav-section">Análisis</div>
+        <div class="qc-nav-item"><span class="icon">◷</span>Velocidad</div>
+        <div class="qc-nav-item"><span class="icon">◑</span>Cohortes</div>
+        <div class="qc-divider"></div>
+        <div class="qc-nav-item"><span class="icon">⚙</span>Settings</div>
+      </nav>
+      <div class="qc-foot">Cerrar sesión</div>
+    </aside>
+
+    <div class="qc-main">
+      <div class="qc-topbar">
+        <div class="qc-title">
+          DM Sorcery Tracker · 2026
+          <span class="qc-pill">en vivo</span>
+        </div>
+        <div class="qc-period">
+          <button>2024</button>
+          <button>2025</button>
+          <button class="on">2026</button>
+        </div>
+      </div>
+
+      <div class="qc-kpis">
+        <div class="qc-kpi">
+          <div class="qc-kpi-h"><span class="qc-kpi-label">Initiated</span><span class="qc-kpi-letter">A</span></div>
+          <div class="qc-kpi-val">2.847</div>
+          <div class="qc-kpi-delta qc-up">▲ +12% vs 2025</div>
+          <svg class="qc-spark" width="100%" height="22" viewBox="0 0 140 22" preserveAspectRatio="none">
+            <polyline points="0,18 12,16 24,15 36,17 48,12 60,10 72,11 84,8 96,9 108,7 120,5 132,4 140,3" fill="none" stroke="#14b8a6" stroke-width="1.5"/>
+          </svg>
+        </div>
+        <div class="qc-kpi">
+          <div class="qc-kpi-h"><span class="qc-kpi-label">Media seen</span><span class="qc-kpi-letter">MS</span></div>
+          <div class="qc-kpi-val">1.213</div>
+          <div class="qc-kpi-delta qc-down">▼ -3% vs 2025</div>
+          <svg class="qc-spark" width="100%" height="22" viewBox="0 0 140 22" preserveAspectRatio="none">
+            <polyline points="0,8 12,10 24,9 36,12 48,11 60,13 72,10 84,12 96,11 108,13 120,12 132,14 140,15" fill="none" stroke="#14b8a6" stroke-width="1.5"/>
+          </svg>
+        </div>
+        <div class="qc-kpi">
+          <div class="qc-kpi-h"><span class="qc-kpi-label">Engaged</span><span class="qc-kpi-letter">B</span></div>
+          <div class="qc-kpi-val">487</div>
+          <div class="qc-kpi-delta qc-up">▲ +28% vs 2025</div>
+          <svg class="qc-spark" width="100%" height="22" viewBox="0 0 140 22" preserveAspectRatio="none">
+            <polyline points="0,17 12,15 24,16 36,13 48,12 60,11 72,9 84,10 96,8 108,7 120,6 132,5 140,4" fill="none" stroke="#14b8a6" stroke-width="1.5"/>
+          </svg>
+        </div>
+        <div class="qc-kpi">
+          <div class="qc-kpi-h"><span class="qc-kpi-label">Calendly</span><span class="qc-kpi-letter">C</span></div>
+          <div class="qc-kpi-val">142</div>
+          <div class="qc-kpi-delta qc-up">▲ +18% vs 2025</div>
+          <svg class="qc-spark" width="100%" height="22" viewBox="0 0 140 22" preserveAspectRatio="none">
+            <polyline points="0,18 12,17 24,15 36,14 48,13 60,12 72,11 84,10 96,8 108,9 120,7 132,6 140,5" fill="none" stroke="#14b8a6" stroke-width="1.5"/>
+          </svg>
+        </div>
+        <div class="qc-kpi">
+          <div class="qc-kpi-h"><span class="qc-kpi-label">Booked</span><span class="qc-kpi-letter">D</span></div>
+          <div class="qc-kpi-val">38</div>
+          <div class="qc-kpi-delta qc-up">▲ +9% vs 2025</div>
+          <svg class="qc-spark" width="100%" height="22" viewBox="0 0 140 22" preserveAspectRatio="none">
+            <polyline points="0,17 12,16 24,18 36,15 48,14 60,12 72,13 84,11 96,10 108,8 120,9 132,7 140,6" fill="none" stroke="#14b8a6" stroke-width="1.5"/>
+          </svg>
+        </div>
+      </div>
+
+      <h3 class="qc-section-title"><span class="icon">▦</span>Matriz mensual · click en un mes para ver el detalle</h3>
+      <div class="qc-card" style="padding: 10px 12px;">
+        <table class="qc-matrix">
+          <thead>
+            <tr>
+              <th></th>
+              <th>Ene</th><th>Feb</th><th>Mar</th><th>Abr</th><th>May</th><th>Jun</th>
+              <th>Jul</th><th>Ago</th><th>Sep</th><th>Oct</th><th>Nov</th><th>Dic</th>
+              <th class="tot">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>A</td><td>238</td><td>312</td><td>241</td><td>198</td><td>312</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td class="tot">2.847</td></tr>
+            <tr><td>MS</td><td>101</td><td>134</td><td>118</td><td>89</td><td>134</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td class="tot">1.213</td></tr>
+            <tr><td>B</td><td>41</td><td>58</td><td>47</td><td>33</td><td>58</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td class="tot">487</td></tr>
+            <tr><td>C</td><td>11</td><td>16</td><td>13</td><td>9</td><td>16</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td class="tot">142</td></tr>
+            <tr><td>D</td><td>3</td><td>5</td><td>4</td><td>2</td><td>5</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td class="tot">38</td></tr>
+            <tr class="sep"><td class="metric-ratio">MSR</td><td class="metric-ratio">42%</td><td class="metric-ratio">43%</td><td class="metric-ratio">49%</td><td class="metric-ratio">45%</td><td class="metric-ratio">43%</td><td class="metric-ratio">—</td><td class="metric-ratio">—</td><td class="metric-ratio">—</td><td class="metric-ratio">—</td><td class="metric-ratio">—</td><td class="metric-ratio">—</td><td class="metric-ratio">—</td><td class="tot">43%</td></tr>
+            <tr><td class="metric-ratio">PRR</td><td class="metric-ratio">17%</td><td class="metric-ratio">19%</td><td class="metric-ratio">20%</td><td class="metric-ratio">17%</td><td class="metric-ratio">19%</td><td class="metric-ratio">—</td><td class="metric-ratio">—</td><td class="metric-ratio">—</td><td class="metric-ratio">—</td><td class="metric-ratio">—</td><td class="metric-ratio">—</td><td class="metric-ratio">—</td><td class="tot">18%</td></tr>
+            <tr><td class="metric-ratio">CSR</td><td class="metric-ratio">4.6%</td><td class="metric-ratio">5.1%</td><td class="metric-ratio">5.4%</td><td class="metric-ratio">4.5%</td><td class="metric-ratio">5.1%</td><td class="metric-ratio">—</td><td class="metric-ratio">—</td><td class="metric-ratio">—</td><td class="metric-ratio">—</td><td class="metric-ratio">—</td><td class="metric-ratio">—</td><td class="metric-ratio">—</td><td class="tot">5.0%</td></tr>
+            <tr><td class="metric-ratio">ABR</td><td class="metric-ratio">1.3%</td><td class="metric-ratio">1.6%</td><td class="metric-ratio">1.7%</td><td class="metric-ratio">1.0%</td><td class="metric-ratio">1.6%</td><td class="metric-ratio">—</td><td class="metric-ratio">—</td><td class="metric-ratio">—</td><td class="metric-ratio">—</td><td class="metric-ratio">—</td><td class="metric-ratio">—</td><td class="metric-ratio">—</td><td class="tot">1.3%</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="qc-section-title"><span class="icon">▼</span>Funnel del año · todas las etapas</h3>
+      <div class="qc-card">
+        <div class="qc-funnel">
+          <div class="qc-funnel-vis">
+            <div class="qc-fbar"><div class="qc-fbar-label">A · Initiated</div><div class="qc-fbar-track"><div class="qc-fbar-fill" style="width: 100%;">2.847</div></div></div>
+            <div class="qc-fdrop">↓ <b>−57%</b> drop · 1.634 perdidos</div>
+            <div class="qc-fbar"><div class="qc-fbar-label">MS · Media seen</div><div class="qc-fbar-track"><div class="qc-fbar-fill" style="width: 42.6%;">1.213</div></div></div>
+            <div class="qc-fdrop">↓ <b>−60%</b> drop · 726 perdidos</div>
+            <div class="qc-fbar"><div class="qc-fbar-label">B · Engaged</div><div class="qc-fbar-track"><div class="qc-fbar-fill" style="width: 17.1%;">487</div></div></div>
+            <div class="qc-fdrop">↓ <b>−71%</b> drop · 345 perdidos</div>
+            <div class="qc-fbar"><div class="qc-fbar-label">C · Calendly</div><div class="qc-fbar-track"><div class="qc-fbar-fill" style="width: 5.0%;">142</div></div></div>
+            <div class="qc-fdrop">↓ <b>−73%</b> drop · 104 perdidos</div>
+            <div class="qc-fbar"><div class="qc-fbar-label">D · Booked</div><div class="qc-fbar-track"><div class="qc-fbar-fill" style="width: 1.3%;">38</div></div></div>
+          </div>
+          <div class="qc-insights">
+            <h4>Insights del año</h4>
+            <div class="qc-insight qc-insight-ok"><span class="icon">✓</span><span class="qc-insight-text">MSR está 8% sobre el promedio histórico</span></div>
+            <div class="qc-insight qc-insight-warn"><span class="icon">⚠</span><span class="qc-insight-text">B→C cayó 12% vs 2025, revisar Fase B</span></div>
+            <div class="qc-insight qc-insight-info"><span class="icon">◉</span><span class="qc-insight-text">A este ritmo cerrarás ~91 bookings este año</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
