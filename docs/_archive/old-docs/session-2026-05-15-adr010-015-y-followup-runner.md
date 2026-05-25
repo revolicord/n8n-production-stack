@@ -4,7 +4,7 @@ Documento de sesión. Registra el estado de implementación de los ADRs 0010–0
 lo que falta para el MVP, los comandos MCP usados, y cómo están modeladas las
 etapas y follow-ups en la base de datos.
 
-> **Aviso de obsolescencia parcial (2026-05-16, v5):** los pasos que mencionan cargar el `system_prompt` en `tenants.config` reflejan la arquitectura de ese día. A partir de v5 el system_prompt vive en el Set node `System Prompt` del workflow `agent-run` en n8n (ver `n8n/nodes/00c-system-prompt.md`), no en DB. Los demás pasos siguen siendo válidos.
+> **Aviso de obsolescencia parcial (2026-05-16, v5):** los pasos que mencionan cargar el `system_prompt` en `tenants.config` reflejan la arquitectura de ese día. A partir de v5 el system_prompt vive en el Set node `System Prompt` del workflow `agent-run` en n8n (ver `docs/n8n/nodes/00c-system-prompt.md`), no en DB. Los demás pasos siguen siendo válidos.
 
 ---
 
@@ -12,9 +12,9 @@ etapas y follow-ups en la base de datos.
 
 - Se hizo `git pull` desde `origin/master`. El pull trajo los ADRs 0010–0015 y
   toda la documentación generada en la sesión anterior.
-- Se leyeron: `n8n/SETTER-MVP-TRACKING.md`, `docs/adr/IMPLEMENTATION-REPORT.md`,
+- Se leyeron: `docs/n8n/SETTER-MVP-TRACKING.md`, `docs/adr/IMPLEMENTATION-REPORT.md`,
   `docs-dm-settings/13-funnel-y-agente.md`, y todos los nodos documentados en
-  `n8n/nodes/`.
+  `docs/n8n/nodes/`.
 - Se inspeccionó el workflow `agent-run` (ID `6QJs9dHcR8NX8MZe`) vía MCP.
 - Se creó el workflow `followup-runner` (ID `hEXWrZBCqNyZGf2v`) vía MCP.
 
@@ -26,10 +26,10 @@ etapas y follow-ups en la base de datos.
 
 | ADR | Descripción | Artefactos |
 |-----|-------------|-----------|
-| 0010 | Funnel stages en Postgres — tablas `funnel_stages` + `stage_flows` | `packages/db/src/schema.ts`, migración `0002_polite_groot.sql`, seed `seed_qc_funnel.sql`, nodo `n8n/nodes/00-get-stage-config.md` |
-| 0011 | Lead crons / detector de inactividad — tabla `lead_crons` | `packages/db/src/schema.ts`, migración `0002_polite_groot.sql`, nodo `n8n/nodes/99-upsert-lead-cron.md` |
+| 0010 | Funnel stages en Postgres — tablas `funnel_stages` + `stage_flows` | `packages/db/src/schema.ts`, migración `0002_polite_groot.sql`, seed `seed_qc_funnel.sql`, nodo `docs/n8n/nodes/00-get-stage-config.md` |
+| 0011 | Lead crons / detector de inactividad — tabla `lead_crons` | `packages/db/src/schema.ts`, migración `0002_polite_groot.sql`, nodo `docs/n8n/nodes/99-upsert-lead-cron.md` |
 | 0012 | Follow-ups en chat memory — INSERT en `n8n_chat_histories` | Parte del workflow `followup-runner`, nodo `Build SQL` |
-| 0013 | Contexto dual del agente — bloque CRM en Build Context | Nodo `n8n/nodes/00b-get-crm-context.md`, código actualizado en `n8n/nodes/01-build-context.md` |
+| 0013 | Contexto dual del agente — bloque CRM en Build Context | Nodo `docs/n8n/nodes/00b-get-crm-context.md`, código actualizado en `docs/n8n/nodes/01-build-context.md` |
 | 0014 | Migración lead_stage a FK — columna `current_stage_id UUID FK` en `lead_stages` | `packages/db/src/schema.ts`, trigger `trg_sync_lead_stage_id` en `0002_polite_groot.sql` |
 | 0015 | Sistema de follow-ups por etapa — tablas `followup_templates` + `lead_followup_log` | `packages/db/src/schema.ts`, migración, seed con 9 templates para A/MS/B/C |
 
@@ -122,21 +122,21 @@ WHERE slug = 'quantum-creators';  -- ajustar slug real
 
 **Workflow `agent-run` (ID `6QJs9dHcR8NX8MZe`):**
 
-Orden de cambios (guías en `n8n/nodes/`):
+Orden de cambios (guías en `docs/n8n/nodes/`):
 
 1. **Agregar `Get Stage Config`** (Postgres, `executeQuery`) antes de `Build Context`.
-   SQL y parámetros: `n8n/nodes/00-get-stage-config.md`.
+   SQL y parámetros: `docs/n8n/nodes/00-get-stage-config.md`.
 
 2. **Agregar `Get Subscriber CRM Context`** (Postgres, `executeQuery`) en paralelo
-   con `Get Stage Config`. SQL y parámetros: `n8n/nodes/00b-get-crm-context.md`.
+   con `Get Stage Config`. SQL y parámetros: `docs/n8n/nodes/00b-get-crm-context.md`.
 
-3. **Reemplazar el JS de `Build Context`** con el código de `n8n/nodes/01-build-context.md`.
+3. **Reemplazar el JS de `Build Context`** con el código de `docs/n8n/nodes/01-build-context.md`.
    Elimina el `FLOW_MAP` hardcodeado; usa salida de `Get Stage Config` y
    `Get Subscriber CRM Context`.
 
 4. **Agregar `Upsert Lead Cron`** (Postgres, `executeQuery`) después de `enviar texto`.
    Dos queries: UPSERT en `lead_crons` + marcar followups previos como respondidos.
-   SQL y parámetros: `n8n/nodes/99-upsert-lead-cron.md`.
+   SQL y parámetros: `docs/n8n/nodes/99-upsert-lead-cron.md`.
 
 **Workflow `followup-runner` (ID `hEXWrZBCqNyZGf2v`):**
 
@@ -147,7 +147,7 @@ Orden de cambios (guías en `n8n/nodes/`):
 ### 3.3 Requiere datos externos (solo Alex conoce)
 
 - **Copy del producto**: rellenar `{{QC_PRODUCT_ONELINER}}` y `{{QC_PRODUCT_NOTAS}}`
-  en `n8n/prompts/setter-v1.md` antes de cargar el system_prompt.
+  en `docs/n8n/prompts/setter-v1.md` antes de cargar el system_prompt.
 - **Flow ns reales**: activar los flows en ManyChat (actualmente STOPPED), anotar
   cada `flow_ns` y ejecutar el UPDATE de stage_flows (Paso 5 arriba).
 - **Cadencia y textos de follow-up**: los 9 templates del seed tienen textos
@@ -642,7 +642,7 @@ Cadena objetivo (ADR-0010, 0011, 0013):
                                                                     └─► Upsert Lead Cron → Code → Callback
 ```
 
-Las specs exactas de cada nodo están en `n8n/nodes/`:
+Las specs exactas de cada nodo están en `docs/n8n/nodes/`:
 - `00-get-stage-config.md` — Postgres query para funnel_stages + stage_flows
 - `00b-get-crm-context.md` — Postgres query para lead_crons + lead_followup_log
 - `01-build-context.md` — JS actualizado (usa pickFlowWeighted + buildCrmBlock)

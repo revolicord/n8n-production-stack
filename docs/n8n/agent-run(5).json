@@ -11,10 +11,7 @@
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2.1,
-      "position": [
-        0,
-        112
-      ],
+      "position": [0, 112],
       "webhookId": "28c2d6f7-8e33-4be1-a6da-8377998b9026",
       "alwaysOutputData": true
     },
@@ -30,10 +27,7 @@
       "name": "Get Stage Config",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "position": [
-        224,
-        16
-      ],
+      "position": [224, 16],
       "alwaysOutputData": true,
       "credentials": {
         "postgres": {
@@ -48,10 +42,7 @@
       "name": "Combine Contexts",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
-      "position": [
-        496,
-        32
-      ]
+      "position": [496, 32]
     },
     {
       "parameters": {
@@ -65,10 +56,7 @@
       "name": "Get Subscriber CRM Context",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "position": [
-        224,
-        208
-      ],
+      "position": [224, 208],
       "alwaysOutputData": true,
       "credentials": {
         "postgres": {
@@ -85,10 +73,7 @@
       "name": "Build Context",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        896,
-        128
-      ]
+      "position": [896, 128]
     },
     {
       "parameters": {
@@ -104,10 +89,7 @@
       "name": "AI Agent",
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 3.1,
-      "position": [
-        1056,
-        64
-      ]
+      "position": [1056, 64]
     },
     {
       "parameters": {
@@ -125,10 +107,7 @@
       "name": "Anthropic Chat Model",
       "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
       "typeVersion": 1.5,
-      "position": [
-        1008,
-        400
-      ],
+      "position": [1008, 400],
       "credentials": {
         "anthropicApi": {
           "id": "CqaNlJsRteqVJlUs",
@@ -145,10 +124,7 @@
       "name": "Postgres Chat Memory",
       "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
       "typeVersion": 1.3,
-      "position": [
-        1104,
-        256
-      ],
+      "position": [1104, 256],
       "credentials": {
         "postgres": {
           "id": "xBbNbntvO0xJs5HM",
@@ -168,10 +144,7 @@
       "name": "Upsert Lead Cron",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "position": [
-        1824,
-        -48
-      ],
+      "position": [1824, -48],
       "credentials": {
         "postgres": {
           "id": "xBbNbntvO0xJs5HM",
@@ -191,10 +164,7 @@
       "name": "Mark Followups Responded",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "position": [
-        1936,
-        112
-      ],
+      "position": [1936, 112],
       "credentials": {
         "postgres": {
           "id": "xBbNbntvO0xJs5HM",
@@ -219,10 +189,7 @@
       },
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [
-        624,
-        112
-      ],
+      "position": [624, 112],
       "id": "f6a508af-30f8-48ee-8583-698475ba9345",
       "name": "System Prompt"
     },
@@ -234,10 +201,7 @@
       },
       "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
       "typeVersion": 1.3,
-      "position": [
-        1184,
-        320
-      ],
+      "position": [1184, 320],
       "id": "96a3523c-8af3-4345-ab04-c1cf739882db",
       "name": "Structured Output Parser"
     },
@@ -251,10 +215,7 @@
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "position": [
-        368,
-        256
-      ],
+      "position": [368, 256],
       "id": "fdc5bd28-586a-4718-816c-fa8413da993d",
       "name": "Get Content History",
       "alwaysOutputData": true,
@@ -292,10 +253,7 @@
       },
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
-      "position": [
-        1472,
-        80
-      ],
+      "position": [1472, 80],
       "id": "99b844cb-298d-40ad-93ab-16cd53255ba1",
       "name": "If"
     },
@@ -309,10 +267,7 @@
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "position": [
-        752,
-        16
-      ],
+      "position": [752, 16],
       "id": "73427d15-d894-491f-83b9-e4c17ee33d07",
       "name": "Execute a SQL query1",
       "credentials": {
@@ -332,10 +287,7 @@
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "position": [
-        1664,
-        240
-      ],
+      "position": [1664, 240],
       "id": "3fdc4e3f-916b-4eb0-97cd-80463ade4943",
       "name": "lead_content_sent",
       "credentials": {
@@ -351,10 +303,7 @@
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        1344,
-        -16
-      ],
+      "position": [1344, -16],
       "id": "6086efcc-2d2b-4b68-90a2-a54fe421d44c",
       "name": "Router"
     }
@@ -551,9 +500,7 @@
       ]
     },
     "Mark Followups Responded": {
-      "main": [
-        []
-      ]
+      "main": [[]]
     },
     "System Prompt": {
       "main": [

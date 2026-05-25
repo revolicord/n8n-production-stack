@@ -167,7 +167,7 @@ El JWT dura 12 h; el login overlay reaparece automáticamente al expirar.
 | Borrar tablas o columnas | Todas las migraciones son ADD/RENAME/CREATE — no destructivas |
 | Deployar la nueva imagen SIN haber corrido `make migrate` | La API 0.7.x usa `delay_minutes`; la BD anterior tiene `delay_hours` — falla en boot |
 | Correr `pnpm db:generate` sin revisar el SQL | Drizzle puede generar DROP+ADD en vez de RENAME (ver comentario en `0009_delay_minutes.sql`) |
-| Editar los JSON de n8n workflows directamente | Solo editar los `.md` de spec en `n8n/workflows/` |
+| Editar los JSON de n8n workflows directamente | Solo editar los `.md` de spec en `docs/n8n/workflows/` |
 
 ---
 

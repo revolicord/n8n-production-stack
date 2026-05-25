@@ -147,7 +147,7 @@ const textSent = rawMessages.map((m) => m.text_content).filter(Boolean).join(' |
 return [{ json: { ...item, mcMessages, textSent } }];
 ```
 
-Ver implementación completa en `n8n/workflows/followup-runner/07c-send-content-messages.md`.
+Ver implementación completa en `docs/n8n/workflows/followup-runner/07c-send-content-messages.md`.
 
 ---
 
@@ -168,6 +168,6 @@ Ver implementación completa en `n8n/workflows/followup-runner/07c-send-content-
 
 - ADR-0015: Sistema de Follow-ups por Etapa (diseño de `followup_templates`)
 - ADR-0018: Follow-up Messages como Assets en MinIO (diseño de `followup_messages` y bucket `assets`)
-- `n8n/workflows/followup-runner/06-type-is-text.md` — nodo a convertir en Switch
-- `n8n/workflows/followup-runner/07c-send-content-messages.md` — implementación de la rama `content`
-- `n8n/workflows/followup-runner/02-get-due-leads.md` — SQL a actualizar con `json_agg`
+- `docs/n8n/workflows/followup-runner/06-type-is-text.md` — nodo a convertir en Switch
+- `docs/n8n/workflows/followup-runner/07c-send-content-messages.md` — implementación de la rama `content`
+- `docs/n8n/workflows/followup-runner/02-get-due-leads.md` — SQL a actualizar con `json_agg`

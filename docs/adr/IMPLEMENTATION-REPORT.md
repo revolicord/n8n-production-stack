@@ -52,11 +52,11 @@ Todos los archivos son **specs ejecutables** (SQL + JavaScript copy-paste) listo
 
 | Archivo | ADR | Descripción |
 |---------|-----|-------------|
-| `n8n/nodes/00-get-stage-config.md` | 0010 | Nodo Postgres: reemplaza `FLOW_MAP` — lee `funnel_stages + stage_flows` |
-| `n8n/nodes/00b-get-crm-context.md` | 0013 | Nodo Postgres: lee `lead_crons + lead_followup_log` para el bloque CRM |
-| `n8n/nodes/01-build-context.md` | 0010, 0013 | Actualizado: `pickFlowWeighted()` + `buildCrmBlock()` — elimina FLOW_MAP hardcodeado |
-| `n8n/nodes/99-upsert-lead-cron.md` | 0011 | Nodo Postgres post-respuesta: UPSERT en `lead_crons` + marca followups como respondidos |
-| `n8n/workflows/followup-runner.md` | 0011, 0012, 0015 | Workflow completo: Schedule Trigger → Get Due Leads → envío → log → avanzar/archivar |
+| `docs/n8n/nodes/00-get-stage-config.md` | 0010 | Nodo Postgres: reemplaza `FLOW_MAP` — lee `funnel_stages + stage_flows` |
+| `docs/n8n/nodes/00b-get-crm-context.md` | 0013 | Nodo Postgres: lee `lead_crons + lead_followup_log` para el bloque CRM |
+| `docs/n8n/nodes/01-build-context.md` | 0010, 0013 | Actualizado: `pickFlowWeighted()` + `buildCrmBlock()` — elimina FLOW_MAP hardcodeado |
+| `docs/n8n/nodes/99-upsert-lead-cron.md` | 0011 | Nodo Postgres post-respuesta: UPSERT en `lead_crons` + marca followups como respondidos |
+| `docs/n8n/workflows/followup-runner.md` | 0011, 0012, 0015 | Workflow completo: Schedule Trigger → Get Due Leads → envío → log → avanzar/archivar |
 
 ---
 
@@ -138,18 +138,18 @@ GROUP BY ls.current_stage;
 
 Orden de cambios en la UI:
 
-1. **Agregar nodo `Get Stage Config`** (Postgres) antes de `Build Context`. Query en `n8n/nodes/00-get-stage-config.md`.
-2. **Agregar nodo `Get Subscriber CRM Context`** (Postgres) en paralelo con `Get Stage Config`. Query en `n8n/nodes/00b-get-crm-context.md`.
-3. **Reemplazar el JavaScript de `Build Context`** con el código de `n8n/nodes/01-build-context.md`. Elimina el `FLOW_MAP` hardcodeado.
-4. **Agregar nodo `Upsert Lead Cron`** (Postgres) después de `enviar texto`. Queries en `n8n/nodes/99-upsert-lead-cron.md`.
+1. **Agregar nodo `Get Stage Config`** (Postgres) antes de `Build Context`. Query en `docs/n8n/nodes/00-get-stage-config.md`.
+2. **Agregar nodo `Get Subscriber CRM Context`** (Postgres) en paralelo con `Get Stage Config`. Query en `docs/n8n/nodes/00b-get-crm-context.md`.
+3. **Reemplazar el JavaScript de `Build Context`** con el código de `docs/n8n/nodes/01-build-context.md`. Elimina el `FLOW_MAP` hardcodeado.
+4. **Agregar nodo `Upsert Lead Cron`** (Postgres) después de `enviar texto`. Queries en `docs/n8n/nodes/99-upsert-lead-cron.md`.
 
 ### 6. Crear workflow `followup-runner` en n8n
 
-Workflow nuevo con Schedule Trigger cada 5 minutos. Implementar siguiendo `n8n/workflows/followup-runner.md` (diagrama + 6 nodos + queries SQL completas).
+Workflow nuevo con Schedule Trigger cada 5 minutos. Implementar siguiendo `docs/n8n/workflows/followup-runner.md` (diagrama + 6 nodos + queries SQL completas).
 
 ### 7. Actualizar el system prompt
 
-En `n8n/prompts/setter-v1.md` y en el Set node `System Prompt` del workflow `agent-run` (campo `staticPrompt`, ver `n8n/nodes/00c-system-prompt.md`), agregar:
+En `docs/n8n/prompts/setter-v1.md` y en el Set node `System Prompt` del workflow `agent-run` (campo `staticPrompt`, ver `docs/n8n/nodes/00c-system-prompt.md`), agregar:
 
 > *"Si ves en tu historial mensajes con el prefijo `[SEGUIMIENTO AUTOMÁTICO #N]`, significa que el sistema envió esos mensajes de forma automática mientras el lead no respondía. No los menciones explícitamente; úsalos como contexto para calibrar tu tono."*
 

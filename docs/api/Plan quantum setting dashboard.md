@@ -17,7 +17,7 @@
   - `assets.ts` — `POST /admin/assets/upload` sube a MinIO bucket `assets` y devuelve URL pública.
 - Multipart registrado en `server.ts` (8 MB).
 - Auth Bearer estática (`N8N_CALLBACK_TOKEN`) en todos los `/admin/*`.
-- Workflow `followup-runner` especificado en `n8n/workflows/followup-runner/*.md` (no creado en n8n UI todavía — fuera de este plan).
+- Workflow `followup-runner` especificado en `docs/n8n/workflows/followup-runner/*.md` (no creado en n8n UI todavía — fuera de este plan).
 
 **Lo que falta y este plan construye:**
 1. Migración `delay_hours` → `delay_minutes` (toca BD, API, n8n SQL).
@@ -193,7 +193,7 @@ UPDATE api.followup_templates
 
 Tres ficheros tocan `delay_hours`:
 
-a) `n8n/nodes/99-upsert-lead-cron.md` línea 22:
+a) `docs/n8n/nodes/99-upsert-lead-cron.md` línea 22:
 ```sql
 -- Antes:
 NOW() + ft.delay_hours * INTERVAL '1 hour',
@@ -201,7 +201,7 @@ NOW() + ft.delay_hours * INTERVAL '1 hour',
 NOW() + ft.delay_minutes * INTERVAL '1 minute',
 ```
 
-b) `n8n/workflows/followup-runner.md` línea 50 y `n8n/workflows/followup-runner/02-get-due-leads.md` línea 29:
+b) `docs/n8n/workflows/followup-runner.md` línea 50 y `docs/n8n/workflows/followup-runner/02-get-due-leads.md` línea 29:
 ```sql
 -- Antes:
 ft_next.delay_hours                AS next_delay_hours
@@ -211,7 +211,7 @@ ft_next.delay_minutes              AS next_delay_minutes
 
 Actualizar también los nombres en la tabla de "Campos de salida" del mismo `.md`.
 
-c) `n8n/workflows/followup-runner/09-build-sql.md` líneas 18 y 45:
+c) `docs/n8n/workflows/followup-runner/09-build-sql.md` líneas 18 y 45:
 ```js
 // Antes:
 const delayHours = pd.next_delay_hours;
@@ -933,7 +933,7 @@ Estructurar el mensaje final exactamente así, con tres bloques claros:
 
 5. **Editar el workflow `agent-run`:** en los nodos Postgres que tienen SQL embebido con `delay_hours`, reemplazar manualmente por `delay_minutes` y cambiar `INTERVAL '1 hour'` por `INTERVAL '1 minute'`. Los `agent-run(N).json` del repo son artefactos exportados, no editarlos a mano.
 
-6. **Crear el workflow `followup-runner`** siguiendo las specs en `n8n/workflows/followup-runner/*.md`. Ya están actualizadas a `delay_minutes`. Tiene 9 nodos:
+6. **Crear el workflow `followup-runner`** siguiendo las specs en `docs/n8n/workflows/followup-runner/*.md`. Ya están actualizadas a `delay_minutes`. Tiene 9 nodos:
    - 01: Schedule Trigger cada 5 minutos.
    - 02: Postgres "Get Due Leads" con la query del `.md` (ojo: ya en minutos).
    - 03: Code "Prepare Data".
@@ -966,7 +966,7 @@ Estructurar el mensaje final exactamente así, con tres bloques claros:
 
 2. **`#tech-debt: `followup-runner` no creado en n8n UI.** Sigue siendo P0. Sin esto, podemos editar lo que queramos en el dashboard pero ningún seguimiento sale.
 
-3. **`#tech-debt: 4 ficheros `agent-run(N).json` versionados pero auto-generados.** `agent-run.json` está a 0 bytes y los sufijados `(5)`–`(8)` ocupan ~200KB cada uno. Solo el más reciente es relevante. Decidir: o se borra el resto, o se documenta en `n8n/README.md` cuál es la "fuente de verdad".
+3. **`#tech-debt: 4 ficheros `agent-run(N).json` versionados pero auto-generados.** `agent-run.json` está a 0 bytes y los sufijados `(5)`–`(8)` ocupan ~200KB cada uno. Solo el más reciente es relevante. Decidir: o se borra el resto, o se documenta en `docs/n8n/README.md` cuál es la "fuente de verdad".
 
 4. **`#tech-debt: tests de integración inexistentes.** Solo hay tests unitarios de Zod schemas (`*.test.ts`). No hay tests que ejerciten Fastify + BD real. Configurar `vitest` + `testcontainers` (Postgres efímero) para los endpoints `/admin/*`. Especialmente el flujo de upload de assets a MinIO no se está cubriendo.
 

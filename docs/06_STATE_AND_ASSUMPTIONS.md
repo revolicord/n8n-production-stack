@@ -23,7 +23,7 @@
 
 ### 1.2 Lo que existe pero NO está completo
 
-- **Workflow `followup-runner`:** especificado en `n8n/workflows/followup-runner.md` con 6 nodos + queries SQL. **No creado en la UI de n8n todavía** — sin él, el sistema no envía seguimientos automáticos.
+- **Workflow `followup-runner`:** especificado en `docs/n8n/workflows/followup-runner.md` con 6 nodos + queries SQL. **No creado en la UI de n8n todavía** — sin él, el sistema no envía seguimientos automáticos.
 - **Nodos del IMPLEMENTATION-REPORT:** `Get Stage Config`, `Get Subscriber CRM Context`, `Upsert Lead Cron` — especificados pero pendientes de cablear en la UI de n8n del workflow `agent-run`.
 - **Webhook de Calendly C→D:** no existe. Hoy `D` se marca por confirmación verbal del lead vía agente.
 - **Round-robin de closers:** no existe. Hoy Calendly es un link único en `tenant.config.calendly_url`.

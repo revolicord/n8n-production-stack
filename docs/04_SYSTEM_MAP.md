@@ -74,7 +74,7 @@
   - `followup-runner` — Schedule (5 min). Especificado pero **pendiente de cablear**.
 - **Modelo LLM:** **Claude Sonnet 4.6** (Anthropic) — migrado en v4 desde llama-3.3-70b (Groq) por adherencia en tool-calling.
 - **Memoria:** Postgres Chat Memory (`n8n_chat_histories`, `session_id = manychat_subscriber_id`).
-- **Tools:** Code Tools con JSON Schema manual (ver `n8n/nodes/02-ai-agent.md`).
+- **Tools:** Code Tools con JSON Schema manual (ver `docs/n8n/nodes/02-ai-agent.md`).
 
 ### 2.5 Postgres (fuente de verdad del CRM)
 - **Schema `api`:** `tenants`, `subscribers`, `messages_raw`, `conversations`, `turns`, `lead_stages`, `stage_transitions`, `dead_letter_queue`, `funnel_stages`, `stage_flows`, `followup_templates`, `lead_followup_log`, `lead_crons`.

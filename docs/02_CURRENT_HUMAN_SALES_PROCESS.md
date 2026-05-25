@@ -104,7 +104,7 @@ El bot deja de operar este lead. El closer toma desde Calendly + notificación.
 
 ## 3. Personalidad del Agente
 
-Definido en `n8n/prompts/setter-v1.md` (v3+):
+Definido en `docs/n8n/prompts/setter-v1.md` (v3+):
 
 - **Persona:** Alex, de Quantum Creators. Tiempo limitado, cientos de mensajes que responder.
 - **Estilo:** seco, rápido, como un humano ocupado desde el móvil.
@@ -131,7 +131,7 @@ La política actual es **descalificación inmediata**, no rebatir. Esto es delib
 
 ## 5. Protocolo de Follow-Up (`followup-runner`)
 
-> Workflow separado en n8n. Schedule Trigger cada 5 min. Ver `n8n/workflows/followup-runner.md`.
+> Workflow separado en n8n. Schedule Trigger cada 5 min. Ver `docs/n8n/workflows/followup-runner.md`.
 
 **Reglas:**
 - Cada etapa tiene templates en `api.followup_templates` con `sequence_number` y `delay_hours`.
@@ -148,7 +148,7 @@ La política actual es **descalificación inmediata**, no rebatir. Esto es delib
 | B | 2 | 24 / 48 |
 | C | 1 | 24 |
 
-> ❓ Cadencia y textos exactos pendientes de confirmar con Alex (ver `n8n/SETTER-MVP-TRACKING.md` decisión #5).
+> ❓ Cadencia y textos exactos pendientes de confirmar con Alex (ver `docs/n8n/SETTER-MVP-TRACKING.md` decisión #5).
 
 ---
 

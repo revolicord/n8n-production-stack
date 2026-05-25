@@ -8,9 +8,9 @@
 > - `packages/db/src/schema.ts:175-224` — tablas `lead_stages`, `stage_transitions`.
 > - `packages/db/src/schema.ts:249-289` — tablas `funnel_stages`, `stage_flows`.
 > - `packages/db/src/schema.ts:349-373` — tabla `lead_crons` (máquina de estados paralela).
-> - `n8n/nodes/02-ai-agent.md:18-25` — tools efectivamente conectadas al AI Agent.
-> - `n8n/prompts/setter-v1.md` (v3 actual) — comportamiento del agente.
-> - `n8n/workflows/followup-runner.md` — runner de inactividad.
+> - `docs/n8n/nodes/02-ai-agent.md:18-25` — tools efectivamente conectadas al AI Agent.
+> - `docs/n8n/prompts/setter-v1.md` (v3 actual) — comportamiento del agente.
+> - `docs/n8n/workflows/followup-runner.md` — runner de inactividad.
 
 ---
 
@@ -146,7 +146,7 @@ Tabla `api.lead_crons` (ADR-0011). Una fila por `(tenant_id, subscriber_id, conv
 
 | Evento | Quién | Estado |
 |--------|-------|--------|
-| Crear `(armed)` tras primer turno del lead | nodo `Upsert Lead Cron` del workflow `agent-run` | ✅ documentado en `n8n/nodes/99-upsert-lead-cron.md` |
+| Crear `(armed)` tras primer turno del lead | nodo `Upsert Lead Cron` del workflow `agent-run` | ✅ documentado en `docs/n8n/nodes/99-upsert-lead-cron.md` |
 | `(armed) → (due)` | paso del tiempo | ✅ |
 | `(due) → (armed con seq++)` | `followup-runner` envía el siguiente template y reescribe `next_followup_at = NOW() + delay_hours` | ✅ |
 | `(due) → (archived: max_followups)` | `followup-runner` cuando no hay `followup_templates` para `next_sequence_number + 1` | ✅ |
@@ -204,12 +204,12 @@ Lista exhaustiva para que el arquitecto vea la deuda entre el diseño escrito y 
 
 | # | Documentado en | Estado real | Impacto |
 |---|----------------|-------------|---------|
-| 1 | Etapas `lost` y `escalated_human_call` (`n8n/stages.md:24-28`, doc 13) | No están en el `enum` de `set-stage.ts`. La API las rechaza con `400`. | Tras 5 follow-ups el lead queda `archived: max_followups` en `lead_crons` pero **sigue en su `current_stage` del momento del último mensaje**, no en una etapa terminal explícita. No hay distinción semántica entre "el lead nunca contestó" y "el lead descalificó". |
-| 2 | Tool `archive_conversation` (`docs/funnel-engine.md`, `n8n/nodes/01-build-context.md:52`) | El prompt v3 no la menciona; el nodo `AI Agent` solo tiene `trigger_manychat_flow` y `set_stage` conectadas. | El agente no puede archivar conversaciones por decisión propia. Solo el runner archiva (por agotamiento). |
+| 1 | Etapas `lost` y `escalated_human_call` (`docs/n8n/stages.md:24-28`, doc 13) | No están en el `enum` de `set-stage.ts`. La API las rechaza con `400`. | Tras 5 follow-ups el lead queda `archived: max_followups` en `lead_crons` pero **sigue en su `current_stage` del momento del último mensaje**, no en una etapa terminal explícita. No hay distinción semántica entre "el lead nunca contestó" y "el lead descalificó". |
+| 2 | Tool `archive_conversation` (`docs/funnel-engine.md`, `docs/n8n/nodes/01-build-context.md:52`) | El prompt v3 no la menciona; el nodo `AI Agent` solo tiene `trigger_manychat_flow` y `set_stage` conectadas. | El agente no puede archivar conversaciones por decisión propia. Solo el runner archiva (por agotamiento). |
 | 3 | Webhook de Calendly (`docs-dm-settings/13-funnel-y-agente.md:316-320`) | No existe ningún endpoint `/webhook/calendly` en `apps/api/src/routes/`. | `C → D` solo se marca cuando el lead confirma la reserva verbalmente y el agente decide invocar `set_stage`. Riesgo: leads que reservan pero no contestan más quedan congelados en `C`. |
 | 4 | Escalado humano (`notify_human`, tabla `notifications`, doc 13) | Tabla `notifications` no existe en `schema.ts`. Tool no conectada. | No hay mecanismo para que Alex reciba alertas estructuradas; el dashboard mencionado en doc 14 está fuera de alcance. |
 | 5 | Round-robin de closers (`closers`, `send_calendly_link`, doc 13) | Tabla `closers` no existe. El link de Calendly es único por tenant (`tenant.config.calendly_url`) y se inyecta en el prompt como texto. | Asignación de closers manual; no hay balanceo. |
-| 6 | 8 follow-ups + escalation día 7 (`n8n/stages.md:28`, doc 13) | `funnel_stages.max_followups DEFAULT 3`; el runner archiva por agotamiento de templates, no por número. | La cadencia es la que esté seedeada en `followup_templates`, sin escalation humano. |
+| 6 | 8 follow-ups + escalation día 7 (`docs/n8n/stages.md:28`, doc 13) | `funnel_stages.max_followups DEFAULT 3`; el runner archiva por agotamiento de templates, no por número. | La cadencia es la que esté seedeada en `followup_templates`, sin escalation humano. |
 | 7 | Tools `cancel_follow_ups`, `schedule_follow_up`, `mark_disqualified`, `get_lead_state`, `get_objection_bank`, `send_audio`, `send_sticker`, `send_video_hook`, `send_video_vsl` (doc 13) | Ninguna implementada. El agente solo tiene `set_stage` (cubre `mark_disqualified` con `new_stage="disqualified"`) y `trigger_manychat_flow` (cubre los envíos de media seleccionando el flow vía Build Context con round-robin ponderado). | El modelo del prompt v3 colapsa toda la interacción en estas 2 tools — es una simplificación deliberada que no está reflejada en doc 13. |
 | 8 | Memoria caliente Redis `mem:{tenant}:{subscriber}` con summary (doc 13:139-156) | Memoria conversacional vive en `n8n_chat_histories` (Postgres Chat Memory node de n8n). No hay summary ni nivel caliente Redis. | Si la conversación crece mucho, contexto enviado al LLM crece linealmente. |
 

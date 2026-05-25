@@ -11,10 +11,7 @@
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2.1,
-      "position": [
-        0,
-        112
-      ],
+      "position": [0, 112],
       "webhookId": "02f8dbff-b2ec-4078-9946-a0ae2a064f22",
       "alwaysOutputData": true
     },
@@ -30,10 +27,7 @@
       "name": "Get Stage Config",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "position": [
-        224,
-        16
-      ],
+      "position": [224, 16],
       "alwaysOutputData": true,
       "credentials": {
         "postgres": {
@@ -48,10 +42,7 @@
       "name": "Combine Contexts",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
-      "position": [
-        496,
-        32
-      ]
+      "position": [496, 32]
     },
     {
       "parameters": {
@@ -65,10 +56,7 @@
       "name": "Get Subscriber CRM Context",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "position": [
-        224,
-        208
-      ],
+      "position": [224, 208],
       "alwaysOutputData": true,
       "credentials": {
         "postgres": {
@@ -85,10 +73,7 @@
       "name": "Build Context",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        896,
-        128
-      ]
+      "position": [896, 128]
     },
     {
       "parameters": {
@@ -104,10 +89,7 @@
       "name": "AI Agent",
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 3.1,
-      "position": [
-        1056,
-        64
-      ]
+      "position": [1056, 64]
     },
     {
       "parameters": {
@@ -125,10 +107,7 @@
       "name": "Anthropic Chat Model",
       "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
       "typeVersion": 1.5,
-      "position": [
-        1008,
-        400
-      ],
+      "position": [1008, 400],
       "credentials": {
         "anthropicApi": {
           "id": "CqaNlJsRteqVJlUs",
@@ -145,10 +124,7 @@
       "name": "Postgres Chat Memory",
       "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
       "typeVersion": 1.3,
-      "position": [
-        1104,
-        256
-      ],
+      "position": [1104, 256],
       "credentials": {
         "postgres": {
           "id": "xBbNbntvO0xJs5HM",
@@ -159,7 +135,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO api.lead_crons (\n  tenant_id, subscriber_id, conversation_id, current_stage_id,\n  next_followup_at, next_sequence_number, is_active\n)\nSELECT\n  $1::uuid, $2::uuid, $3::uuid,\n  ls.current_stage_id,\n  NOW() + ft.delay_hours * INTERVAL '1 hour',\n  1,\n  TRUE\nFROM api.lead_stages ls\nLEFT JOIN api.followup_templates ft\n  ON ft.stage_id        = ls.current_stage_id\n  AND ft.sequence_number = 1\n  AND ft.is_active       = TRUE\nWHERE ls.subscriber_id = $2::uuid\n  AND ls.tenant_id     = $1::uuid\nLIMIT 1\nON CONFLICT (tenant_id, subscriber_id, conversation_id) DO UPDATE SET\n  current_stage_id     = EXCLUDED.current_stage_id,\n  next_followup_at     = EXCLUDED.next_followup_at,\n  next_sequence_number = 1,\n  is_active            = TRUE,\n  updated_at           = NOW()",
+        "query": "INSERT INTO api.lead_crons (\n  tenant_id, subscriber_id, conversation_id, current_stage_id,\n  next_followup_at, next_sequence_number, is_active\n)\nSELECT\n  $1::uuid, $2::uuid, $3::uuid,\n  ls.current_stage_id,\n  NOW() + ft.delay_minutes * INTERVAL '1 minute',\n  1,\n  TRUE\nFROM api.lead_stages ls\nLEFT JOIN api.followup_templates ft\n  ON ft.stage_id        = ls.current_stage_id\n  AND ft.sequence_number = 1\n  AND ft.is_active       = TRUE\nWHERE ls.subscriber_id = $2::uuid\n  AND ls.tenant_id     = $1::uuid\nLIMIT 1\nON CONFLICT (tenant_id, subscriber_id, conversation_id) DO UPDATE SET\n  current_stage_id     = EXCLUDED.current_stage_id,\n  next_followup_at     = EXCLUDED.next_followup_at,\n  next_sequence_number = 1,\n  is_active            = TRUE,\n  updated_at           = NOW()",
         "options": {
           "queryReplacement": "={{ $('Build Context').first().json.tenantDbId }},{{ $('Build Context').first().json.subscriberDbId }},{{ $('Build Context').first().json.conversationId }}"
         }
@@ -168,10 +144,7 @@
       "name": "Upsert Lead Cron",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "position": [
-        1712,
-        0
-      ],
+      "position": [1712, 0],
       "credentials": {
         "postgres": {
           "id": "xBbNbntvO0xJs5HM",
@@ -191,10 +164,7 @@
       "name": "Mark Followups Responded",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "position": [
-        1856,
-        160
-      ],
+      "position": [1856, 160],
       "credentials": {
         "postgres": {
           "id": "xBbNbntvO0xJs5HM",
@@ -219,10 +189,7 @@
       },
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [
-        624,
-        112
-      ],
+      "position": [624, 112],
       "id": "8d99c84a-ce35-4921-a5bd-3fafa1a8d40b",
       "name": "System Prompt"
     },
@@ -234,10 +201,7 @@
       },
       "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
       "typeVersion": 1.3,
-      "position": [
-        1184,
-        320
-      ],
+      "position": [1184, 320],
       "id": "69e2e6a5-1d90-4cec-82c9-a79bed05d827",
       "name": "Structured Output Parser"
     },
@@ -251,10 +215,7 @@
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "position": [
-        368,
-        128
-      ],
+      "position": [368, 128],
       "id": "c5fec6d0-cc3b-475e-b366-9bd9cff94907",
       "name": "Get Content History",
       "alwaysOutputData": true,
@@ -292,10 +253,7 @@
       },
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
-      "position": [
-        1488,
-        -96
-      ],
+      "position": [1488, -96],
       "id": "b5366e0d-8ae7-4024-89a9-cbfdb6949350",
       "name": "If"
     },
@@ -309,10 +267,7 @@
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "position": [
-        752,
-        16
-      ],
+      "position": [752, 16],
       "id": "a78caa29-55ad-472e-a2fd-63b2d9f2f2da",
       "name": "Execute a SQL query1",
       "credentials": {
@@ -332,10 +287,7 @@
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "position": [
-        1584,
-        64
-      ],
+      "position": [1584, 64],
       "id": "80c3692f-4a16-4c72-97ee-48ccca050510",
       "name": "lead_content_sent",
       "credentials": {
@@ -347,14 +299,11 @@
     },
     {
       "parameters": {
-        "jsCode": "// ============================================================================\n// ROUTER v4.2 — macros + retry + lookup_stage para contenidos cross-stage.\n// ----------------------------------------------------------------------------\n// Cambios respecto a v4.1:\n//\n//   FIX bug \"MS->B busca audios donde no están\":\n//     - Las macros pueden declarar `lookup_stage` opcional. Si está, el Router\n//       resuelve los slug_id de send_content contra ese stage en vez del\n//       destino de la transición.\n//     - Aplicado a MS->B porque manda audios que viven en stage MS, no en B.\n//     - A->MS sigue sin lookup_stage (destino = MS = donde viven los slugs).\n//\n// Sigue de v4.1: retry de red, fail-loud en errores no transitorios.\n// Sigue de v4: macros con texto del agente (lead_in), no recursión, atomic.\n// ============================================================================\n\n// ---------- 0. Lógica de negocio — macros por transición -------------------\n\n// Las macros pueden referenciar `{lead_in}` que se sustituye en runtime con\n// el campo `lead_in` de la acción change_stage del agente. Si el agente NO\n// emitió lead_in para una transición que tiene macro de texto, la macro\n// usa el fallback_text declarado abajo.\n\nconst TRANSITION_MACROS = {\n  'A->MS': {\n    // lookup_stage: cuando una macro envía send_content, el Router busca el\n    // slug_id en este stage. Si no se declara, se usa el stage destino de\n    // la transición. Aquí no hace falta porque destino = MS = donde viven\n    // los slugs QC_MS_*.\n    after: [\n      { type: 'send_content', slug_id: 'QC_MS_AUDIO_se envia antes de la vsl',     evidence: 'auto: cascada A->MS' },\n      { type: 'send_content', slug_id: 'QC_MS_VIDEO_vsl que demuestra resultados', evidence: 'auto: cascada A->MS' },\n      { type: 'change_stage', new_stage: 'B',                                       evidence: 'auto: contenido core entregado tras 👍 al hook' }\n    ]\n  },\n  'MS->B': {\n    // lookup_stage explícito: la transición va a B pero los contenidos viven\n    // en MS (son los mismos audio/VSL que se mandan en A->MS).\n    lookup_stage: 'MS',\n    after: [\n      { type: 'send_content', slug_id: 'QC_MS_AUDIO_se envia antes de la vsl',     evidence: 'auto: cascada MS->B' },\n      { type: 'send_content', slug_id: 'QC_MS_VIDEO_vsl que demuestra resultados', evidence: 'auto: cascada MS->B' }\n    ]\n  },\n\n  // B -> C: mandar link de Calendly. Frase humana viene del agente.\n  'B->C': {\n    after: [\n      { type: 'reply_text_with_link', source_url: 'calendly_url', fallback_text: 'Aquí tienes, elige el horario que te venga: {link}' }\n    ]\n  },\n\n  // Disqualified desde cualquier origen: despedida con frase del agente.\n  'A->disqualified':  { after: [ { type: 'reply_text_dynamic', fallback_text: 'Vale, no es tu momento. Éxitos.' } ] },\n  'MS->disqualified': { after: [ { type: 'reply_text_dynamic', fallback_text: 'Vale, no es tu momento. Éxitos.' } ] },\n  'B->disqualified':  { after: [ { type: 'reply_text_dynamic', fallback_text: 'Vale, no es tu momento. Éxitos.' } ] },\n  'C->disqualified':  { after: [ { type: 'reply_text_dynamic', fallback_text: 'Vale, no es tu momento. Éxitos.' } ] }\n};\n\n// ---------- 1. Leer inputs --------------------------------------------------\n\nconst ctx = $('Build Context').first().json;\nconst agentOutput = $input.first().json;\nconst plan = (agentOutput && agentOutput.output) ? agentOutput.output : agentOutput;\n\nconst reasoning = plan.reasoning || '';\nconst agentActions = Array.isArray(plan.actions) ? plan.actions.slice() : [];\n\nconst trace = [];\nlet firstSentInsertPayload = null;\nlet currentStage = ctx.currentStage;\n\nconst stageFlowsBySlug = ctx.stageFlowsBySlug || {};\n\n// Mapa de fuentes de URL del tenant para reply_text_with_link.\n// Si en el futuro hay más links (tipo \"buy_link\"), se añaden aquí.\nconst tenantUrls = {\n  calendly_url: (ctx.contextJson && ctx.contextJson.extras && ctx.contextJson.extras.calendly_url) || null\n};\n\n// ---------- 2. Helpers HTTP -------------------------------------------------\n\n// Detecta si un error es transitorio (red, no de aplicación) y vale la pena reintentar.\n// Errores típicos de AWS/ManyChat que aparecen y desaparecen solos.\nfunction isRetryableNetworkError(err) {\n  if (!err) return false;\n  const code = err.code || (err.cause && err.cause.code);\n  const msg = String(err.message || err);\n  const retryableCodes = ['ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'EHOSTUNREACH', 'ENETUNREACH', 'EPIPE'];\n  if (code && retryableCodes.includes(code)) return true;\n  // n8n a veces envuelve el código en el mensaje, lo cazamos por texto también\n  return retryableCodes.some(c => msg.includes(c));\n}\n\n// HTTP responses con códigos que tiene sentido reintentar:\n// 408 (timeout), 429 (rate limit), 502/503/504 (gateway/service unavailable).\nfunction isRetryableHttpStatus(statusCode) {\n  return [408, 429, 502, 503, 504].includes(statusCode);\n}\n\n// Espera ms milisegundos (helper sin dependencias).\nfunction sleep(ms) {\n  return new Promise(resolve => setTimeout(resolve, ms));\n}\n\n// Envuelve una llamada HTTP con retry exponencial. Hasta 3 intentos en total:\n// intento 1, espera 500ms, intento 2, espera 1500ms, intento 3.\n// Solo reintenta errores transitorios. Otros errores se propagan al primer try.\n// Devuelve { response, attempts } donde attempts es cuántos intentos hicieron falta.\nasync function withRetry(fn, label) {\n  const delays = [500, 1500]; // delays entre intentos (2 reintentos máx)\n  let lastErr = null;\n  let lastResponse = null;\n\n  for (let attempt = 1; attempt <= delays.length + 1; attempt++) {\n    try {\n      const response = await fn();\n      // Si responde pero con status retriable, lo tratamos como fallo transitorio.\n      if (response && isRetryableHttpStatus(response.statusCode)) {\n        lastResponse = response;\n        if (attempt <= delays.length) {\n          await sleep(delays[attempt - 1]);\n          continue;\n        }\n        return { response, attempts: attempt, retried: attempt > 1 };\n      }\n      return { response, attempts: attempt, retried: attempt > 1 };\n    } catch (err) {\n      lastErr = err;\n      if (!isRetryableNetworkError(err) || attempt > delays.length) {\n        // Error no transitorio, o ya gastamos los reintentos. Propagar.\n        throw err;\n      }\n      await sleep(delays[attempt - 1]);\n    }\n  }\n\n  // Solo llegamos aquí si todos los intentos devolvieron status retriable\n  // (sin lanzar excepción). Devolvemos el último response para que el caller\n  // decida qué hacer con él (fallar ruidoso).\n  return { response: lastResponse, attempts: delays.length + 1, retried: true };\n}\n\nasync function callManychatFlow(flowNs) {\n  const result = await withRetry(\n    () => this.helpers.httpRequest({\n      method: 'POST',\n      url: 'https://api.manychat.com/fb/sending/sendFlow',\n      headers: { Authorization: `Bearer ${ctx.mcApiKey}`, 'Content-Type': 'application/json' },\n      body: { subscriber_id: ctx.subscriberId, flow_ns: flowNs },\n      json: true,\n      returnFullResponse: true,\n      timeout: 15000 // explícito en lugar del default de n8n (que varía)\n    }),\n    `sendFlow(${flowNs})`\n  );\n  // Anexamos metadata de retry al response para que el trace pueda verla.\n  if (result.response) {\n    result.response.__attempts = result.attempts;\n    result.response.__retried = result.retried;\n  }\n  return result.response;\n}\n\nasync function callManychatText(text) {\n  const result = await withRetry(\n    () => this.helpers.httpRequest({\n      method: 'POST',\n      url: 'https://api.manychat.com/fb/sending/sendContent',\n      headers: { Authorization: `Bearer ${ctx.mcApiKey}`, 'Content-Type': 'application/json' },\n      body: {\n        subscriber_id: ctx.subscriberId,\n        data: { version: 'v2', content: { type: 'instagram', messages: [{ type: 'text', text: text }] } }\n      },\n      json: true,\n      returnFullResponse: true,\n      timeout: 15000\n    }),\n    `sendContent(text)`\n  );\n  if (result.response) {\n    result.response.__attempts = result.attempts;\n    result.response.__retried = result.retried;\n  }\n  return result.response;\n}\n\nasync function callSetStage(newStage, reason, evidence) {\n  const baseUrl = ctx.callbackUrl.replace('/turn-completed', '');\n  return await this.helpers.httpRequest({\n    method: 'POST',\n    url: `${baseUrl}/leads/${ctx.subscriberDbId}/stage`,\n    headers: { Authorization: `Bearer ${ctx.callbackToken}`, 'Content-Type': 'application/json' },\n    body: {\n      new_stage: newStage,\n      reason:    reason   || 'no reason provided',\n      evidence:  evidence || 'no evidence provided',\n      turn_id:   ctx.turnId\n    },\n    json: true,\n    returnFullResponse: true\n  });\n}\n\n// ---------- 3. Resolución de flow_ns ----------------------------------------\n\nfunction resolveFlowNs(slugId, fromMacro, macroToStage) {\n  if (!slugId) return null;\n  if (!fromMacro) {\n    return (ctx.selectedVariants || {})[slugId] || null;\n  }\n  const flowsOfStage = stageFlowsBySlug[macroToStage] || {};\n  return flowsOfStage[slugId] || null;\n}\n\n// ---------- 4. Ejecutores ---------------------------------------------------\n\nasync function execSendContent(action, fromMacro, macroToStage) {\n  const slugId = action.slug_id || null;\n  const directFlowNs = action.flow_ns || null;\n  let flowNs = directFlowNs || resolveFlowNs(slugId, fromMacro, macroToStage);\n\n  if (!flowNs) {\n    const availableSlugs = fromMacro\n      ? Object.keys(stageFlowsBySlug[macroToStage] || {})\n      : Object.keys(ctx.selectedVariants || {});\n    return {\n      type: 'send_content', status: 'error',\n      reason: `No se encontró flow_ns para slug_id=\"${slugId}\" en stage=\"${fromMacro ? macroToStage : currentStage}\"`,\n      slug_id: slugId, lookup_stage: fromMacro ? macroToStage : currentStage, available_slugs: availableSlugs\n    };\n  }\n\n  try {\n    const res = await callManychatFlow.call(this, flowNs);\n    const ok = res.statusCode === 200 && res.body && res.body.status === 'success';\n    if (!ok) {\n      return { type: 'send_content', status: 'error', slug_id: slugId, flow_ns: flowNs, status_code: res.statusCode, api_response: res.body, attempts: res.__attempts, retried: res.__retried, reason: `ManyChat ${res.statusCode}: ${JSON.stringify(res.body)}` };\n    }\n    if (!firstSentInsertPayload) {\n      firstSentInsertPayload = {\n        tenant_id: ctx.tenantDbId, subscriber_id: ctx.subscriberDbId, conversation_id: ctx.conversationId,\n        stage_slug: currentStage, slug_id: slugId, flow_ns: flowNs, turn_id: ctx.turnId\n      };\n    }\n    return { type: 'send_content', status: 'sent', slug_id: slugId, flow_ns: flowNs, evidence: action.evidence, attempts: res.__attempts, retried: res.__retried };\n  } catch (err) {\n    return { type: 'send_content', status: 'error', slug_id: slugId, flow_ns: flowNs, reason: err.message || String(err), api_response: err.response ? err.response.body : null, attempts: 3, retried: true, exhausted: true };\n  }\n}\n\nasync function execChangeStage(action) {\n  if (!action.new_stage) {\n    return { type: 'change_stage', status: 'error', reason: 'missing new_stage' };\n  }\n  try {\n    const res = await callSetStage.call(this, action.new_stage, action.reason, action.evidence);\n    const ok = res.statusCode === 200;\n    if (!ok) {\n      return { type: 'change_stage', status: 'error', from_stage: currentStage, new_stage: action.new_stage, reason: action.reason, evidence: action.evidence, status_code: res.statusCode, api_response: res.body };\n    }\n    const fromStage = currentStage;\n    currentStage = action.new_stage;\n    return { type: 'change_stage', status: 'changed', from_stage: fromStage, new_stage: action.new_stage, reason: action.reason, evidence: action.evidence, api_response: res.body };\n  } catch (err) {\n    return { type: 'change_stage', status: 'error', from_stage: currentStage, new_stage: action.new_stage, reason: err.message || String(err) };\n  }\n}\n\nasync function execReplyText(action) {\n  const text = (action.text || '').trim();\n  if (!text) {\n    return { type: 'reply_text', status: 'skipped', reason: 'empty text' };\n  }\n  try {\n    const res = await callManychatText.call(this, text);\n    const ok = res.statusCode === 200 && res.body && res.body.status === 'success';\n    return { type: 'reply_text', status: ok ? 'sent' : 'error', text: text, api_response: ok ? null : res.body, attempts: res.__attempts, retried: res.__retried };\n  } catch (err) {\n    return { type: 'reply_text', status: 'error', text: text, reason: err.message || String(err), api_response: err.response ? err.response.body : null, attempts: 3, retried: true, exhausted: true };\n  }\n}\n\n// NUEVO v4: combina texto del agente con un URL del contexto.\n// action.source_url   → nombre del campo en tenantUrls (ej: 'calendly_url')\n// action.fallback_text → texto a usar si el agente NO mandó lead_in\n// action.__lead_in    → texto del agente (inyectado por runMacro)\nasync function execReplyTextWithLink(action) {\n  const url = tenantUrls[action.source_url];\n  if (!url) {\n    return {\n      type: 'reply_text_with_link', status: 'error',\n      reason: `Falta URL: tenantUrls[\"${action.source_url}\"] está vacía. Verifica tenant.config.${action.source_url} en DB.`\n    };\n  }\n  const leadIn = (action.__lead_in || '').trim();\n  let text;\n  if (leadIn) {\n    // Si el lead_in ya contiene la URL (porque el agente la metió por error),\n    // no la duplicamos. Si no, la pegamos al final con un espacio.\n    text = leadIn.includes(url) ? leadIn : `${leadIn} ${url}`;\n  } else {\n    text = (action.fallback_text || '{link}').replace('{link}', url);\n  }\n  return await execReplyText.call(this, { text });\n}\n\n// NUEVO v4: usa el texto del agente como reply_text literal.\n// Si no hay lead_in, usa fallback_text.\nasync function execReplyTextDynamic(action) {\n  const leadIn = (action.__lead_in || '').trim();\n  const text = leadIn || action.fallback_text || '';\n  if (!text) {\n    return { type: 'reply_text_dynamic', status: 'error', reason: 'no lead_in y no fallback_text' };\n  }\n  return await execReplyText.call(this, { text });\n}\n\nasync function execAction(action, fromMacro, macroToStage) {\n  switch (action.type) {\n    case 'send_content':         return await execSendContent.call(this, action, fromMacro, macroToStage);\n    case 'change_stage':         return await execChangeStage.call(this, action);\n    case 'reply_text':           return await execReplyText.call(this, action);\n    case 'reply_text_with_link': return await execReplyTextWithLink.call(this, action);\n    case 'reply_text_dynamic':   return await execReplyTextDynamic.call(this, action);\n    default:\n      return { type: action.type || 'unknown', status: 'error', reason: 'unsupported action type' };\n  }\n}\n\n// ---------- 5. Bucle principal ---------------------------------------------\n\nlet step = 0;\nfunction pushTrace(action, result, source) {\n  step++;\n  trace.push({ step, action, result, source });\n}\n\nasync function runMacro(transitionKey, toStage, leadInFromAgent) {\n  const macro = TRANSITION_MACROS[transitionKey];\n  if (!macro || !Array.isArray(macro.after)) return;\n\n  // Si la macro declara lookup_stage, se usa para resolver slugs de send_content\n  // en lugar del stage destino. Útil cuando la macro envía contenidos que\n  // viven en un stage distinto al destino de la transición (ej: MS->B manda\n  // audios que viven en MS).\n  const stageForLookup = macro.lookup_stage || toStage;\n\n  for (const macroActionTemplate of macro.after) {\n    // Clonamos para no mutar la constante TRANSITION_MACROS y le inyectamos\n    // el lead_in del agente — los ejecutores con sufijo _dynamic / _with_link\n    // lo leen de ahí.\n    const macroAction = { ...macroActionTemplate, __lead_in: leadInFromAgent || null };\n\n    const result = await execAction.call(this, macroAction, true, stageForLookup);\n    pushTrace(macroAction, result, `macro:${transitionKey}`);\n\n    const isOk =\n      (macroAction.type === 'send_content'         && result.status === 'sent')    ||\n      (macroAction.type === 'change_stage'         && result.status === 'changed') ||\n      (macroAction.type === 'reply_text'           && result.status === 'sent')    ||\n      (macroAction.type === 'reply_text_with_link' && result.status === 'sent')    ||\n      (macroAction.type === 'reply_text_dynamic'   && result.status === 'sent');\n\n    if (!isOk) {\n      const errorDetail = JSON.stringify({\n        transition: transitionKey, failed_action: macroAction, result: result, trace_so_far: trace\n      }, null, 2);\n      throw new Error(\n        `[Router v4.2] Macro \"${transitionKey}\" falló en la acción ${macroAction.type}` +\n        (macroAction.slug_id ? ` (slug_id=\"${macroAction.slug_id}\")` : '') +\n        `. El workflow se detiene para no avanzar el estado del lead silenciosamente.\\n\\nDetalle:\\n${errorDetail}`\n      );\n    }\n  }\n}\n\n// Procesar acciones del agente\nlet agentTriggeredMacro = false;\nfor (const action of agentActions) {\n  const result = await execAction.call(this, action, false, null);\n  pushTrace(action, result, 'agent');\n\n  if (\n    action.type === 'change_stage' &&\n    result.status === 'changed' &&\n    !agentTriggeredMacro\n  ) {\n    const key = `${result.from_stage}->${result.new_stage}`;\n    if (TRANSITION_MACROS[key]) {\n      agentTriggeredMacro = true;\n      // El lead_in del agente (si lo emitió) se pasa a runMacro para que\n      // los ejecutores _dynamic / _with_link puedan usarlo.\n      await runMacro.call(this, key, result.new_stage, action.lead_in);\n    }\n  }\n}\n\n// ---------- 6. Output -------------------------------------------------------\n\nreturn [{\n  json: {\n    plan: { reasoning, actions: agentActions },\n    trace: trace,\n    insert_content_sent: firstSentInsertPayload,\n    subscriberDbId: ctx.subscriberDbId,\n    conversationId: ctx.conversationId,\n    turnId: ctx.turnId,\n    callbackUrl: ctx.callbackUrl,\n    callbackToken: ctx.callbackToken,\n    finalStage: currentStage\n  }\n}];"
+        "jsCode": "// ============================================================================\n// ROUTER v4.5 — timeout callManychatFlow/callManychatText: 15 000 ms → 30 000 ms.\n// ============================================================================\n\nconst TRANSITION_MACROS = {\n  'A->MS': {\n    after: [\n      { type: 'send_content', slug_id: 'QC_MS_AUDIO_se envia antes de la vsl',     evidence: 'auto: cascada A->MS' },\n      { type: 'send_content', slug_id: 'QC_MS_VIDEO_vsl que demuestra resultados', evidence: 'auto: cascada A->MS' },\n      { type: 'change_stage', new_stage: 'B',                                       evidence: 'auto: contenido core entregado tras 👍 al hook' }\n    ]\n  },\n  'MS->B': {\n    lookup_stage: 'MS',\n    after: [\n      { type: 'send_content', slug_id: 'QC_MS_AUDIO_se envia antes de la vsl',     evidence: 'auto: cascada MS->B' },\n      { type: 'send_content', slug_id: 'QC_MS_VIDEO_vsl que demuestra resultados', evidence: 'auto: cascada MS->B' }\n    ]\n  },\n  'B->C': {\n    after: [\n      { type: 'reply_text_with_link', source_url: 'calendly_url', fallback_text: 'Aquí tienes, elige el horario que te venga: {link}' }\n    ]\n  },\n  'A->disqualified':  { after: [ { type: 'reply_text_dynamic', fallback_text: 'Vale, no es tu momento. Éxitos.' } ] },\n  'MS->disqualified': { after: [ { type: 'reply_text_dynamic', fallback_text: 'Vale, no es tu momento. Éxitos.' } ] },\n  'B->disqualified':  { after: [ { type: 'reply_text_dynamic', fallback_text: 'Vale, no es tu momento. Éxitos.' } ] },\n  'C->disqualified':  { after: [ { type: 'reply_text_dynamic', fallback_text: 'Vale, no es tu momento. Éxitos.' } ] }\n};\n\n// ---------- 1. Leer inputs --------------------------------------------------\n\nconst ctx = $('Build Context').first().json;\nconst agentOutput = $input.first().json;\nconst plan = (agentOutput && agentOutput.output) ? agentOutput.output : agentOutput;\n\nconst reasoning = plan.reasoning || '';\nconst agentActions = Array.isArray(plan.actions) ? plan.actions.slice() : [];\n\nconst trace = [];\nlet firstSentInsertPayload = null;\nlet currentStage = ctx.currentStage;\n\nconst stageFlowsBySlug = ctx.stageFlowsBySlug || {};\n\nconst tenantUrls = {\n  calendly_url: (ctx.contextJson && ctx.contextJson.extras && ctx.contextJson.extras.calendly_url) || null\n};\n\n// ---------- 2. Helpers HTTP -------------------------------------------------\n\nfunction isRetryableNetworkError(err) {\n  if (!err) return false;\n  const code = err.code || (err.cause && err.cause.code);\n  const msg = String(err.message || err);\n  const retryableCodes = ['ETIMEDOUT', 'ECONNABORTED', 'ECONNRESET', 'ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'EHOSTUNREACH', 'ENETUNREACH', 'EPIPE'];\n  if (code && retryableCodes.includes(code)) return true;\n  return retryableCodes.some(c => msg.includes(c));\n}\n\nfunction isRetryableHttpStatus(statusCode) {\n  return [408, 429, 502, 503, 504].includes(statusCode);\n}\n\nfunction sleep(ms) {\n  return new Promise(resolve => setTimeout(resolve, ms));\n}\n\nasync function withRetry(fn, label) {\n  const delays = [500, 1500];\n  let lastErr = null;\n  let lastResponse = null;\n\n  for (let attempt = 1; attempt <= delays.length + 1; attempt++) {\n    try {\n      const response = await fn();\n      if (response && isRetryableHttpStatus(response.statusCode)) {\n        lastResponse = response;\n        if (attempt <= delays.length) { await sleep(delays[attempt - 1]); continue; }\n        return { response, attempts: attempt, retried: attempt > 1 };\n      }\n      return { response, attempts: attempt, retried: attempt > 1 };\n    } catch (err) {\n      lastErr = err;\n      const shouldRetry = isRetryableNetworkError(err) && attempt <= delays.length;\n      if (!shouldRetry) {\n        err.__attempts = attempt;\n        err.__retried = attempt > 1;\n        throw err;\n      }\n      await sleep(delays[attempt - 1]);\n    }\n  }\n  if (lastErr) {\n    lastErr.__attempts = delays.length + 1;\n    lastErr.__retried = true;\n    throw lastErr;\n  }\n  return { response: lastResponse, attempts: delays.length + 1, retried: true };\n}\n\nasync function callManychatFlow(flowNs) {\n  const result = await withRetry(\n    () => this.helpers.httpRequest({\n      method: 'POST',\n      url: 'https://api.manychat.com/fb/sending/sendFlow',\n      headers: { Authorization: `Bearer ${ctx.mcApiKey}`, 'Content-Type': 'application/json' },\n      body: { subscriber_id: ctx.subscriberId, flow_ns: flowNs },\n      json: true, returnFullResponse: true, timeout: 30000\n    }),\n    `sendFlow(${flowNs})`\n  );\n  if (result.response) { result.response.__attempts = result.attempts; result.response.__retried = result.retried; }\n  return result.response;\n}\n\nasync function callManychatText(text) {\n  const result = await withRetry(\n    () => this.helpers.httpRequest({\n      method: 'POST',\n      url: 'https://api.manychat.com/fb/sending/sendContent',\n      headers: { Authorization: `Bearer ${ctx.mcApiKey}`, 'Content-Type': 'application/json' },\n      body: {\n        subscriber_id: ctx.subscriberId,\n        data: { version: 'v2', content: { type: 'instagram', messages: [{ type: 'text', text }] } }\n      },\n      json: true, returnFullResponse: true, timeout: 30000\n    }),\n    `sendContent(text)`\n  );\n  if (result.response) { result.response.__attempts = result.attempts; result.response.__retried = result.retried; }\n  return result.response;\n}\n\nasync function callSetStage(newStage, reason, evidence) {\n  const baseUrl = ctx.callbackUrl.replace('/turn-completed', '');\n  return await this.helpers.httpRequest({\n    method: 'POST',\n    url: `${baseUrl}/leads/${ctx.subscriberDbId}/stage`,\n    headers: { Authorization: `Bearer ${ctx.callbackToken}`, 'Content-Type': 'application/json' },\n    body: { new_stage: newStage, reason: reason || 'no reason provided', evidence: evidence || 'no evidence provided', turn_id: ctx.turnId },\n    json: true, returnFullResponse: true\n  });\n}\n\n// ---------- 3. Resolución de flow_ns ----------------------------------------\n\nfunction resolveFlowNs(slugId, fromMacro, macroToStage) {\n  if (!slugId) return null;\n  if (!fromMacro) return (ctx.selectedVariants || {})[slugId] || null;\n  const flowsOfStage = stageFlowsBySlug[macroToStage] || {};\n  return flowsOfStage[slugId] || null;\n}\n\n// ---------- 4. Ejecutores ---------------------------------------------------\n\nasync function execSendContent(action, fromMacro, macroToStage) {\n  const slugId = action.slug_id || null;\n  const directFlowNs = action.flow_ns || null;\n  let flowNs = directFlowNs || resolveFlowNs(slugId, fromMacro, macroToStage);\n\n  if (!flowNs) {\n    const availableSlugs = fromMacro\n      ? Object.keys(stageFlowsBySlug[macroToStage] || {})\n      : Object.keys(ctx.selectedVariants || {});\n    return { type: 'send_content', status: 'error', reason: `No se encontró flow_ns para slug_id=\"${slugId}\" en stage=\"${fromMacro ? macroToStage : currentStage}\"`, slug_id: slugId, lookup_stage: fromMacro ? macroToStage : currentStage, available_slugs: availableSlugs };\n  }\n\n  try {\n    const res = await callManychatFlow.call(this, flowNs);\n    const ok = res.statusCode === 200 && res.body && res.body.status === 'success';\n    if (!ok) return { type: 'send_content', status: 'error', slug_id: slugId, flow_ns: flowNs, status_code: res.statusCode, api_response: res.body, attempts: res.__attempts, retried: res.__retried, reason: `ManyChat ${res.statusCode}: ${JSON.stringify(res.body)}` };\n    if (!firstSentInsertPayload) {\n      firstSentInsertPayload = { tenant_id: ctx.tenantDbId, subscriber_id: ctx.subscriberDbId, conversation_id: ctx.conversationId, stage_slug: currentStage, slug_id: slugId, flow_ns: flowNs, turn_id: ctx.turnId };\n    }\n    return { type: 'send_content', status: 'sent', slug_id: slugId, flow_ns: flowNs, evidence: action.evidence, attempts: res.__attempts, retried: res.__retried };\n  } catch (err) {\n    return { type: 'send_content', status: 'error', slug_id: slugId, flow_ns: flowNs, reason: err.message || String(err), api_response: err.response ? err.response.body : null, attempts: err.__attempts || 1, retried: err.__retried || false, exhausted: true };\n  }\n}\n\nasync function execChangeStage(action) {\n  if (!action.new_stage) return { type: 'change_stage', status: 'error', reason: 'missing new_stage' };\n  try {\n    const res = await callSetStage.call(this, action.new_stage, action.reason, action.evidence);\n    const ok = res.statusCode === 200;\n    if (!ok) return { type: 'change_stage', status: 'error', from_stage: currentStage, new_stage: action.new_stage, reason: action.reason, evidence: action.evidence, status_code: res.statusCode, api_response: res.body };\n    const fromStage = currentStage;\n    currentStage = action.new_stage;\n    return { type: 'change_stage', status: 'changed', from_stage: fromStage, new_stage: action.new_stage, reason: action.reason, evidence: action.evidence, api_response: res.body };\n  } catch (err) {\n    return { type: 'change_stage', status: 'error', from_stage: currentStage, new_stage: action.new_stage, reason: err.message || String(err) };\n  }\n}\n\nasync function execReplyText(action) {\n  const text = (action.text || '').trim();\n  if (!text) return { type: 'reply_text', status: 'skipped', reason: 'empty text' };\n  try {\n    const res = await callManychatText.call(this, text);\n    const ok = res.statusCode === 200 && res.body && res.body.status === 'success';\n    return { type: 'reply_text', status: ok ? 'sent' : 'error', text, api_response: ok ? null : res.body, attempts: res.__attempts, retried: res.__retried };\n  } catch (err) {\n    return { type: 'reply_text', status: 'error', text, reason: err.message || String(err), api_response: err.response ? err.response.body : null, attempts: 3, retried: true, exhausted: true };\n  }\n}\n\nasync function execReplyTextWithLink(action) {\n  const url = tenantUrls[action.source_url];\n  if (!url) return { type: 'reply_text_with_link', status: 'error', reason: `Falta URL: tenantUrls[\"${action.source_url}\"] está vacía.` };\n  const leadIn = (action.__lead_in || '').trim();\n  let text;\n  if (leadIn) {\n    text = leadIn.includes(url) ? leadIn : `${leadIn} ${url}`;\n  } else {\n    text = (action.fallback_text || '{link}').replace('{link}', url);\n  }\n  return await execReplyText.call(this, { text });\n}\n\nasync function execReplyTextDynamic(action) {\n  const leadIn = (action.__lead_in || '').trim();\n  const text = leadIn || action.fallback_text || '';\n  if (!text) return { type: 'reply_text_dynamic', status: 'error', reason: 'no lead_in y no fallback_text' };\n  return await execReplyText.call(this, { text });\n}\n\nasync function execAction(action, fromMacro, macroToStage) {\n  switch (action.type) {\n    case 'send_content':         return await execSendContent.call(this, action, fromMacro, macroToStage);\n    case 'change_stage':         return await execChangeStage.call(this, action);\n    case 'reply_text':           return await execReplyText.call(this, action);\n    case 'reply_text_with_link': return await execReplyTextWithLink.call(this, action);\n    case 'reply_text_dynamic':   return await execReplyTextDynamic.call(this, action);\n    default: return { type: action.type || 'unknown', status: 'error', reason: 'unsupported action type' };\n  }\n}\n\n// ---------- 5. Bucle principal ---------------------------------------------\n\nlet step = 0;\nfunction pushTrace(action, result, source) {\n  step++;\n  trace.push({ step, action, result, source });\n}\n\nasync function runMacro(transitionKey, toStage, leadInFromAgent) {\n  const macro = TRANSITION_MACROS[transitionKey];\n  if (!macro || !Array.isArray(macro.after)) return;\n\n  const stageForLookup = macro.lookup_stage || toStage;\n\n  for (const macroActionTemplate of macro.after) {\n    const macroAction = { ...macroActionTemplate, __lead_in: leadInFromAgent || null };\n    const result = await execAction.call(this, macroAction, true, stageForLookup);\n    pushTrace(macroAction, result, `macro:${transitionKey}`);\n\n    const isOk =\n      (macroAction.type === 'send_content'         && result.status === 'sent')    ||\n      (macroAction.type === 'change_stage'         && result.status === 'changed') ||\n      (macroAction.type === 'reply_text'           && result.status === 'sent')    ||\n      (macroAction.type === 'reply_text_with_link' && result.status === 'sent')    ||\n      (macroAction.type === 'reply_text_dynamic'   && result.status === 'sent');\n\n    if (!isOk) {\n      const errorDetail = JSON.stringify({ transition: transitionKey, failed_action: macroAction, result, trace_so_far: trace }, null, 2);\n      throw new Error(\n        `[Router v4.4] Macro \"${transitionKey}\" falló en la acción ${macroAction.type}` +\n        (macroAction.slug_id ? ` (slug_id=\"${macroAction.slug_id}\")` : '') +\n        `. El workflow se detiene para no avanzar el estado del lead silenciosamente.\\n\\nDetalle:\\n${errorDetail}`\n      );\n    }\n  }\n}\n\nlet agentTriggeredMacro = false;\nfor (const action of agentActions) {\n  const result = await execAction.call(this, action, false, null);\n  pushTrace(action, result, 'agent');\n\n  if (action.type === 'change_stage' && result.status === 'changed' && !agentTriggeredMacro) {\n    const key = `${result.from_stage}->${result.new_stage}`;\n    if (TRANSITION_MACROS[key]) {\n      agentTriggeredMacro = true;\n      await runMacro.call(this, key, result.new_stage, action.lead_in);\n    }\n  }\n}\n\n// ---------- 6. Output -------------------------------------------------------\n\nreturn [{\n  json: JSON.parse(JSON.stringify({\n    plan: { reasoning, actions: agentActions },\n    trace: trace,\n    insert_content_sent: firstSentInsertPayload,\n    subscriberDbId: ctx.subscriberDbId,\n    conversationId: ctx.conversationId,\n    turnId: ctx.turnId,\n    callbackUrl: ctx.callbackUrl,\n    callbackToken: ctx.callbackToken,\n    finalStage: currentStage\n  }))\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        1312,
-        -64
-      ],
+      "position": [1312, -64],
       "id": "a9b48fbf-c59b-4b79-ae0c-353ca6128627",
       "name": "Router"
     },
@@ -366,10 +315,7 @@
       "name": "Code in JavaScript",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        2016,
-        16
-      ]
+      "position": [2016, 16]
     },
     {
       "parameters": {
@@ -407,10 +353,7 @@
       "name": "Callback",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
-      "position": [
-        2160,
-        176
-      ]
+      "position": [2160, 176]
     }
   ],
   "pinData": {
@@ -420,7 +363,7 @@
           "headers": {
             "host": "paneln8n.revolicord.com",
             "user-agent": "node",
-            "content-length": "2935",
+            "content-length": "2934",
             "accept": "*/*",
             "accept-encoding": "br, gzip, deflate",
             "accept-language": "*",
@@ -438,7 +381,7 @@
           "query": {},
           "body": {
             "schema_version": "v1",
-            "turn_id": "0120c9bb-5d5f-4408-8f38-e2fc0594a067",
+            "turn_id": "a0048e2c-3890-4018-9362-792b1c8031bd",
             "callback_url": "https://api.revolicord.com/admin/turn-completed",
             "callback_token": "c37a1bb5741c19a484203b7f691fd445e92410e46d934c82c6170b5734acaa80",
             "tenant": {
@@ -457,35 +400,35 @@
               }
             },
             "subscriber": {
-              "id": "cd4a18b6-7ebb-48c2-9f98-487789d7dac7",
+              "id": "1cca1d35-677f-4f24-9751-d430d9c5a8eb",
               "manychat_subscriber_id": "1724803790",
               "ig_user_id": null,
               "ig_username": "ingenieroenia",
               "display_name": "AI Engineer",
               "locale": null,
               "metadata": {},
-              "lead_stage": "MS"
+              "lead_stage": "A"
             },
             "conversation": {
-              "id": "a23c69f0-6399-4b34-9b19-bda4f5836695",
-              "opened_at": "2026-05-22T00:12:53.373Z"
+              "id": "b4b5f641-3117-44ba-8898-6c9f5ef5b495",
+              "opened_at": "2026-05-22T19:20:32.787Z"
             },
             "instagram_context": {
               "opt_in": "1",
               "verified": "",
-              "last_seen": "2026-05-22 00:40:16.964656",
+              "last_seen": "2026-05-22 19:22:13.381444",
               "follows_you": "",
               "followers_count": "0",
-              "last_interaction": "2026-05-22 00:40:16.964656",
+              "last_interaction": "2026-05-22 19:22:13.381444",
               "messaging_window": "{{ig_messaging_window}}"
             },
             "messages": [
               {
-                "id": "9df768e0-c127-430e-8e22-9b41342aa819",
-                "external_message_id": "1724803790_revolicord_1779410417222",
+                "id": "3c6af482-86ed-40b2-990c-04f1331deebf",
+                "external_message_id": "1724803790_revolicord_1779477733723",
                 "text": "👍",
                 "reply_type": "{{last_reply_type}}",
-                "ts": 1779410417240,
+                "ts": 1779477733762,
                 "media_urls": []
               }
             ],
@@ -726,7 +669,7 @@
     "binaryMode": "separate",
     "availableInMCP": false
   },
-  "versionId": "772952d9-71e4-4119-b3f5-889de9e84985",
+  "versionId": "a28bd848-7a27-4b72-a04f-542f01f58d23",
   "meta": {
     "aiBuilderAssisted": true,
     "builderVariant": "mcp",

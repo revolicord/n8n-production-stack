@@ -276,7 +276,7 @@ Si los slugs no coinciden con `'A'`, `'MS'`, `'B'`, `'C'`, `'D'`, **parar** y ab
 
 1. **`first_seen_at` vs primera transición:** un subscriber puede crearse pero no entrar a etapa A inmediatamente. En la práctica, el flow del repo crea ambos casi a la vez. Si hay desfase notable, ajustar a `stage_transitions WHERE to_stage='A'`.
 
-2. **MS no es un cambio de etapa sino un evento de contenido:** por eso usamos `lead_content_sent` y no `stage_transitions WHERE to_stage='MS'`. Confirmar que ese es el modelo del repo (revisar `n8n/stages.md`).
+2. **MS no es un cambio de etapa sino un evento de contenido:** por eso usamos `lead_content_sent` y no `stage_transitions WHERE to_stage='MS'`. Confirmar que ese es el modelo del repo (revisar `docs/n8n/stages.md`).
 
 3. **Backfill:** si hay subscribers viejos sin `stage_transitions`, los conteos pueden ser inconsistentes. El seed debería garantizar coherencia. Si no, abrir issue.
 

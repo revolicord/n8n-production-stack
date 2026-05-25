@@ -110,7 +110,7 @@ El nodo 06 (Switch por tipo) añade una rama `content` que construye el payload 
 
 - ADR-0015: Sistema de Follow-ups por Etapa (tabla padre `followup_templates`)
 - ADR-0003: Almacenamiento MinIO (configuración del servicio Docker)
-- `n8n/workflows/followup-runner/07c-send-content-messages.md` — instrucciones de implementación del nodo n8n
+- `docs/n8n/workflows/followup-runner/07c-send-content-messages.md` — instrucciones de implementación del nodo n8n
 
 ---
 

@@ -5,7 +5,7 @@
 
 > **Propósito:** Documentar cada tool/integración que el agente puede invocar, su contrato y cuándo se usa.
 >
-> **Implementación viva:** el contrato real está en `n8n/nodes/02-ai-agent.md` (JSON Schemas + JS) y en las rutas Fastify (`apps/api/src/routes/`).
+> **Implementación viva:** el contrato real está en `docs/n8n/nodes/02-ai-agent.md` (JSON Schemas + JS) y en las rutas Fastify (`apps/api/src/routes/`).
 
 ---
 

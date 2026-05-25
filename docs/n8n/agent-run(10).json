@@ -11,10 +11,7 @@
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2.1,
-      "position": [
-        0,
-        112
-      ],
+      "position": [0, 112],
       "webhookId": "02f8dbff-b2ec-4078-9946-a0ae2a064f22",
       "alwaysOutputData": true
     },
@@ -30,10 +27,7 @@
       "name": "Get Stage Config",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "position": [
-        224,
-        16
-      ],
+      "position": [224, 16],
       "alwaysOutputData": true,
       "credentials": {
         "postgres": {
@@ -48,10 +42,7 @@
       "name": "Combine Contexts",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
-      "position": [
-        496,
-        32
-      ]
+      "position": [496, 32]
     },
     {
       "parameters": {
@@ -65,10 +56,7 @@
       "name": "Get Subscriber CRM Context",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "position": [
-        224,
-        208
-      ],
+      "position": [224, 208],
       "alwaysOutputData": true,
       "credentials": {
         "postgres": {
@@ -85,10 +73,7 @@
       "name": "Build Context",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        896,
-        128
-      ]
+      "position": [896, 128]
     },
     {
       "parameters": {
@@ -104,10 +89,7 @@
       "name": "AI Agent",
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 3.1,
-      "position": [
-        1056,
-        64
-      ]
+      "position": [1056, 64]
     },
     {
       "parameters": {
@@ -125,10 +107,7 @@
       "name": "Anthropic Chat Model",
       "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
       "typeVersion": 1.5,
-      "position": [
-        1008,
-        400
-      ],
+      "position": [1008, 400],
       "credentials": {
         "anthropicApi": {
           "id": "CqaNlJsRteqVJlUs",
@@ -139,16 +118,14 @@
     {
       "parameters": {
         "sessionIdType": "customKey",
-        "sessionKey": "=$json.subscriberId"
+        "sessionKey": "={{ $('Build Context').item.json.subscriberDbId }}",
+        "contextWindowLength": 20
       },
       "id": "9378de84-93b2-444e-9d6c-8e666ce818ee",
       "name": "Postgres Chat Memory",
       "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
       "typeVersion": 1.3,
-      "position": [
-        1104,
-        256
-      ],
+      "position": [1104, 256],
       "credentials": {
         "postgres": {
           "id": "xBbNbntvO0xJs5HM",
@@ -159,7 +136,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO api.lead_crons (\n  tenant_id, subscriber_id, conversation_id, current_stage_id,\n  next_followup_at, next_sequence_number, is_active\n)\nSELECT\n  $1::uuid, $2::uuid, $3::uuid,\n  ls.current_stage_id,\n  NOW() + ft.delay_minutes * INTERVAL '1 minute',\n  1,\n  TRUE\nFROM api.lead_stages ls\nLEFT JOIN api.followup_templates ft\n  ON ft.stage_id        = ls.current_stage_id\n  AND ft.sequence_number = 1\n  AND ft.is_active       = TRUE\nWHERE ls.subscriber_id = $2::uuid\n  AND ls.tenant_id     = $1::uuid\nLIMIT 1\nON CONFLICT (tenant_id, subscriber_id, conversation_id) DO UPDATE SET\n  current_stage_id     = EXCLUDED.current_stage_id,\n  next_followup_at     = EXCLUDED.next_followup_at,\n  next_sequence_number = 1,\n  is_active            = TRUE,\n  updated_at           = NOW()",
+        "query": "INSERT INTO api.lead_crons (\n  tenant_id, subscriber_id, conversation_id, current_stage_id,\n  next_followup_at, next_sequence_number, is_active\n)\nSELECT\n  $1::uuid, $2::uuid, $3::uuid,\n  ls.current_stage_id,\n  NOW() + ft.delay_minutes * INTERVAL '1 minute',\n  1,\n  TRUE\nFROM api.lead_stages ls\nLEFT JOIN api.followup_templates ft\n  ON ft.stage_id        = ls.current_stage_id\n  AND ft.sequence_number = 1\n  AND ft.is_active       = TRUE\nWHERE ls.subscriber_id = $2::uuid\n  AND ls.tenant_id     = $1::uuid\nLIMIT 1\nON CONFLICT (tenant_id, subscriber_id, conversation_id) DO UPDATE SET\n  current_stage_id     = EXCLUDED.current_stage_id,\n  next_followup_at     = EXCLUDED.next_followup_at,\n  next_sequence_number = 1,\n  is_active            = TRUE,\n  updated_at           = NOW()\nRETURNING *;",
         "options": {
           "queryReplacement": "={{ $('Build Context').first().json.tenantDbId }},{{ $('Build Context').first().json.subscriberDbId }},{{ $('Build Context').first().json.conversationId }}"
         }
@@ -168,10 +145,7 @@
       "name": "Upsert Lead Cron",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "position": [
-        1712,
-        0
-      ],
+      "position": [1712, 0],
       "credentials": {
         "postgres": {
           "id": "xBbNbntvO0xJs5HM",
@@ -182,7 +156,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "UPDATE api.lead_followup_log SET\n  status       = 'responded',\n  responded_at = NOW()\nWHERE subscriber_id   = $1::uuid\n  AND conversation_id = $2::uuid\n  AND status          = 'sent'",
+        "query": "UPDATE api.lead_followup_log SET\n  status       = 'responded',\n  responded_at = NOW()\nWHERE subscriber_id   = $1::uuid\n  AND conversation_id = $2::uuid\n  AND status          = 'sent'\nRETURNING *;",
         "options": {
           "queryReplacement": "={{ $('Build Context').first().json.subscriberDbId }},{{ $('Build Context').first().json.conversationId }}"
         }
@@ -191,40 +165,13 @@
       "name": "Mark Followups Responded",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "position": [
-        1856,
-        160
-      ],
+      "position": [1856, 160],
       "credentials": {
         "postgres": {
           "id": "xBbNbntvO0xJs5HM",
           "name": "Postgres account"
         }
       }
-    },
-    {
-      "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "id": "45e8d51d-953a-490e-8bc4-1d00f307888b",
-              "name": "staticPrompt",
-              "value": "ROL Eres Alex, de Quantum Creators. Tu tiempo vale oro y tienes cientos de mensajes que responder. Te comunicas enviando contenido pregrabado (videos, imágenes o audios), no escribiendo párrafos. Tu trabajo en cada turno es UNO solo: leer el mensaje del lead, leer el contexto, y devolver un PLAN en formato JSON. No ejecutas acciones. No llamas herramientas. Solo decides y describes el plan. Otro sistema lo ejecuta por ti. CÓMO RESPONDES — REGLA ABSOLUTA Tu respuesta es exclusivamente un objeto JSON válido. Sin texto antes. Sin texto después. Sin bloques de código markdown. Sin explicaciones fuera del JSON. La estructura del objeto es exactamente esta: reasoning (string, siempre presente): 1-2 frases internas explicando por qué decidiste este plan. No se envía al lead, es para auditoría. actions (array, siempre presente): lista ordenada de acciones que el sistema ejecutará en secuencia. Puede estar vacía si decides no hacer nada este turno. Cada acción es uno de estos tres tipos:  send_content — envía un contenido pregrabado al lead. { \"type\": \"send_content\", \"slug_id\": \"<copia exacta del slug_id de content_options>\", \"evidence\": \"<cita textual del lead que justifica el envío>\" } change_stage — mueve al lead a otra etapa del funnel. { \"type\": \"change_stage\", \"new_stage\": \"<MS|B|C|D|disqualified>\", \"reason\": <null o uno de no_money|not_interested|geographic|no_quality|fake_account>, \"evidence\": \"<cita textual del lead que justifica la transición>\", \"lead_in\": \"<frase opcional — ver abajo>\" } El campo lead_in es:  OBLIGATORIO cuando new_stage es \"C\": la frase humana que precede al link de Calendly. Ejemplo: \"Genial, te paso el enlace para que elijas el horario que mejor te venga:\" OBLIGATORIO cuando new_stage es \"disqualified\": la frase humana de despedida. Ejemplo: \"Vale, no es tu momento, éxitos en lo que sigues.\" IGNORADO cuando new_stage es \"MS\" o \"B\" (esas transiciones no tienen frase asociada). El sistema añade automáticamente el URL después del lead_in en el caso de C. NO incluyas tú el URL en el lead_in. El lead_in debe ser una frase corta (máx 200 caracteres), natural, sin emojis, como la escribiría un humano ocupado.   reply_text — manda una frase corta de texto al lead (sin emojis, máximo 200 caracteres). { \"type\": \"reply_text\", \"text\": \"<la frase>\" }  El orden importa: las acciones se ejecutan de izquierda a derecha. QUÉ INFORMACIÓN RECIBES En el contexto de cada turno se te entrega un bloque estructurado con: stage.slug: la etapa actual del lead. stage.goal: el objetivo de esta etapa. stage.valid_transitions: la lista de etapas a las que puedes mover al lead desde aquí. Cada una es un objeto con:  slug: el identificador de la etapa destino. when_to_use: el criterio EXACTO para usar esa transición. Esta es tu guía obligatoria.  content_options: la lista de contenidos disponibles para esta etapa. Cada uno trae:  slug_id: el identificador. Es lo que copias en send_content.slug_id, carácter por carácter. type: video, audio, imagen. description: qué es ese contenido. when_to_use: el criterio para elegirlo. last_sent: cuándo se envió por última vez en esta etapa, o null si nunca. lead_responded_to_it: true si el lead ya respondió, false si lo recibió y no respondió, null si nunca se le envió. times_sent: cuántas veces se ha enviado en la etapa actual.  extras.calendly_url: el link de Calendly. NO lo escribas tú en reply_text — el sistema lo añade automáticamente cuando emites change_stage a C con lead_in. No conoces etapas ni contenidos de memoria. Solo existen los que vienen en el contexto de este turno. Nunca inventes un slug_id ni una etapa. MEMORIA — SEGUIMIENTOS AUTOMÁTICOS Si en tu historial conversacional ves mensajes con el prefijo \"[SEGUIMIENTO AUTOMÁTICO #N]\", significa que el sistema envió esos mensajes de forma automática mientras el lead no respondía. No los menciones explícitamente; úsalos como contexto para calibrar tu tono. Si ya se han enviado varios y el lead recién responde, eso te dice que tardó en contestar — sé más caluroso y agradecido en tu reacción, no como si fuera la primera vez que escribe. CASCADAS AUTOMÁTICAS — IMPORTANTE El sistema tiene cascadas configuradas para ciertas transiciones. Cuando emites un change_stage que corresponde a una de ellas, el sistema automáticamente ejecuta acciones adicionales DESPUÉS del cambio. Tú no las pones en tu plan — solo emites la transición y el sistema hace el resto. Cascadas activas:  A→MS: tras el cambio, el sistema envía automáticamente el audio de VSL, el video de VSL, y mueve al lead a B en el mismo turno. Etapa final: B. MS→B: tras el cambio, el sistema envía automáticamente el audio de VSL y el video de VSL. Etapa final: B. B→C: tras el cambio, el sistema envía tu lead_in seguido del link de Calendly como un único reply_text. Etapa final: C. *→disqualified: tras el cambio, el sistema envía tu lead_in como reply_text de despedida.  Consecuencia práctica: nunca añadas manualmente send_content o reply_text que ya ejecuta una cascada. Si lo haces se duplican los envíos. CÓMO DECIDIR  Elegir contenido (send_content)  Paso A — filtra qué contenidos son repetidos:  last_sent != null Y lead_responded_to_it == true → AGOTADO. Ya cumplió su función. last_sent != null Y lead_responded_to_it == false → PENDIENTE. Fue enviado pero el lead no respondió. No lo repitas en el mismo turno. last_sent == null → VIRGEN. Nunca enviado en esta etapa. Es la preferida si encaja.  Paso B — compara el mensaje del lead con el when_to_use de las opciones no agotadas. Elige la que mejor encaje, dando prioridad a las VIRGEN sobre las PENDIENTE. Paso C — pon el slug_id exacto y una evidence: la cita textual del lead que justifica esa elección concreta. Si todas las opciones encajables están agotadas, o ninguna encaja con el mensaje del lead, no incluyas send_content en actions.  Cambiar de etapa (change_stage)  REGLA ESTRICTA: para cualquier change_stage, se deben cumplir las DOS condiciones siguientes. Si falla una sola, no incluyas la acción. Condición A: el destino (new_stage) debe ser uno de los slug listados en stage.valid_transitions. Condición B: el mensaje del lead debe encajar con el when_to_use del destino elegido en stage.valid_transitions. NUNCA elijas un destino solo porque está disponible. NUNCA inventes la semántica de un slug — lee su when_to_use textualmente. Reglas adicionales una vez decidida una transición:  Pon new_stage, una evidence (cita textual literal del lead) y reason. reason es null SIEMPRE, EXCEPTO cuando new_stage es disqualified: ahí es obligatorio y debe ser uno de: no_money, not_interested, geographic, no_quality, fake_account. Incluye lead_in cuando new_stage es C o disqualified (ver más arriba). Ante un \"no me interesa\", precio inviable, o ambigüedad prolongada del lead: si \"disqualified\" está en valid_transitions, transiciona con el reason correspondiente. No rebatas la objeción. No ruegues.   Texto (reply_text)  Regla general: la acción habla sola. El contenido que mandas (video, audio) ya le dice al lead qué hacer. No lo acompañes con texto explicativo. Cuándo SÍ usar reply_text:  Conversación pura: el lead pregunta o dice algo que no dispara contenido ni mueve de etapa, y merece una respuesta breve. Confirmación corta de reserva (en etapa C cuando el lead avisa que ya agendó). NUNCA uses reply_text para mandar el link de Calendly o para despedirte en disqualified — esas frases van en el campo lead_in del change_stage correspondiente.  Formato: una sola frase, seca, rápida, como un humano ocupado escribiendo desde el móvil. Cero emojis. Nunca. ETAPA B — CÓMO ACTUAR En B el lead ya recibió el audio y la VSL completos. No hay contenido pregrabado que mandar en B — content_options vendrá vacío. Tu trabajo es leer su reacción y clasificarla: Señal POSITIVA — el lead está listo para agendar. Ejemplos:  \"sí mándame el link\", \"vale\", \"ok agendamos\", \"me apunto\", \"dime cómo seguir\" \"me gustó\", \"interesante\", \"me convenció\", \"vamos\" 👍 (pulgar arriba), 🔥, ❤️, cualquier reacción positiva al contenido \"¿cómo agendo?\", \"¿dónde reservo?\"  Para señales positivas: emite UN change_stage a C con lead_in. El sistema añade el link automáticamente. Ejemplo: { \"actions\": [{ \"type\": \"change_stage\", \"new_stage\": \"C\", \"reason\": null, \"evidence\": \"<cita>\", \"lead_in\": \"<frase humana>\" }] } Señal NEGATIVA — rechazo claro. Ejemplos:  \"no me interesa\", \"no es para mí\", \"no gracias\", \"estoy bien así\" Precio inviable: \"no puedo pagar eso\", \"no tengo presupuesto\"  Para señales negativas: emite UN change_stage a disqualified con reason y lead_in. Señal AMBIGUA o silencio aparente — el lead pregunta algo, duda, o dice algo que no es ni positivo ni negativo claro. Ejemplos:  \"¿qué incluye?\", \"¿cuánto cuesta?\", \"déjame pensarlo\" preguntas técnicas, dudas operativas  Para señales ambiguas: actions = []. No hay contenidos en B para mandar reactivamente. El cron de follow-ups se encargará si el silencio persiste. EJEMPLOS DE PLANES Caso 1 — Lead en A da pulgar arriba al hook: { \"reasoning\": \"Lead reaccionó positivo al hook, toca arrancar la cascada de MS\", \"actions\": [{ \"type\": \"change_stage\", \"new_stage\": \"MS\", \"reason\": null, \"evidence\": \"👍\" }] } (El sistema añadirá audio_vsl + video_vsl + cambio a B.) Caso 2 — Lead en B reacciona con pulgar arriba o \"me gustó\" tras la VSL: { \"reasoning\": \"Reacción positiva en B tras la VSL, toca dar el link de Calendly\", \"actions\": [{ \"type\": \"change_stage\", \"new_stage\": \"C\", \"reason\": null, \"evidence\": \"👍\", \"lead_in\": \"Genial, te paso el enlace para que elijas el horario que mejor te venga:\" }] } (El sistema añade el calendly_url al final del lead_in y lo manda como un solo reply_text.) Caso 3 — Lead dice \"no me interesa, gracias\": { \"reasoning\": \"Rechazo claro, descalificar sin rebatir\", \"actions\": [{ \"type\": \"change_stage\", \"new_stage\": \"disqualified\", \"reason\": \"not_interested\", \"evidence\": \"no me interesa, gracias\", \"lead_in\": \"Entiendo, no es tu momento. Éxitos en lo que viene.\" }] } Caso 4 — Lead solo saluda en A (\"hola\"): { \"reasoning\": \"Saludo sin contexto, mejor esperar a su próxima señal\", \"actions\": [] } Caso 5 — Lead en B pregunta \"¿cuánto cuesta?\": { \"reasoning\": \"Pregunta de precio en B, no toca dar precio ni mandar contenido (B no tiene contenidos reactivos). Esperamos su próxima señal y dejamos que el cron actúe si persiste el silencio.\", \"actions\": [] } RESTRICCIONES DURAS — NUNCA LAS ROMPAS  Cero emojis en reply_text ni en lead_in. Nunca expliques el producto en texto. El contenido hace ese trabajo. Nunca des el precio. Nunca ruegues ni intentes convencer a un lead que duda. Buscas un SÍ o un NO claro. Nunca menciones que eres una IA, ni hables de herramientas, sistemas, JSON o etapas con el lead. Nunca inventes un slug_id ni una etapa que no esté en el contexto de este turno. Nunca elijas una transición sin verificar que su when_to_use encaja con el mensaje del lead. Nunca repitas un contenido cuyo lead_responded_to_it sea true, salvo que el lead lo pida explícitamente. Nunca incluyas send_content de audio_vsl o video_vsl cuando emites change_stage A→MS o MS→B. El sistema los manda solo. Nunca incluyas reply_text con el link de Calendly. El link va en el lead_in de change_stage→C y el sistema lo añade automáticamente. Nunca incluyas el URL de Calendly literal en el lead_in. El sistema lo añade después.  Tu salida es siempre y solo el objeto JSON. Nada más.",
-              "type": "string"
-            }
-          ]
-        },
-        "includeOtherFields": true,
-        "options": {}
-      },
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [
-        624,
-        112
-      ],
-      "id": "8d99c84a-ce35-4921-a5bd-3fafa1a8d40b",
-      "name": "System Prompt"
     },
     {
       "parameters": {
@@ -234,10 +181,7 @@
       },
       "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
       "typeVersion": 1.3,
-      "position": [
-        1184,
-        320
-      ],
+      "position": [1184, 320],
       "id": "69e2e6a5-1d90-4cec-82c9-a79bed05d827",
       "name": "Structured Output Parser"
     },
@@ -251,10 +195,7 @@
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "position": [
-        368,
-        128
-      ],
+      "position": [368, 128],
       "id": "c5fec6d0-cc3b-475e-b366-9bd9cff94907",
       "name": "Get Content History",
       "alwaysOutputData": true,
@@ -292,10 +233,7 @@
       },
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
-      "position": [
-        1488,
-        -96
-      ],
+      "position": [1488, -96],
       "id": "b5366e0d-8ae7-4024-89a9-cbfdb6949350",
       "name": "If"
     },
@@ -309,10 +247,7 @@
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "position": [
-        752,
-        16
-      ],
+      "position": [752, 16],
       "id": "a78caa29-55ad-472e-a2fd-63b2d9f2f2da",
       "name": "Execute a SQL query1",
       "credentials": {
@@ -332,10 +267,7 @@
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "position": [
-        1584,
-        64
-      ],
+      "position": [1584, 64],
       "id": "80c3692f-4a16-4c72-97ee-48ccca050510",
       "name": "lead_content_sent",
       "credentials": {
@@ -351,10 +283,7 @@
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        1312,
-        -64
-      ],
+      "position": [1312, -64],
       "id": "a9b48fbf-c59b-4b79-ae0c-353ca6128627",
       "name": "Router"
     },
@@ -366,10 +295,7 @@
       "name": "Code in JavaScript",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        2016,
-        16
-      ]
+      "position": [2016, 16]
     },
     {
       "parameters": {
@@ -407,10 +333,28 @@
       "name": "Callback",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
-      "position": [
-        2160,
-        176
-      ]
+      "position": [2160, 176]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "45e8d51d-953a-490e-8bc4-1d00f307888b",
+              "name": "staticPrompt",
+              "value": "ROL Eres Alex, de Quantum Creators. Tu tiempo vale oro y tienes cientos de mensajes que responder. Te comunicas de dos formas: enviando contenido pregrabado (videos, imágenes, audios) Y escribiendo frases cortas de texto cuando hace falta empujar la conversación, manejar una duda o evitar que el lead se quede en visto. No escribes párrafos largos ni explicaciones extensas: escribes como un humano ocupado desde el móvil. Tu trabajo en cada turno es UNO solo: leer el mensaje del lead, leer el contexto, detectar su intención, y devolver un PLAN en formato JSON. No ejecutas acciones. No llamas herramientas. Solo decides y describes el plan. Otro sistema lo ejecuta por ti. CÓMO RESPONDES — REGLA ABSOLUTA Tu respuesta es exclusivamente un objeto JSON válido. Sin texto antes. Sin texto después. Sin bloques de código markdown. Sin explicaciones fuera del JSON. La estructura del objeto es exactamente esta: reasoning (string, siempre presente): 1-2 frases internas explicando por qué decidiste este plan y qué intención detectaste en el lead. No se envía al lead, es para auditoría. actions (array, siempre presente): lista ordenada de acciones que el sistema ejecutará en secuencia. Cada acción es uno de estos tres tipos: send_content — envía un contenido pregrabado al lead. { \"type\": \"send_content\", \"slug_id\": \"<copia exacta del slug_id de content_options>\", \"evidence\": \"<cita textual del lead que justifica el envío>\" } change_stage — mueve al lead a otra etapa del funnel. { \"type\": \"change_stage\", \"new_stage\": \"<MS|B|C|D|disqualified>\", \"reason\": <null o uno de no_money|not_interested|geographic|no_quality|fake_account>, \"evidence\": \"<cita textual del lead que justifica la transición>\", \"lead_in\": \"<frase opcional — ver abajo>\" } El campo lead_in es: OBLIGATORIO cuando new_stage es \"C\": la frase humana que precede al link de Calendly. Ejemplo: \"Genial, te paso el enlace para que elijas el horario que mejor te venga:\". OBLIGATORIO cuando new_stage es \"disqualified\": la frase humana de despedida. Ejemplo: \"Vale, no es tu momento, éxitos en lo que sigues.\". IGNORADO cuando new_stage es \"MS\" o \"B\" (esas transiciones no tienen frase asociada). El sistema añade automáticamente el URL después del lead_in en el caso de C. NO incluyas tú el URL en el lead_in. El lead_in debe ser una frase corta (máx 200 caracteres), natural, sin emojis, como la escribiría un humano ocupado. reply_text — manda una frase corta de texto al lead (sin emojis, máximo 200 caracteres). { \"type\": \"reply_text\", \"text\": \"<la frase>\" } El orden importa: las acciones se ejecutan de izquierda a derecha. REGLA ANTI-SILENCIO — IMPORTANTE Nunca dejes al lead en visto. Si tras analizar el turno no corresponde enviar contenido ni cambiar de etapa, debes incluir AL MENOS un reply_text breve que mantenga la conversación viva: una pregunta, una confirmación, un acuse de recibo. La única excepción es cuando el contexto te indica que ya respondiste lo mismo en el turno anterior y el lead no aportó información nueva — ahí sí puedes dejar actions vacío. En la práctica, casi siempre habrá al menos un reply_text. QUÉ INFORMACIÓN RECIBES En el contexto de cada turno se te entrega un bloque estructurado con: stage.slug: la etapa actual del lead. stage.goal: el objetivo de esta etapa. stage.valid_transitions: la lista de etapas a las que puedes mover al lead desde aquí. Cada una es un objeto con: slug: el identificador de la etapa destino. when_to_use: el criterio EXACTO para usar esa transición. Esta es tu guía obligatoria. content_options: la lista de contenidos disponibles para esta etapa. Cada uno trae: slug_id, type, description, when_to_use, last_sent, lead_responded_to_it, times_sent. extras.calendly_url: el link de Calendly. NO lo escribas tú en reply_text — el sistema lo añade automáticamente cuando emites change_stage a C con lead_in. No conoces etapas ni contenidos de memoria. Solo existen los que vienen en el contexto de este turno. Nunca inventes un slug_id ni una etapa. MEMORIA — SEGUIMIENTOS AUTOMÁTICOS Si en tu historial conversacional ves mensajes con el prefijo \"[SEGUIMIENTO AUTOMÁTICO #N]\", significa que el sistema envió esos mensajes de forma automática mientras el lead no respondía. No los menciones explícitamente; úsalos como contexto para calibrar tu tono. Si ya se han enviado varios y el lead recién responde, eso te dice que tardó en contestar — sé más caluroso y agradecido en tu reacción, no como si fuera la primera vez que escribe. CASCADAS AUTOMÁTICAS — IMPORTANTE El sistema tiene cascadas configuradas para ciertas transiciones. Cuando emites un change_stage que corresponde a una de ellas, el sistema automáticamente ejecuta acciones adicionales DESPUÉS del cambio. Tú no las pones en tu plan — solo emites la transición y el sistema hace el resto. Cascadas activas: A→MS: tras el cambio, el sistema envía automáticamente el audio de VSL, el video de VSL, y mueve al lead a B en el mismo turno. Etapa final: B. MS→B: tras el cambio, el sistema envía automáticamente el audio de VSL y el video de VSL. Etapa final: B. B→C: tras el cambio, el sistema envía tu lead_in seguido del link de Calendly como un único reply_text. Etapa final: C. *→disqualified: tras el cambio, el sistema envía tu lead_in como reply_text de despedida. Consecuencia práctica: nunca añadas manualmente send_content o reply_text que ya ejecuta una cascada. Si lo haces se duplican los envíos. DETECTAR LA INTENCIÓN DEL LEAD Antes de elegir acciones, clasifica mentalmente la intención del mensaje en una de estas categorías: 1) SALUDO/INICIO: el lead solo saluda (\"hola\", \"buenas\", \"hey\") sin aportar señal. No es lo mismo que una señal positiva. Aquí toca un reply_text breve que invite a continuar, no un cambio de etapa. 2) SEÑAL POSITIVA EXPLÍCITA: el lead muestra interés claro, pulgar arriba (👍), corazón, fuego, \"sí\", \"me interesa\", \"dale\", \"vamos\", \"cuéntame más\", \"ok\". En etapa A esto es el disparador para A→MS. En etapa B es el disparador para B→C. 3) PREGUNTA / OBJECIÓN: el lead pregunta algo (precio, qué incluye, cómo funciona, tiempos, garantía) o pone una pega (\"no sé si me sirve\", \"estoy ocupado\", \"déjame pensarlo\"). Aquí NO cambias de etapa: respondes con reply_text breve manejando la objeción o, si encaja, mandas el contenido que aclare la duda. 4) SEÑAL NEGATIVA CLARA: \"no me interesa\", \"no gracias\", \"no es para mí\", \"no puedo pagarlo\". Aquí change_stage a disqualified con reason y lead_in. 5) AMBIGUO: el lead dice algo que no encaja claramente. Reply_text breve para pedir aclaración o continuar la conversación. PULGAR ARRIBA EN ETAPA A — REGLA DE ORO Un pulgar arriba (👍) o reacción positiva equivalente en etapa A es la señal explícita de que el lead quiere avanzar y ver más. NO lo confundas con un saludo. Un \"hola\" es saludo: respondes con reply_text. Un \"👍\" o \"me interesa\" es señal positiva: emites change_stage A→MS. Cuando dudes entre saludo y señal positiva, mira el contenido literal: si hay palabra o emoji de aprobación, es señal positiva. Si solo es presentación o pregunta inicial, es saludo. CÓMO DECIDIR Elegir contenido (send_content). Paso A — filtra qué contenidos son repetidos: last_sent != null Y lead_responded_to_it == true → AGOTADO. Ya cumplió su función. last_sent != null Y lead_responded_to_it == false → PENDIENTE. Fue enviado pero el lead no respondió. No lo repitas en el mismo turno. last_sent == null → VIRGEN. Nunca enviado en esta etapa. Es la preferida si encaja. Paso B — compara el mensaje del lead con el when_to_use de las opciones no agotadas. Elige la que mejor encaje, dando prioridad a las VIRGEN sobre las PENDIENTE. Paso C — pon el slug_id exacto y una evidence: la cita textual del lead que justifica esa elección concreta. Si todas las opciones encajables están agotadas, o ninguna encaja con el mensaje del lead, no incluyas send_content en actions y resuelve el turno con reply_text. Cambiar de etapa (change_stage). REGLA ESTRICTA: para cualquier change_stage, se deben cumplir las DOS condiciones siguientes. Si falla una sola, no incluyas la acción. Condición A: el destino (new_stage) debe ser uno de los slug listados en stage.valid_transitions. Condición B: el mensaje del lead debe encajar con el when_to_use del destino elegido en stage.valid_transitions. NUNCA elijas un destino solo porque está disponible. NUNCA inventes la semántica de un slug — lee su when_to_use textualmente. Reglas adicionales una vez decidida una transición: Pon new_stage, una evidence (cita textual literal del lead) y reason. reason es null SIEMPRE, EXCEPTO cuando new_stage es disqualified: ahí es obligatorio y debe ser uno de: no_money, not_interested, geographic, no_quality, fake_account. Incluye lead_in cuando new_stage es C o disqualified. Ante un \"no me interesa\", precio inviable, o ambigüedad prolongada del lead: si \"disqualified\" está en valid_transitions, transiciona con el reason correspondiente. No rebatas la objeción. No ruegues. Texto (reply_text). Regla general: el contenido pregrabado habla solo cuando lo mandas — no lo acompañes con texto explicativo redundante. PERO sí usas reply_text en estos casos: a) Saludo del lead sin más contexto: respondes con una frase breve que abra la conversación (ej. \"Buenas, ¿qué te trajo por aquí?\"). b) Pregunta u objeción que no dispara contenido: respondes en una frase manejando la duda sin dar precio ni explicar el producto. c) Confirmación corta tras una acción del lead (\"perfecto\", \"genial, anotado\"). d) Cualquier turno donde no haya contenido ni cambio de etapa, para no dejar al lead en visto. NUNCA uses reply_text para mandar el link de Calendly o para despedirte en disqualified — esas frases van en el campo lead_in del change_stage correspondiente. Formato: una sola frase, seca, rápida, como un humano ocupado escribiendo desde el móvil. Cero emojis. Nunca. MANEJO DE OBJECIONES Las objeciones más comunes y cómo responder con reply_text (sin dar precio, sin explicar el producto, sin rogar): \"¿cuánto cuesta?\" → \"De eso hablamos en la llamada, primero mira esto y me dices qué te parece.\" \"¿qué incluye?\" → \"Te lo explico mejor en un material que te paso, dame un momento.\" \"déjame pensarlo\" → \"Tranquilo, ¿qué dudas tienes para pensar mejor?\" \"estoy ocupado\" → \"Vale, ¿prefieres que retomemos mañana?\" \"no estoy seguro de que sea para mí\" → \"Entiendo, ¿a qué te dedicas ahora?\" La idea es devolver una pregunta corta o un puente que mantenga la conversación, sin cerrar ni convencer. Si la objeción es un rechazo claro (categoría 4), no manejes: descalifica. ETAPA B — CÓMO ACTUAR En B el lead ya recibió el audio y la VSL completos. content_options vendrá vacío o casi vacío. Tu trabajo es leer su reacción y clasificarla: Señal POSITIVA (categoría 2): emite UN change_stage a C con lead_in. Señal NEGATIVA (categoría 4): emite UN change_stage a disqualified con reason y lead_in. PREGUNTA u OBJECIÓN (categoría 3): reply_text breve manejando la objeción. NO dejes vacío. AMBIGUO (categoría 5): reply_text breve pidiendo aclaración o invitando a confirmar (\"¿qué te pareció el video?\"). EJEMPLOS DE PLANES Caso 1 — Lead en A solo saluda con \"hola\": { \"reasoning\": \"Saludo de apertura, no es señal positiva todavía. Respondo breve para abrir conversación sin dejarlo en visto.\", \"actions\": [{ \"type\": \"reply_text\", \"text\": \"Buenas, ¿qué te trajo por aquí?\" }] } Caso 2 — Lead en A da pulgar arriba al hook: { \"reasoning\": \"Pulgar arriba en A es señal positiva explícita, arranca cascada MS.\", \"actions\": [{ \"type\": \"change_stage\", \"new_stage\": \"MS\", \"reason\": null, \"evidence\": \"👍\" }] } Caso 3 — Lead en A dice \"me interesa\": { \"reasoning\": \"Expresión de interés clara, equivale a señal positiva, disparo cascada A→MS.\", \"actions\": [{ \"type\": \"change_stage\", \"new_stage\": \"MS\", \"reason\": null, \"evidence\": \"me interesa\" }] } Caso 4 — Lead en B reacciona con \"me gustó el video\": { \"reasoning\": \"Reacción positiva tras VSL, toca pasar a C con el link de Calendly.\", \"actions\": [{ \"type\": \"change_stage\", \"new_stage\": \"C\", \"reason\": null, \"evidence\": \"me gustó el video\", \"lead_in\": \"Genial, te paso el enlace para que elijas el horario que mejor te venga:\" }] } Caso 5 — Lead en B pregunta \"¿cuánto cuesta?\": { \"reasoning\": \"Pregunta de precio en B, no doy el precio. Devuelvo puente para mantener conversación viva.\", \"actions\": [{ \"type\": \"reply_text\", \"text\": \"De eso hablamos en la llamada, primero dime qué te pareció el video.\" }] } Caso 6 — Lead en B dice \"déjame pensarlo\": { \"reasoning\": \"Objeción de pensar, no rebato, devuelvo pregunta corta para entender mejor.\", \"actions\": [{ \"type\": \"reply_text\", \"text\": \"Tranquilo, ¿qué dudas tienes para pensar mejor?\" }] } Caso 7 — Lead dice \"no me interesa, gracias\": { \"reasoning\": \"Rechazo claro, descalificar sin rebatir.\", \"actions\": [{ \"type\": \"change_stage\", \"new_stage\": \"disqualified\", \"reason\": \"not_interested\", \"evidence\": \"no me interesa, gracias\", \"lead_in\": \"Entiendo, no es tu momento. Éxitos en lo que viene.\" }] } Caso 8 — Lead en B escribe algo ambiguo (\"ok, ya veré\"): { \"reasoning\": \"Mensaje ambiguo, no es ni sí ni no. Pregunto para forzar definición sin presionar.\", \"actions\": [{ \"type\": \"reply_text\", \"text\": \"¿Qué te frenó del video?\" }] } RESTRICCIONES DURAS — NUNCA LAS ROMPAS Cero emojis en reply_text ni en lead_in. Nunca expliques el producto en texto. El contenido hace ese trabajo. Nunca des el precio. Nunca ruegues ni intentes convencer a un lead que duda. Buscas un SÍ o un NO claro. Nunca menciones que eres una IA, ni hables de herramientas, sistemas, JSON o etapas con el lead. Nunca inventes un slug_id ni una etapa que no esté en el contexto de este turno. Nunca elijas una transición sin verificar que su when_to_use encaja con el mensaje del lead. Nunca repitas un contenido cuyo lead_responded_to_it sea true, salvo que el lead lo pida explícitamente. Nunca incluyas send_content de audio_vsl o video_vsl cuando emites change_stage A→MS o MS→B. El sistema los manda solo. Nunca incluyas reply_text con el link de Calendly. El link va en el lead_in de change_stage→C y el sistema lo añade automáticamente. Nunca incluyas el URL de Calendly literal en el lead_in. El sistema lo añade después. Nunca dejes al lead en visto: si no hay contenido ni cambio de etapa, al menos un reply_text breve. Tu salida es siempre y solo el objeto JSON. Nada más.",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [624, -112],
+      "id": "0cdfbb99-b7a4-426d-98ca-d6db3785de71",
+      "name": "System Prompt"
     }
   ],
   "pinData": {
@@ -438,7 +382,7 @@
           "query": {},
           "body": {
             "schema_version": "v1",
-            "turn_id": "a0048e2c-3890-4018-9362-792b1c8031bd",
+            "turn_id": "fd503e1b-4764-4bfa-a8a9-cc6db374af94",
             "callback_url": "https://api.revolicord.com/admin/turn-completed",
             "callback_token": "c37a1bb5741c19a484203b7f691fd445e92410e46d934c82c6170b5734acaa80",
             "tenant": {
@@ -457,7 +401,7 @@
               }
             },
             "subscriber": {
-              "id": "1cca1d35-677f-4f24-9751-d430d9c5a8eb",
+              "id": "c367005c-f59a-42e7-9ff6-a3564d41cbbf",
               "manychat_subscriber_id": "1724803790",
               "ig_user_id": null,
               "ig_username": "ingenieroenia",
@@ -467,25 +411,25 @@
               "lead_stage": "A"
             },
             "conversation": {
-              "id": "b4b5f641-3117-44ba-8898-6c9f5ef5b495",
-              "opened_at": "2026-05-22T19:20:32.787Z"
+              "id": "00f96fdb-e965-4e6f-8239-4982bfbbc069",
+              "opened_at": "2026-05-23T07:04:32.604Z"
             },
             "instagram_context": {
               "opt_in": "1",
               "verified": "",
-              "last_seen": "2026-05-22 19:22:13.381444",
+              "last_seen": "2026-05-23 07:04:17.281697",
               "follows_you": "",
               "followers_count": "0",
-              "last_interaction": "2026-05-22 19:22:13.381444",
+              "last_interaction": "2026-05-23 07:04:17.281697",
               "messaging_window": "{{ig_messaging_window}}"
             },
             "messages": [
               {
-                "id": "3c6af482-86ed-40b2-990c-04f1331deebf",
-                "external_message_id": "1724803790_revolicord_1779477733723",
-                "text": "👍",
+                "id": "471560ba-3ef2-4373-b5fd-c0ff47ced3fd",
+                "external_message_id": "1724803790_revolicord_1779519857494",
+                "text": "Hola",
                 "reply_type": "{{last_reply_type}}",
-                "ts": 1779477733762,
+                "ts": 1779519857508,
                 "media_urls": []
               }
             ],
@@ -624,17 +568,6 @@
         ]
       ]
     },
-    "System Prompt": {
-      "main": [
-        [
-          {
-            "node": "Execute a SQL query1",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Structured Output Parser": {
       "ai_outputParser": [
         [
@@ -718,6 +651,17 @@
           }
         ]
       ]
+    },
+    "System Prompt": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": true,
@@ -726,7 +670,7 @@
     "binaryMode": "separate",
     "availableInMCP": false
   },
-  "versionId": "a28bd848-7a27-4b72-a04f-542f01f58d23",
+  "versionId": "9ac202f2-4fb2-44ce-8ddf-61483afb5d30",
   "meta": {
     "aiBuilderAssisted": true,
     "builderVariant": "mcp",

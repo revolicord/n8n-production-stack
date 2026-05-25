@@ -1,6 +1,6 @@
 # Sync Followup Workflow Docs
 
-Sincroniza la documentación de nodos en `n8n/nodes/followup/` con el JSON del workflow n8n en `$ARGUMENTS`.
+Sincroniza la documentación de nodos en `docs/n8n/nodes/followup/` con el JSON del workflow n8n en `$ARGUMENTS`.
 
 ## Instrucciones exactas
 
@@ -19,7 +19,7 @@ Para cada nodo extrae:
 
 ### 2. Leer documentación existente
 
-Lee TODOS los archivos `.md` en `n8n/nodes/followup/`. Para cada uno, extrae:
+Lee TODOS los archivos `.md` en `docs/n8n/nodes/followup/`. Para cada uno, extrae:
 - El `**ID:**` del frontmatter si existe (línea que empieza con `**ID:**`)
 - El nombre del nodo del encabezado `# Nodo: <nombre>`
 - El contenido completo para comparación
@@ -118,4 +118,4 @@ Al terminar, imprime un reporte en este formato exacto:
 - `XX-nombre.md` — ⚠️ nodo no encontrado en el workflow actual
 ```
 
-No hagas cambios fuera de `n8n/nodes/followup/`. No modifiques el JSON del workflow.
+No hagas cambios fuera de `docs/n8n/nodes/followup/`. No modifiques el JSON del workflow.

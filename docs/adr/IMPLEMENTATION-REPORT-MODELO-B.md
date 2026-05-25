@@ -21,7 +21,7 @@ Soporte completo para follow-ups con imagen + texto (Modelo B): un operador sube
 | `apps/api/src/services/followup-messages.ts` | CRUD sobre `followup_messages` (list, get, create, update, delete) |
 | `apps/api/src/routes/admin/assets.ts` | `POST /admin/assets/upload` — multipart, max 8 MB |
 | `apps/api/src/routes/admin/followup-messages.ts` | 4 endpoints CRUD de mensajes hijos de un template |
-| `n8n/workflows/followup-runner/07c-send-content-messages.md` | Instrucciones para el nuevo nodo en el runner de n8n |
+| `docs/n8n/workflows/followup-runner/07c-send-content-messages.md` | Instrucciones para el nuevo nodo en el runner de n8n |
 | `docs/adr/0018-followup-messages-minio-assets.md` | ADR de la decisión arquitectónica |
 
 ## Archivos modificados
@@ -174,7 +174,7 @@ mc anonymous set download local/assets   # GET público, PUT/DELETE requieren cr
 
 ## Cambios pendientes en n8n UI (usuario aplica)
 
-Ver instrucciones detalladas en `n8n/workflows/followup-runner/07c-send-content-messages.md`.
+Ver instrucciones detalladas en `docs/n8n/workflows/followup-runner/07c-send-content-messages.md`.
 
 ### Resumen de 3 cambios:
 

@@ -7,7 +7,7 @@
 >
 > **Funnel canónico:** Quantum Creators — 5 etapas activas `A / MS / B / C / D` + 3 estados terminales (`disqualified`, `lost`, `escalated_human_call`).
 >
-> **Implementación:** este modelo está implementado en `apps/api/src/routes/admin/set-stage.ts` (validación de transiciones), `packages/db/src/schema.ts` (tablas `lead_stages` + `funnel_stages` + `stage_transitions`) y `n8n/stages.md` (definiciones operativas). La fuente de verdad ejecutable son esas tres ubicaciones — este doc las explica.
+> **Implementación:** este modelo está implementado en `apps/api/src/routes/admin/set-stage.ts` (validación de transiciones), `packages/db/src/schema.ts` (tablas `lead_stages` + `funnel_stages` + `stage_transitions`) y `docs/n8n/stages.md` (definiciones operativas). La fuente de verdad ejecutable son esas tres ubicaciones — este doc las explica.
 
 ---
 
@@ -114,7 +114,7 @@ const VALID_TRANSITIONS: Record<Stage, readonly Stage[]> = {
 
 ## 5. Contenido Asociado a Cada Etapa
 
-Definido en la tabla `api.stage_flows`. Ver `n8n/flows-catalog.md` para el catálogo vivo.
+Definido en la tabla `api.stage_flows`. Ver `docs/n8n/flows-catalog.md` para el catálogo vivo.
 
 | Etapa | Flow / Contenido | Tipo | Cuándo se dispara |
 |-------|------------------|------|-------------------|
@@ -142,7 +142,7 @@ Definido en la tabla `api.stage_flows`. Ver `n8n/flows-catalog.md` para el catá
 
 ### 6.2 Cómo se recupera en cada turno
 
-El nodo `Get Subscriber CRM Context` (n8n) hace JOIN entre `lead_crons`, `lead_followup_log` y `funnel_stages` para construir el bloque CRM. `Get Stage Config` resuelve los flows válidos para la etapa actual. Ambos se inyectan en el `# CONTEXTO` del system prompt (ver `n8n/nodes/01-build-context.md`).
+El nodo `Get Subscriber CRM Context` (n8n) hace JOIN entre `lead_crons`, `lead_followup_log` y `funnel_stages` para construir el bloque CRM. `Get Stage Config` resuelve los flows válidos para la etapa actual. Ambos se inyectan en el `# CONTEXTO` del system prompt (ver `docs/n8n/nodes/01-build-context.md`).
 
 > **Close CRM:** la integración con Close es **roadmap V1+** (post-MVP). Hoy Postgres es la única fuente de verdad — Close, cuando exista, se nutrirá de Postgres, no al revés.
 

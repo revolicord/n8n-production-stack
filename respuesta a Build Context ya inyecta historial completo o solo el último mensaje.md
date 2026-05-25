@@ -8,7 +8,7 @@
 
 ### 1. Build Context — solo el turno actual
 
-`n8n/nodes/01-build-context.md`, líneas 65–72:
+`docs/n8n/nodes/01-build-context.md`, líneas 65–72:
 
 ```javascript
 const messages = body.messages   // ← lote del webhook actual (debounced 15s)
@@ -27,7 +27,7 @@ Este valor se exporta como `chatInput` y el AI Agent lo recibe como el mensaje d
 
 ### 2. Postgres Chat Memory — historial completo
 
-`n8n/nodes/02-ai-agent.md`, tabla de sub-nodos:
+`docs/n8n/nodes/02-ai-agent.md`, tabla de sub-nodos:
 
 | Sub-nodo | Tipo de conexión |
 |---|---|

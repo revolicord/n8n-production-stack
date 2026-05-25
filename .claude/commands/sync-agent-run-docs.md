@@ -1,6 +1,6 @@
 # Sync Agent-Run Workflow Docs
 
-Sincroniza la documentación de nodos en `n8n/nodes/` (raíz, no en followup/) con el JSON del workflow n8n en `$ARGUMENTS`.
+Sincroniza la documentación de nodos en `docs/n8n/nodes/` (raíz, no en followup/) con el JSON del workflow n8n en `$ARGUMENTS`.
 
 ## Instrucciones exactas
 
@@ -19,7 +19,7 @@ Para cada nodo extrae:
 
 ### 2. Leer documentación existente
 
-Lee TODOS los archivos `.md` en `n8n/nodes/` (solo el directorio raíz, no en `n8n/nodes/followup/`). Para cada uno, extrae:
+Lee TODOS los archivos `.md` en `docs/n8n/nodes/` (solo el directorio raíz, no en `docs/n8n/nodes/followup/`). Para cada uno, extrae:
 - El `**ID:**` si existe (línea que empieza con `**ID:**`)
 - El nombre del nodo del encabezado `# Nodo: <nombre>`
 - El contenido completo para comparación
@@ -60,9 +60,9 @@ Si el doc tiene una sección `## Código completo` con un bloque `js` y el JSON 
 
 ### 5. Para nodos NUEVOS — crear archivo con estructura completa
 
-Nombre del archivo: `XX-nombre-del-nodo.md` donde `XX` es el siguiente número disponible en `n8n/nodes/` (con padding de 2 dígitos). Usa letras (`00b`, `00c`) si el nodo es paralelo a otro.
+Nombre del archivo: `XX-nombre-del-nodo.md` donde `XX` es el siguiente número disponible en `docs/n8n/nodes/` (con padding de 2 dígitos). Usa letras (`00b`, `00c`) si el nodo es paralelo a otro.
 
-Estructura del archivo nuevo (respeta el mismo formato que los existentes en `n8n/nodes/`):
+Estructura del archivo nuevo (respeta el mismo formato que los existentes en `docs/n8n/nodes/`):
 
 ```markdown
 # Nodo: <nombre exacto en n8n>
@@ -125,4 +125,4 @@ Al terminar, imprime un reporte en este formato exacto:
 - `XX-nombre.md` — ⚠️ nodo no encontrado en el workflow actual
 ```
 
-No hagas cambios fuera de `n8n/nodes/` (raíz). No toques `n8n/nodes/followup/`. No modifiques el JSON del workflow.
+No hagas cambios fuera de `docs/n8n/nodes/` (raíz). No toques `docs/n8n/nodes/followup/`. No modifiques el JSON del workflow.

@@ -102,4 +102,4 @@ Si en el futuro se necesita enviar media (imágenes, audio) generada dinámicame
 
 - ADR-0006: Adaptación del payload de ManyChat al DM API
 - ManyChat API: `POST /fb/sending/sendContent`
-- Workflow: `n8n/agent-run.json`
+- Workflow: `docs/n8n/agent-run.json`

@@ -98,7 +98,7 @@ packages/
   db/src/schema.ts    # all Drizzle table definitions (pgSchema 'api')
   shared/src/schemas/ # Zod schemas shared between API and n8n dispatch types
 
-n8n/                  # n8n workflow docs + node reference code
+docs/n8n/              # n8n workflow docs + node reference code
   README.md           # workflow setup checklist + node map
   nodes/              # JS code for Code nodes (Build Context, Prepare Callback)
   system-prompt.md    # AI agent system prompt
