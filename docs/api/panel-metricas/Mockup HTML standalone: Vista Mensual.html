@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Quantum Dashboard · Vista Mensual</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0a0a0a; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; color: #e5e7eb; min-height: 100vh; padding: 24px; }
+  .qm-shell { max-width: 1400px; margin: 0 auto; background: #0d0d0d; color: #e5e7eb; border-radius: 12px; overflow: hidden; border: 1px solid #1f2937; }
+  .qm-row { display: flex; height: 880px; }
+  .qm-side { width: 200px; background: #111; border-right: 1px solid #1f2937; display: flex; flex-direction: column; flex-shrink: 0; }
+  .qm-side-head { padding: 14px 14px 12px; border-bottom: 1px solid #1f2937; display: flex; align-items: center; gap: 8px; }
+  .qm-logo { width: 22px; height: 22px; background: #0f6e56; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #5dcaa5; font-size: 14px; font-weight: 500; }
+  .qm-brand { font-size: 13px; font-weight: 500; color: #fff; }
+  .qm-tenant { padding: 12px 12px 8px; }
+  .qm-tenant-box { width: 100%; background: #0d0d0d; border: 1px solid #374151; border-radius: 6px; padding: 5px 8px; color: #d1d5db; font-size: 11px; }
+  .qm-nav { flex: 1; padding: 8px 0; overflow-y: auto; }
+  .qm-nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 16px; font-size: 12.5px; color: #9ca3af; cursor: pointer; transition: all 120ms; border-left: 2px solid transparent; }
+  .qm-nav-item:hover { color: #fff; background: rgba(255,255,255,0.03); }
+  .qm-nav-item.active { color: #5dcaa5; background: rgba(13,148,136,0.08); border-left-color: #14b8a6; }
+  .qm-nav-item .icon { font-size: 15px; display: inline-block; width: 15px; text-align: center; }
+  .qm-divider { border-top: 1px solid #1f2937; margin: 6px 12px; }
+  .qm-nav-section { padding: 6px 16px 2px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #4b5563; font-weight: 500; }
+  .qm-foot { padding: 12px 16px; border-top: 1px solid #1f2937; font-size: 11px; color: #6b7280; cursor: pointer; }
+  .qm-main { flex: 1; overflow-y: auto; padding: 20px 24px; }
+  .qm-topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .qm-title { font-size: 18px; font-weight: 500; color: #fff; display: flex; align-items: center; gap: 10px; }
+  .qm-crumb { font-size: 11.5px; color: #6b7280; }
+  .qm-crumb a { color: #14b8a6; cursor: pointer; text-decoration: none; }
+  .qm-nav-month { display: flex; gap: 4px; align-items: center; background: #111; border: 1px solid #1f2937; border-radius: 7px; padding: 3px; }
+  .qm-nav-month button { background: transparent; border: 0; color: #9ca3af; font-size: 11.5px; padding: 4px 10px; border-radius: 5px; cursor: pointer; display: flex; align-items: center; gap: 4px; font-family: inherit; }
+  .qm-nav-month button.on { background: #0f6e56; color: #fff; font-weight: 500; }
+  .qm-kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 14px; }
+  .qm-kpi { background: #111; border: 1px solid #1f2937; border-radius: 8px; padding: 10px 12px; }
+  .qm-kpi-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+  .qm-kpi-label { font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 500; }
+  .qm-kpi-letter { font-size: 9px; color: #14b8a6; font-weight: 500; background: rgba(13,148,136,0.12); padding: 2px 5px; border-radius: 3px; }
+  .qm-kpi-val { font-size: 22px; font-weight: 500; color: #fff; line-height: 1; letter-spacing: -0.01em; }
+  .qm-kpi-sub { font-size: 10px; color: #6b7280; margin-top: 3px; }
+  .qm-ratios { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 20px; padding: 10px 14px; background: #0a0a0a; border: 1px solid #1f2937; border-radius: 8px; }
+  .qm-ratio { display: flex; align-items: baseline; gap: 8px; font-size: 11.5px; }
+  .qm-ratio-name { color: #6b7280; font-weight: 500; min-width: 50px; }
+  .qm-ratio-val { color: #fff; font-size: 15px; font-weight: 500; letter-spacing: -0.01em; }
+  .qm-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+  .qm-section-title { font-size: 12px; font-weight: 500; color: #d1d5db; margin: 0 0 10px; display: flex; align-items: center; gap: 7px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .qm-section-title .icon { color: #14b8a6; font-size: 14px; }
+  .qm-card { background: #111; border: 1px solid #1f2937; border-radius: 8px; padding: 14px; }
+  .qm-velocity-row { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #1a1a1a; font-size: 11.5px; }
+  .qm-velocity-row:last-child { border-bottom: 0; }
+  .qm-velocity-label { color: #9ca3af; display: flex; align-items: center; gap: 6px; }
+  .qm-arrow { color: #14b8a6; font-weight: 500; font-size: 10px; }
+  .qm-velocity-val { color: #fff; font-weight: 500; }
+  .qm-velocity-total { margin-top: 10px; padding-top: 10px; border-top: 1px solid #1f2937; display: flex; justify-content: space-between; font-size: 12px; }
+  .qm-velocity-total .v { color: #5dcaa5; font-weight: 500; font-size: 16px; }
+  .qm-heat { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; max-width: 280px; }
+  .qm-heat-day-label { font-size: 9.5px; color: #6b7280; text-align: center; padding-bottom: 4px; }
+  .qm-heat-cell { aspect-ratio: 1; border-radius: 2px; background: #1a1a1a; position: relative; cursor: pointer; transition: transform 100ms; }
+  .qm-heat-cell:hover { transform: scale(1.15); }
+  .qm-heat-l1 { background: rgba(13,148,136,0.2); }
+  .qm-heat-l2 { background: rgba(13,148,136,0.4); }
+  .qm-heat-l3 { background: rgba(13,148,136,0.65); }
+  .qm-heat-l4 { background: #14b8a6; }
+  .qm-heat-legend { display: flex; justify-content: flex-end; align-items: center; gap: 4px; margin-top: 8px; font-size: 9.5px; color: #6b7280; }
+  .qm-heat-legend-cell { width: 11px; height: 11px; border-radius: 2px; }
+  .qm-funnel-month { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid #1a1a1a; }
+  .qm-funnel-month:last-child { border-bottom: 0; }
+  .qm-funnel-month-label { width: 70px; font-size: 11.5px; color: #9ca3af; font-weight: 500; }
+  .qm-funnel-month-bar { flex: 1; height: 24px; background: #0a0a0a; border-radius: 4px; overflow: hidden; }
+  .qm-funnel-month-fill { height: 100%; background: linear-gradient(90deg, #0f6e56 0%, #14b8a6 100%); display: flex; align-items: center; padding: 0 8px; font-size: 11px; color: #fff; font-weight: 500; }
+  .qm-funnel-month-conv { width: 64px; text-align: right; font-size: 10.5px; color: #6b7280; }
+  .qm-fu-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; }
+  .qm-fu-cell { background: #0a0a0a; border: 1px solid #1f2937; border-radius: 6px; padding: 8px 10px; }
+  .qm-fu-seq { font-size: 10px; color: #14b8a6; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; }
+  .qm-fu-count { font-size: 17px; font-weight: 500; color: #fff; line-height: 1; margin: 4px 0 3px; }
+  .qm-fu-resp { font-size: 10px; color: #6b7280; }
+  .qm-prediction { background: linear-gradient(135deg, rgba(13,148,136,0.15) 0%, rgba(13,148,136,0.05) 100%); border: 1px solid rgba(20,184,166,0.3); border-radius: 8px; padding: 16px; }
+  .qm-pred-label { font-size: 10.5px; color: #5dcaa5; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 500; }
+  .qm-pred-val { font-size: 28px; font-weight: 500; color: #fff; line-height: 1; margin: 8px 0 6px; letter-spacing: -0.02em; }
+  .qm-pred-sub { font-size: 11px; color: #9ca3af; }
+</style>
+</head>
+<body>
+<div class="qm-shell">
+  <div class="qm-row">
+    <aside class="qm-side">
+      <div class="qm-side-head">
+        <div class="qm-logo">Q</div>
+        <span class="qm-brand">Quantum</span>
+      </div>
+      <div class="qm-tenant">
+        <div class="qm-tenant-box">Quantum Creators ▾</div>
+      </div>
+      <nav class="qm-nav">
+        <div class="qm-nav-item"><span class="icon">▦</span>Vista anual</div>
+        <div class="qm-nav-item active"><span class="icon">▤</span>Vista mensual</div>
+        <div class="qm-nav-item"><span class="icon">▼</span>Funnel</div>
+        <div class="qm-nav-item"><span class="icon">●</span>Prospectos</div>
+        <div class="qm-divider"></div>
+        <div class="qm-nav-section">Análisis</div>
+        <div class="qm-nav-item"><span class="icon">◷</span>Velocidad</div>
+        <div class="qm-nav-item"><span class="icon">◑</span>Cohortes</div>
+        <div class="qm-divider"></div>
+        <div class="qm-nav-item"><span class="icon">⚙</span>Settings</div>
+      </nav>
+      <div class="qm-foot">Cerrar sesión</div>
+    </aside>
+
+    <div class="qm-main">
+      <div class="qm-topbar">
+        <div>
+          <div class="qm-crumb"><a href="#">2026</a> · vista mensual</div>
+          <div class="qm-title">Mayo 2026</div>
+        </div>
+        <div class="qm-nav-month">
+          <button>‹ Abr</button>
+          <button class="on">Mayo</button>
+          <button>Jun ›</button>
+        </div>
+      </div>
+
+      <div class="qm-kpis">
+        <div class="qm-kpi"><div class="qm-kpi-h"><span class="qm-kpi-label">Initiated</span><span class="qm-kpi-letter">A</span></div><div class="qm-kpi-val">312</div><div class="qm-kpi-sub">10 por día</div></div>
+        <div class="qm-kpi"><div class="qm-kpi-h"><span class="qm-kpi-label">Media seen</span><span class="qm-kpi-letter">MS</span></div><div class="qm-kpi-val">134</div><div class="qm-kpi-sub">4 por día</div></div>
+        <div class="qm-kpi"><div class="qm-kpi-h"><span class="qm-kpi-label">Engaged</span><span class="qm-kpi-letter">B</span></div><div class="qm-kpi-val">58</div><div class="qm-kpi-sub">2 por día</div></div>
+        <div class="qm-kpi"><div class="qm-kpi-h"><span class="qm-kpi-label">Calendly</span><span class="qm-kpi-letter">C</span></div><div class="qm-kpi-val">16</div><div class="qm-kpi-sub">0.5 por día</div></div>
+        <div class="qm-kpi"><div class="qm-kpi-h"><span class="qm-kpi-label">Booked</span><span class="qm-kpi-letter">D</span></div><div class="qm-kpi-val">5</div><div class="qm-kpi-sub">0.2 por día</div></div>
+      </div>
+
+      <div class="qm-ratios">
+        <div class="qm-ratio"><span class="qm-ratio-name">MSR</span><span class="qm-ratio-val">43%</span></div>
+        <div class="qm-ratio"><span class="qm-ratio-name">PRR</span><span class="qm-ratio-val">19%</span></div>
+        <div class="qm-ratio"><span class="qm-ratio-name">CSR</span><span class="qm-ratio-val">5.1%</span></div>
+        <div class="qm-ratio"><span class="qm-ratio-name">ABR</span><span class="qm-ratio-val">1.6%</span></div>
+        <div class="qm-ratio"><span class="qm-ratio-name">A→MS</span><span class="qm-ratio-val">43%</span></div>
+        <div class="qm-ratio"><span class="qm-ratio-name">MS→B</span><span class="qm-ratio-val">43%</span></div>
+        <div class="qm-ratio"><span class="qm-ratio-name">B→C</span><span class="qm-ratio-val">28%</span></div>
+        <div class="qm-ratio"><span class="qm-ratio-name">C→D</span><span class="qm-ratio-val">31%</span></div>
+      </div>
+
+      <div class="qm-grid">
+        <div class="qm-card">
+          <h3 class="qm-section-title"><span class="icon">▼</span>Funnel de mayo</h3>
+          <div class="qm-funnel-month"><div class="qm-funnel-month-label">A</div><div class="qm-funnel-month-bar"><div class="qm-funnel-month-fill" style="width: 100%;">312</div></div><div class="qm-funnel-month-conv">100%</div></div>
+          <div class="qm-funnel-month"><div class="qm-funnel-month-label">MS</div><div class="qm-funnel-month-bar"><div class="qm-funnel-month-fill" style="width: 43%;">134</div></div><div class="qm-funnel-month-conv">43%</div></div>
+          <div class="qm-funnel-month"><div class="qm-funnel-month-label">B</div><div class="qm-funnel-month-bar"><div class="qm-funnel-month-fill" style="width: 18.5%;">58</div></div><div class="qm-funnel-month-conv">19%</div></div>
+          <div class="qm-funnel-month"><div class="qm-funnel-month-label">C</div><div class="qm-funnel-month-bar"><div class="qm-funnel-month-fill" style="width: 5.1%;">16</div></div><div class="qm-funnel-month-conv">5.1%</div></div>
+          <div class="qm-funnel-month"><div class="qm-funnel-month-label">D</div><div class="qm-funnel-month-bar"><div class="qm-funnel-month-fill" style="width: 1.6%;">5</div></div><div class="qm-funnel-month-conv">1.6%</div></div>
+        </div>
+
+        <div class="qm-card">
+          <h3 class="qm-section-title"><span class="icon">◷</span>Velocidad del funnel</h3>
+          <div class="qm-velocity-row"><span class="qm-velocity-label">A <span class="qm-arrow">→</span> MS</span><span class="qm-velocity-val">1.2 días</span></div>
+          <div class="qm-velocity-row"><span class="qm-velocity-label">MS <span class="qm-arrow">→</span> B</span><span class="qm-velocity-val">0.8 días</span></div>
+          <div class="qm-velocity-row"><span class="qm-velocity-label">B <span class="qm-arrow">→</span> C</span><span class="qm-velocity-val">3.4 días</span></div>
+          <div class="qm-velocity-row"><span class="qm-velocity-label">C <span class="qm-arrow">→</span> D</span><span class="qm-velocity-val">1.1 días</span></div>
+          <div class="qm-velocity-total"><span style="color:#9ca3af;">A → D promedio</span><span class="v">6.5 días</span></div>
+        </div>
+      </div>
+
+      <div class="qm-grid" style="grid-template-columns: 1.3fr 1fr;">
+        <div class="qm-card">
+          <h3 class="qm-section-title"><span class="icon">✻</span>Días con más actividad · mayo</h3>
+          <div class="qm-heat">
+            <div class="qm-heat-day-label">L</div>
+            <div class="qm-heat-day-label">M</div>
+            <div class="qm-heat-day-label">X</div>
+            <div class="qm-heat-day-label">J</div>
+            <div class="qm-heat-day-label">V</div>
+            <div class="qm-heat-day-label">S</div>
+            <div class="qm-heat-day-label">D</div>
+            <div class="qm-heat-cell qm-heat-l2"></div><div class="qm-heat-cell qm-heat-l3"></div><div class="qm-heat-cell qm-heat-l2"></div><div class="qm-heat-cell qm-heat-l1"></div><div class="qm-heat-cell qm-heat-l1"></div><div class="qm-heat-cell"></div><div class="qm-heat-cell"></div>
+            <div class="qm-heat-cell qm-heat-l3"></div><div class="qm-heat-cell qm-heat-l4"></div><div class="qm-heat-cell qm-heat-l3"></div><div class="qm-heat-cell qm-heat-l2"></div><div class="qm-heat-cell qm-heat-l2"></div><div class="qm-heat-cell qm-heat-l1"></div><div class="qm-heat-cell"></div>
+            <div class="qm-heat-cell qm-heat-l4"></div><div class="qm-heat-cell qm-heat-l3"></div><div class="qm-heat-cell qm-heat-l4"></div><div class="qm-heat-cell qm-heat-l3"></div><div class="qm-heat-cell qm-heat-l2"></div><div class="qm-heat-cell qm-heat-l1"></div><div class="qm-heat-cell"></div>
+            <div class="qm-heat-cell qm-heat-l2"></div><div class="qm-heat-cell qm-heat-l3"></div><div class="qm-heat-cell qm-heat-l2"></div><div class="qm-heat-cell qm-heat-l1"></div><div class="qm-heat-cell qm-heat-l1"></div><div class="qm-heat-cell"></div><div class="qm-heat-cell"></div>
+            <div class="qm-heat-cell qm-heat-l1"></div><div class="qm-heat-cell qm-heat-l2"></div><div class="qm-heat-cell qm-heat-l1"></div><div class="qm-heat-cell"></div><div class="qm-heat-cell"></div><div class="qm-heat-cell"></div><div class="qm-heat-cell"></div>
+          </div>
+          <div class="qm-heat-legend">menos <div class="qm-heat-legend-cell" style="background:#1a1a1a;"></div><div class="qm-heat-legend-cell qm-heat-l1"></div><div class="qm-heat-legend-cell qm-heat-l2"></div><div class="qm-heat-legend-cell qm-heat-l3"></div><div class="qm-heat-legend-cell qm-heat-l4"></div> más</div>
+        </div>
+
+        <div class="qm-card">
+          <h3 class="qm-section-title"><span class="icon">✉</span>Follow-ups del mes</h3>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 11.5px;">
+            <span style="color:#9ca3af;">Enviados</span><span style="color:#fff; font-weight:500;">1.247</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 12px; font-size: 11.5px;">
+            <span style="color:#9ca3af;">Respondidos</span><span style="color:#5dcaa5; font-weight:500;">312 · 25%</span>
+          </div>
+          <div class="qm-fu-grid">
+            <div class="qm-fu-cell"><div class="qm-fu-seq">1B</div><div class="qm-fu-count">487</div><div class="qm-fu-resp">128 resp.</div></div>
+            <div class="qm-fu-cell"><div class="qm-fu-seq">2B</div><div class="qm-fu-count">312</div><div class="qm-fu-resp">71 resp.</div></div>
+            <div class="qm-fu-cell"><div class="qm-fu-seq">3B</div><div class="qm-fu-count">196</div><div class="qm-fu-resp">42 resp.</div></div>
+            <div class="qm-fu-cell"><div class="qm-fu-seq">4B</div><div class="qm-fu-count">112</div><div class="qm-fu-resp">28 resp.</div></div>
+            <div class="qm-fu-cell"><div class="qm-fu-seq">1C</div><div class="qm-fu-count">58</div><div class="qm-fu-resp">19 resp.</div></div>
+            <div class="qm-fu-cell"><div class="qm-fu-seq">2C</div><div class="qm-fu-count">42</div><div class="qm-fu-resp">14 resp.</div></div>
+            <div class="qm-fu-cell"><div class="qm-fu-seq">3C</div><div class="qm-fu-count">28</div><div class="qm-fu-resp">7 resp.</div></div>
+            <div class="qm-fu-cell"><div class="qm-fu-seq">4C</div><div class="qm-fu-count">12</div><div class="qm-fu-resp">3 resp.</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="qm-prediction">
+        <div class="qm-pred-label">✦ Predicción de cierre</div>
+        <div class="qm-pred-val">~7 bookings</div>
+        <div class="qm-pred-sub">proyectado fin de mayo · al ritmo actual, +14% sobre abril</div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
