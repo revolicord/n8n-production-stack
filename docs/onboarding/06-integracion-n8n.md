@@ -40,7 +40,7 @@ Estructura mínima:
    ↓
 [Postgres: GET tenant config (modelo, prompt_version)]
    ↓
-[AI Agent node con Redis Chat Memory + tools]
+[AI Agent node con Postgres Chat Memory + tools]
    ↓
 [Set: format response, calculate tokens]
    ↓
@@ -202,4 +202,6 @@ http://admin.x.com          http://admin.x.com/      http://admin.x.com/
                             queues                    grafana
 ```
 
-Todo detrás del mismo Caddy con auth.
+Todo detrás del mismo Traefik con auth.
+
+> Nota: Bull Board y la mayoría de los endpoints `/admin/*` que se mencionan en este documento (dlq, pause, stats) son **diseño, no implementados** hoy. Endpoints reales en [05-api-fastify-endpoints](05-api-fastify-endpoints.md); estado en [`status.md`](../status.md).

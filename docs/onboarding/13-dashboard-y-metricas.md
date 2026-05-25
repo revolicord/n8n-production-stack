@@ -1,8 +1,10 @@
-# 14 · Dashboard de métricas y notificaciones
+# 13 · Dashboard de métricas y notificaciones
 
-Reemplaza el Excel "DM Sorcery Tracker" por una vista en tiempo real que Alex usa para ver el sistema funcionar y detectar leads que necesitan acción humana.
+> **⚠️ PENDIENTE — no implementado.** Este es **el diseño del panel que falta** (la pieza principal pendiente del MVP, ver [`status.md`](../status.md)): conteo de leads por etapa, tasas MSR/PRR/CSR/ABR y estadísticas de follow-ups. No existen ni los endpoints (`/admin/stats/*`, `/admin/leads`, `/admin/notifications`) ni la SPA admin.
+>
+> **Aviso sobre las queries SQL de abajo**: se escribieron contra un modelo de datos anterior y hay que adaptarlas al schema real (ver [04-modelo-de-datos](04-modelo-de-datos.md)): usar `stage_transitions.created_at` (no `occurred_at`); **no existen** `lead_stages.entered_stage_at`, `follow_up_count` ni `disqualification_reason` — esos datos viven en `stage_transitions`, `lead_followup_log` y `lead_crons`. Tampoco existen aún las tablas `closers` ni `notifications`.
 
-> Visible solo para Alex. No es producto cara al cliente final. Auth simple (clave maestra → JWT 1h).
+Reemplaza el Excel "DM Sorcery Tracker" por una vista en tiempo real para ver el sistema funcionar y detectar leads que necesitan acción humana.
 
 ## Objetivo del dashboard
 
@@ -26,7 +28,7 @@ Para el MVP, dos opciones. Recomendación clara:
 - **Grafana** para los gráficos y métricas agregadas (lo que reemplaza la pestaña "Dashboard" del Excel).
 - **Admin web** (`apps/admin`) para listas accionables (notificaciones, leads por etapa, editor de plantillas).
 
-Ambos detrás del mismo Caddy en `https://admin.<dominio-alex>` con auth JWT.
+Ambos detrás del mismo Traefik en `https://admin.<dominio-alex>` con auth JWT.
 
 ## Layout del admin web
 
@@ -492,7 +494,7 @@ apps/admin/
 
 Stack: SvelteKit + Tailwind + shadcn/ui (svelte). UI rápida y simple. Sin estado complejo, todo viene del API.
 
-Build: `pnpm --filter admin build` → `apps/admin/build/` → servido por Caddy o un Node server simple.
+Build: `pnpm --filter admin build` → `apps/admin/build/` → servido por Traefik o un Node server simple.
 
 Auth: cookie httpOnly con JWT, hooks.server.ts verifica en cada request server-side.
 

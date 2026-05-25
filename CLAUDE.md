@@ -61,7 +61,7 @@ bash scripts/setup.sh   # interactive: domains, SSL email, credentials, Swarm in
 ### Infrastructure layer (`docker-stack.yml`)
 
 Docker Swarm stack with five services:
-- **Traefik v3.3** — TLS termination + routing. Webhooks (`/webhook/*`) go to `n8n-webhook` (priority 10); all other traffic goes to `n8n-main`.
+- **Traefik v2.11** — TLS termination + routing. Webhooks (`/webhook/*`) go to `n8n-webhook` (priority 10); all other traffic goes to `n8n-main`. (v2.11, not v3: the v3 Swarm provider is incompatible with Docker Engine 28+.)
 - **n8n-main** — n8n UI + REST API
 - **n8n-webhook** — dedicated webhook processor replicas
 - **n8n-worker** — queue workers (Bull/Redis), default 3 replicas
@@ -78,10 +78,10 @@ apps/api/src/
   config.ts           # Zod-validated env — always use getConfig(), never process.env directly
   routes/
     webhook-manychat.ts   # POST /webhook/manychat — main inbound path
-    tools.ts              # GET /tools — returns flows/tools for n8n Build Context
+    tools.ts              # GET/POST /tenants/:slug/tools[/sync] — flows for n8n Build Context + ManyChat sync
     admin/
       turn-completed.ts   # POST /admin/turn-completed — n8n calls this to close a turn
-      set-stage.ts        # POST /admin/set-stage — n8n calls this to advance lead stage
+      set-stage.ts        # POST /admin/leads/:subscriberId/stage — n8n calls this to advance lead stage
   services/
     debounce.ts       # Lua atomic: RPUSH buffer + SET debounce token + SET first_msg
     lock.ts           # Redis lock for turn exclusivity
@@ -102,7 +102,7 @@ n8n/                  # n8n workflow docs + node reference code
   README.md           # workflow setup checklist + node map
   nodes/              # JS code for Code nodes (Build Context, Prepare Callback)
   system-prompt.md    # AI agent system prompt
-  stages.md           # funnel stage definitions + flows_by_stage config
+  stages.md           # funnel stage definitions + transition criteria
   flows-catalog.md    # ManyChat flow name → namespace mapping
 ```
 
@@ -115,14 +115,14 @@ ManyChat → POST /webhook/manychat
   → Lua atomic debounce (Redis buffer RPUSH + debounce timer reset)
   → BullMQ job scheduled after DEBOUNCE_MS (default 15 s)
   → worker fires → acquire turn lock → drain buffer → POST n8n /webhook/agent-run
-      n8n: Build Context → AI Agent (Groq LLM) → send ManyChat response
+      n8n: Build Context → AI Agent (Claude Sonnet 4.6) → send ManyChat response
       n8n: → POST /admin/turn-completed  ← releases lock + persists metrics
 ```
 
 ## Critical rules
 
 ### Code vs. n8n boundary
-The most important design decision. See `docs-dm-settings/02-frontera-codigo-vs-n8n.md`.
+The most important design decision. See `docs/onboarding/02-frontera-codigo-vs-n8n.md`.
 - **Fastify code**: auth, idempotency, rate-limit, debounce, lock, BullMQ, DB mutations
 - **n8n**: prompts, LLM selection, tools, memory, ManyChat API calls, business routing
 

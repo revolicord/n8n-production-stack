@@ -213,7 +213,7 @@ export default async function toolsRoutes(app: FastifyInstance): Promise<void> {
       pending_approval: !force,
       message: force
         ? 'Flows synced and activated directly (dev mode)'
-        : 'Flows written to pending_ns. Run approval SQL to activate. See docs-dm-settings/15-flow-registry-manychat.md',
+        : 'Flows written to pending_ns. Run approval SQL to activate. See docs/onboarding/09-flow-registry-manychat.md',
     });
   });
 }

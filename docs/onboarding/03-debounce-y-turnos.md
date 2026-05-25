@@ -1,4 +1,4 @@
-# 04 · Debounce y turnos
+# 03 · Debounce y turnos
 
 El corazón del sistema. Si esto no funciona perfecto, todo lo demás es decorado.
 
@@ -16,7 +16,7 @@ El corazón del sistema. Si esto no funciona perfecto, todo lo demás es decorad
 
 ```ts
 const DEFAULTS = {
-  DEBOUNCE_MS: 8_000,        // ventana sin actividad para disparar
+  DEBOUNCE_MS: 15_000,       // ventana sin actividad para disparar (default real en config.ts)
   MAX_WAIT_MS: 30_000,       // techo absoluto
   LOCK_TTL_MS: 90_000,       // mientras n8n + LLM responden
   BUFFER_HARD_LIMIT: 20,     // si llega 21º mensaje, dispatch inmediato

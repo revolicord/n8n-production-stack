@@ -1,6 +1,6 @@
 /**
  * Convenciones de claves Redis. Documentadas en
- * docs-dm-settings/03-modelo-de-datos.md.
+ * docs/onboarding/04-modelo-de-datos.md.
  */
 export const redisKeys = {
   idemp: (hash: string): string => `idemp:${hash}`,

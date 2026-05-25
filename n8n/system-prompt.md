@@ -42,7 +42,7 @@ Ver el contrato completo de inyección en `prompts/setter-v1.md`.
 
 ## Sección dinámica de flows (`CONTENIDO DISPONIBLE`)
 
-Se inyecta a partir de `tenant.config.flows_by_stage[etapaActual]`. Formato de cada línea:
+Se inyecta desde el registro `stage_flows` de la etapa actual (vía `Get Stage Config` → `Build Context`; ver [`../docs/onboarding/09-flow-registry-manychat.md`](../docs/onboarding/09-flow-registry-manychat.md)). Formato de cada línea:
 
 ```
 - flow_name: "<ns de ManyChat>" — <description>
@@ -54,10 +54,11 @@ en n8n y el modelo lo usa como string exacto. Si no hay flows para la etapa, la 
 
 ---
 
-## Notas sobre tool calling con llama-3.3-70b en Groq
+## Notas sobre tool calling
 
-- El modelo soporta tool calling vía la API de Groq cuando las tools están conectadas en n8n como `ai_tool`.
+> El modelo en uso es **Claude Sonnet 4.6**. El doc del nodo `nodes/03-groq-chat-model.md` conserva el nombre histórico (Groq) y queda fuera del alcance de este refactor — reconciliar por separado. Ver [`../docs/status.md`](../docs/status.md).
+
+- El modelo soporta tool calling cuando las tools están conectadas en n8n como `ai_tool`.
 - Si el modelo emite `<function=name>{...}` como texto plano, n8n no está pasando las tools al modelo. Verificar que `trigger_manychat_flow` y `set_stage` están conectadas al nodo AI Agent con tipo `ai_tool`.
 - El prompt explícito sobre cómo y cuándo usar cada tool mejora mucho la tasa de éxito.
-- El `ns` no se adivina — se inyecta desde `flows_by_stage` en la DB (ver `nodes/01-build-context.md`).
-- llama-3.3-70b es de gama media para tool calling multi-etapa. Si la adherencia al funnel falla, evaluar un modelo clase Claude / GPT-4o (ver `SETTER-MVP-TRACKING.md` P2).
+- El `ns` no se adivina — se inyecta desde la DB (`stage_flows`, vía `Get Stage Config`; ver `nodes/01-build-context.md`).

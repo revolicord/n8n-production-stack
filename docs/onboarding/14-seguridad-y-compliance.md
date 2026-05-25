@@ -1,15 +1,17 @@
-# 09 · Seguridad y compliance
+# 14 · Seguridad y compliance
 
 Una agencia de marketing trabaja con datos personales reales de usuarios de Instagram. Esto importa legalmente y operativamente.
+
+> **Estado:** buena parte de este documento es diseño aún **no implementado** (JWT admin con roles, RLS en Postgres, endpoints GDPR de export/delete). Lo activo hoy: TLS vía Traefik, `X-MC-Token` en el webhook y `N8N_CALLBACK_TOKEN` para n8n. Ver [`status.md`](../status.md).
 
 ## Capas de seguridad
 
 ### Red
 
 - Postgres y Redis **nunca expuestos al exterior**: solo en red Docker `internal`.
-- Solo Caddy tiene puertos públicos (80/443).
-- Firewall de host (ufw): permitir solo SSH (clave, no password) y los dos puertos de Caddy.
-- TLS automático con Caddy + Let's Encrypt.
+- Solo Traefik tiene puertos públicos (80/443).
+- Firewall de host (ufw): permitir solo SSH (clave, no password) y los dos puertos de Traefik.
+- TLS automático con Traefik + Let's Encrypt.
 - Considerar **Cloudflare proxy** delante para WAF y DDoS protection.
 
 ### Autenticación de webhook ManyChat
@@ -18,7 +20,7 @@ ManyChat External Request **no tiene firma HMAC nativa** (a diferencia de Stripe
 
 1. **Token compartido en header `X-MC-Token`**: secret de 32 bytes, rotable.
 2. **IP allowlist** vía Cloudflare Firewall Rules con los rangos de salida de ManyChat (frágil, ManyChat no publica una lista oficial estable, validar y mantener).
-3. **Rate limit global por IP** en Caddy/Cloudflare como defensa en profundidad.
+3. **Rate limit global por IP** en Traefik/Cloudflare como defensa en profundidad.
 
 ```ts
 // Verificación en Fastify
@@ -45,7 +47,7 @@ fastify.addHook('preHandler', async (req, reply) => {
 
 ### En tránsito
 
-- TLS 1.3 obligatorio en Caddy (mínimo 1.2).
+- TLS 1.3 obligatorio en Traefik (mínimo 1.2).
 - HSTS habilitado (`Strict-Transport-Security`).
 - Comunicación interna entre containers va por red Docker (no TLS, pero aislada). Si quieres mTLS interno, añadir certificados — overkill para un único VPS.
 

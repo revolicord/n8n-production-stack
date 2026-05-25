@@ -90,5 +90,5 @@ Rechazado por el advisor técnico: mezclar "qué es" con "cuándo usarlo" crea d
 - Implementación: `apps/api/src/routes/tools.ts`
 - Schema DB: `packages/db/src/schema.ts` → `stageFlows`
 - Migración: `packages/db/drizzle/0003_flow_registry.sql`
-- Documento operativo: `docs-dm-settings/15-flow-registry-manychat.md`
+- Documento operativo: `docs/onboarding/09-flow-registry-manychat.md`
 - Nodo n8n afectado: `n8n/nodes/00-get-stage-config.md`, `n8n/nodes/01-build-context.md`

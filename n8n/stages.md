@@ -2,7 +2,7 @@
 
 Define las 5 etapas del lead, las transiciones válidas, los criterios de avance y los flows por etapa.
 
-> **Modelo canónico:** este es el funnel de `docs-dm-settings/13-funnel-y-agente.md`.
+> **Modelo canónico:** este es el funnel de `docs/onboarding/07-funnel-y-agente.md`.
 > El modelo de datos completo (`lead_stages`, `stage_transitions`, `closers`, `follow_up_templates`,
 > `notifications`) vive en doc 13. Aquí solo van las definiciones de etapa y la config de flows.
 > La versión anterior con etapas `nuevo/interesado/prospecto/cliente` queda **obsoleta**.
@@ -57,10 +57,9 @@ cualquiera → escalated_human_call | lost  (solo vía cron de follow-ups)
 
 ---
 
-## Config `flows_by_stage` para la DB
+## Config de flows por etapa (legacy `flows_by_stage`)
 
-Pegar en `tenants.config` del tenant Quantum Creators. Los `ns` son los IDs reales de los flows de
-ManyChat — **pendientes de confirmar** (ver `n8n/SETTER-MVP-TRACKING.md` P0 y `flows-catalog.md`).
+> **El mecanismo vivo es el registro `stage_flows` en Postgres** (vía `Get Stage Config`; ver [`../docs/onboarding/09-flow-registry-manychat.md`](../docs/onboarding/09-flow-registry-manychat.md)). El bloque `flows_by_stage` de abajo es el enfoque anterior basado en `tenants.config`; se conserva como referencia. Los `ns` reales de QC están pendientes de confirmar (ver [`../docs/status.md`](../docs/status.md) y `flows-catalog.md`).
 
 ```json
 {

@@ -1,4 +1,4 @@
-# 07 · Docker Swarm y deploy
+# 11 · Docker Swarm y deploy
 
 Un único VPS, todo en Docker Swarm. El repo `n8n-production-stack` es el punto de entrada único: instala Traefik, despliega n8n, y cuando la API esté lista la añade al mismo stack. Un solo `bash setup.sh` deja todo corriendo.
 
@@ -30,7 +30,7 @@ VPS (Ubuntu 22.04 LTS)
 │   ├── tsconfig.base.json   ← TS estricto
 │   ├── .github/workflows/   ← CI GitHub Actions
 │   ├── docs/adr/            ← ADRs del stack
-│   └── docs-dm-settings/    ← esta documentación
+│   └── docs/               ← esta documentación (onboarding, adr, reference, status)
 │
 └── Docker Swarm (single-node manager)
     ├── Servicio: traefik      ← reverse proxy + TLS

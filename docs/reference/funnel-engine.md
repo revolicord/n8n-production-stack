@@ -2,7 +2,7 @@
 
 **Versión:** 2.0  
 **Fecha:** 2026-05-15  
-**Estado:** Diseño aprobado — pendiente de implementación
+**Estado:** Implementado en su mayoría (ADRs 0010–0015 migrados; `agent-run` y `followup-runner` operativos). Ver [`../status.md`](../status.md) para lo que falta. Este doc conserva el diseño original; donde difiere de la implementación, manda [`onboarding/04-modelo-de-datos.md`](../onboarding/04-modelo-de-datos.md).
 
 ---
 
@@ -186,8 +186,11 @@ CREATE INDEX idx_lead_crons_due
   ON lead_crons(next_followup_at)
   WHERE is_active = TRUE AND next_followup_at IS NOT NULL;
 
--- ─── MIGRACIÓN subscribers ──────────────────────────────────────────────────
-ALTER TABLE subscribers
+-- ─── MIGRACIÓN current_stage_id (ADR-0014 Path B) ───────────────────────────
+-- NOTA: la implementación final añadió current_stage_id a api.lead_stages,
+-- NO a subscribers (Path B de ADR-0014). El schema real manda:
+-- packages/db/src/schema.ts y docs/onboarding/04-modelo-de-datos.md.
+ALTER TABLE api.lead_stages
   ADD COLUMN current_stage_id UUID REFERENCES funnel_stages(id);
 ```
 

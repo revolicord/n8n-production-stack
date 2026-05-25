@@ -1,8 +1,10 @@
-# 12 · ManyChat setup, canales y triggers
+# 10 · ManyChat setup, canales y triggers
 
 Este documento define **toda la configuración necesaria en ManyChat** para que el sistema funcione. Es el contrato entre lo que ManyChat envía y lo que Fastify espera recibir.
 
 > Aplica al MVP de Quantum Creators (`tenant_slug: quantum-creators`). Para futuros clientes (cuando dejen de ser teóricos), se replica esta configuración en su cuenta de ManyChat con su propio `tenant_slug`.
+
+> **Dos cosas cambiaron desde que se escribió este doc:** (1) el mapeo `flow_name → ns` ya **no** vive en `tenants.config.flows`, sino en el registro `stage_flows` (ver [09-flow-registry-manychat](09-flow-registry-manychat.md)); (2) la idempotencia real usa `external_message_id` (o uno generado), no el hash de contenido + bucket de 30 s que se describe más abajo — el contrato real está en [05-api-fastify-endpoints](05-api-fastify-endpoints.md).
 
 ## Resumen de lo que hay que hacer en ManyChat
 

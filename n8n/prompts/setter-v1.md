@@ -4,9 +4,9 @@
 **Dónde vive en ejecución:** `tenants.config.system_prompt` del tenant Quantum Creators. El nodo `Build Context` lo lee y le anexa el bloque `# CONTEXTO` dinámico en cada turno (ver `n8n/nodes/01-build-context.md`).
 **Este archivo es la fuente de verdad versionada.** Cuando edites el prompt, edítalo aquí, súbelo a git, y luego copia el bloque a `tenants.config.system_prompt`.
 
-**Base teórica:** `fundamentals/` (frameworks de cualificación, psicología del setter de DMs, 8 patrones de prompts) + `docs-dm-settings/13-funnel-y-agente.md` (funnel de 5 etapas).
+**Base teórica:** `fundamentals/` (frameworks de cualificación, psicología del setter de DMs, 8 patrones de prompts) + `docs/onboarding/07-funnel-y-agente.md` (funnel de 5 etapas).
 
-**Pendiente antes del go-live:** completar los placeholders `{{QC_PRODUCT_*}}` — solo los sabe Alex. Ver `n8n/SETTER-MVP-TRACKING.md`.
+**Pendiente antes del go-live:** completar los placeholders `{{QC_PRODUCT_*}}` — solo los sabe Alex. Ver [`../../docs/status.md`](../../docs/status.md).
 
 ---
 
@@ -179,16 +179,17 @@ El bloque dinámico contiene:
 | Última vez activa / última interacción | `body.instagram_context.{last_seen,last_interaction}` | ❌ El API aún no lo envía — ver tracking P1 |
 | Señales previas | `subscriber.metadata.signals` / `lead_state.signals` | ❌ Depende de que el agente las persista — ver tracking P1 |
 | Link de Calendly | `tenant.config.calendly_url` | ❌ Falta configurarlo — ver tracking P0 |
-| CONTENIDO DISPONIBLE | `tenant.config.flows_by_stage[etapa]` → lista de `{ns, description}` | ⚠️ Existe el mecanismo; faltan los `ns` reales de Quantum Creators |
+| CONTENIDO DISPONIBLE | registro `stage_flows` de la etapa (vía `Get Stage Config`) → lista de `{ns, description}` | ⚠️ Verificar los `ns` reales de QC (ver doc 09) |
 
 El agente degrada con elegancia: si una variable falta, el bloque simplemente no la incluye. El prompt sigue funcionando con lo mínimo (nombre + etapa + contenido disponible).
 
 ---
 
-## Notas sobre tool calling con llama-3.3-70b en Groq
+## Notas sobre tool calling
 
-- El modelo soporta tool calling vía la API de Groq cuando las tools están conectadas en n8n como `ai_tool`.
+> El modelo en uso es **Claude Sonnet 4.6**. El doc del nodo `nodes/03-groq-chat-model.md` conserva el nombre histórico (Groq) y queda fuera del alcance de este refactor. Ver [`../../docs/status.md`](../../docs/status.md).
+
+- El modelo soporta tool calling cuando las tools están conectadas en n8n como `ai_tool`.
 - Si el modelo emite `<function=name>{...}` como texto plano, n8n no está pasando las tools al modelo. Verifica que `trigger_manychat_flow` y `set_stage` están conectadas al nodo AI Agent con tipo `ai_tool`.
 - El prompt explícito sobre cómo y cuándo usar cada tool mejora mucho la tasa de éxito — por eso la sección `# TUS HERRAMIENTAS` es detallada.
-- `flow_name` es el `ns` de ManyChat directamente (ej. `content20260511160051_518775`). Se inyecta desde `flows_by_stage`; el modelo lo usa como string exacto, sin adivinar.
-- llama-3.3-70b es un modelo de gama media para tool calling multi-etapa. Si la adherencia al funnel falla en pruebas, evaluar un modelo de la clase Claude / GPT-4o (ver tracking P2).
+- `flow_name` es el `ns` de ManyChat directamente (ej. `content20260511160051_518775`). Se inyecta desde `stage_flows` (DB); el modelo lo usa como string exacto, sin adivinar.

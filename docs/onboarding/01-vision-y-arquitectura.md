@@ -1,8 +1,8 @@
-# 01 · Arquitectura global
+# 01 · Visión y arquitectura
 
 ## Componentes
 
-Todo corre en un único VPS vía Docker Compose, en una red privada interna. Solo dos servicios se exponen públicamente: el reverse proxy (Caddy/Traefik) y, opcionalmente, el dashboard admin.
+Todo corre en un único VPS vía **Docker Swarm**, en una red privada interna. Solo los servicios que lo necesitan se exponen públicamente, detrás del reverse proxy (**Traefik**).
 
 ```
                          Internet
@@ -10,7 +10,7 @@ Todo corre en un único VPS vía Docker Compose, en una red privada interna. Sol
                             │ HTTPS
                             ▼
                     ┌───────────────┐
-                    │  Caddy/Traefik │  (TLS, reverse proxy)
+                    │    Traefik     │  (TLS, reverse proxy)
                     └───┬───────┬───┘
                         │       │
         ┌───────────────┘       └────────────────┐
@@ -54,7 +54,7 @@ Todo corre en un único VPS vía Docker Compose, en una red privada interna. Sol
 
 | Servicio | Imagen | Función |
 |---|---|---|
-| `caddy` | `caddy:2` | TLS y reverse proxy |
+| `traefik` | `traefik:v2.11` | TLS y reverse proxy (servicio Swarm aparte del stack) |
 | `api` | `./apps/api` | Fastify HTTP server (webhooks + admin API) |
 | `api-worker` | `./apps/api` (mismo build, comando distinto) | Procesa jobs BullMQ (batches, fan-out a n8n, callbacks ManyChat) |
 | `n8n-main` | `n8nio/n8n` | UI y orquestación |
@@ -62,10 +62,11 @@ Todo corre en un único VPS vía Docker Compose, en una red privada interna. Sol
 | `n8n-worker` (xN) | `n8nio/n8n` (con `--worker`) | Ejecuta workflows |
 | `postgres` | `postgres:16` | DB compartida (schemas separados) |
 | `redis` | `redis:7-alpine` | Cola + cache + debounce state |
-| `grafana` (opcional) | `grafana/grafana` | Dashboards |
-| `prometheus` (opcional) | `prom/prometheus` | Métricas |
+| `minio` | `minio/minio` | Almacenamiento S3-compatible |
 
-> Postgres y Redis **se comparten** entre la API y n8n para simplificar operación. Son dos schemas distintos en Postgres y prefijos distintos en Redis. Esto es seguro y reduce coste/operación; ver `07-docker-compose-y-deploy.md` para los detalles.
+> Grafana/Prometheus aparecen en el plan de observabilidad pero **no están desplegados** (ver [12-observabilidad](12-observabilidad.md)).
+
+> Postgres y Redis **se comparten** entre la API y n8n para simplificar operación. Son dos schemas distintos en Postgres y prefijos distintos en Redis. Esto reduce coste/operación; ver [11-deploy-docker-swarm](11-deploy-docker-swarm.md) para los detalles.
 
 ## Flujo end-to-end (turno completo)
 
@@ -75,19 +76,18 @@ Todo corre en un único VPS vía Docker Compose, en una red privada interna. Sol
 3. ManyChat → External Request (POST) → https://api.midominio.com/webhook/manychat
 4. Fastify api:
    a. Verifica X-MC-Token header
-   b. Calcula hash de idempotencia: sha256(channel + subscriber_id + message_id)
+   b. Calcula hash de idempotencia: sha256(tenant_id + subscriber_id + external_message_id)
    c. SET idemp:{hash} 1 NX EX 86400 → si ya existía, descarta y responde 200
    d. INSERT messages_raw (audit)
-   e. Rate limit check (token bucket por subscriber)
-   f. RPUSH buffer:{tenant}:{subscriber} <mensaje serializado>
-   g. SET debounce:{tenant}:{subscriber} <token-uuid> EX 8
-   h. BullMQ.add('process-batch', {tenant, subscriber, token}, {delay: 8000, jobId: token})
-   i. Responde 200 OK con cuerpo vacío en <100 ms
-5. Usuario escribe 4 mensajes más en 6 s. Cada uno repite el paso 4:
+   e. RPUSH buffer:{tenant}:{subscriber} <mensaje serializado>
+   f. SET debounce:{tenant}:{subscriber} <token-uuid> PX 15000
+   g. BullMQ.add('process-batch', {tenant, subscriber, token}, {delay: 15000, jobId: token})
+   h. Responde 200 OK con cuerpo vacío en <100 ms
+5. Usuario escribe 4 mensajes más en pocos segundos. Cada uno repite el paso 4:
    - Cada nuevo mensaje genera nuevo token UUID
    - SET debounce sobreescribe → token anterior es inválido
-   - Se programa nuevo job de BullMQ con nuevo jobId (delay 8s)
-6. Tras 8 s sin actividad, el job más reciente se ejecuta en api-worker:
+   - Se programa nuevo job de BullMQ con nuevo jobId (delay 15s)
+6. Tras 15 s sin actividad, el job más reciente se ejecuta en api-worker:
    a. GET debounce:{tenant}:{subscriber} → ¿coincide con el token del job?
       - NO → llegó otro mensaje después, este job es obsoleto, abort
       - SÍ → continúa
@@ -98,7 +98,7 @@ Todo corre en un único VPS vía Docker Compose, en una red privada interna. Sol
       con: {tenant, subscriber, batch, conversation_id, turn_id, callback_url}
    f. n8n responde 202 Accepted (no espera al LLM)
 7. n8n ejecuta el workflow del agente:
-   - Hidrata memoria (Redis Chat Memory node)
+   - Hidrata memoria (Postgres Chat Memory node)
    - Llama al LLM con tools
    - Llama a ManyChat API para enviar la respuesta al usuario
    - POST callback a la api: /admin/turn-completed

@@ -1,4 +1,4 @@
-# 15 · Flow Registry — Naming Convention y Sincronización ManyChat
+# 09 · Flow Registry — Naming Convention y Sincronización ManyChat
 
 Este documento es la **fuente de verdad operativa** para gestionar los flows de ManyChat que usa el agente setter. Es el cuello de botella histórico del sistema: si los flows no están mapeados correctamente, el agente no puede enviar contenido y el funnel se rompe.
 

@@ -23,9 +23,9 @@ Si confundes esto, acabas con un n8n gigante imposible de mantener, **o** con c�
 | Fan-out a n8n (HTTP call al webhook interno) | **Código** | Es el "punto de entrada" del workflow del agente. |
 | Callback de n8n (turn-completed) | **Código** | Cierra el lock y persiste métricas. |
 | **Lógica del agente (prompts, tools, memoria)** | **n8n** | Cambia a menudo, queremos iterar sin redeploy. |
-| Selección de modelo LLM (GPT-4o vs mini) | **n8n** | Decisión por cliente / por tenant, ajustable en UI. |
-| Tools del agente (CRM, calendario, RAG) | **n8n** | Visual, fácil de añadir nodos. |
-| Memoria de conversación (chat history) | **n8n (Redis Chat Memory node)** | Ya existe out-of-the-box, no reinventar. |
+| Selección de modelo LLM (p. ej. Claude Sonnet 4.6) | **n8n** | Decisión por cliente / por tenant, ajustable en UI. |
+| Tools del agente (flows ManyChat, set_stage, etc.) | **n8n** | Visual, fácil de añadir nodos. |
+| Memoria de conversación (chat history) | **n8n (Postgres Chat Memory node)** | Ya existe out-of-the-box, no reinventar. |
 | Llamada a ManyChat API para enviar la respuesta | **n8n** | Forma parte de la lógica del agente. |
 | Routing por intención / handoff humano | **n8n** | Lógica de negocio, cambia. |
 | Triggers programados (campañas, recordatorios) | **n8n** | Para eso es n8n. |
@@ -66,7 +66,7 @@ Hazte estas preguntas en orden:
 │       ↓                                                                   │
 │  Lookup tenant config (Postgres node)                                    │
 │       ↓                                                                   │
-│  Hidratar memoria (Redis Chat Memory)                                    │
+│  Hidratar memoria (Postgres Chat Memory)                                 │
 │       ↓                                                                   │
 │  AI Agent node (LLM + tools)                                             │
 │       ↓                                                                   │

@@ -1,6 +1,8 @@
-# 08 · Observabilidad y dashboard
+# 12 · Observabilidad
 
-Como solo founder, observabilidad **no es opcional**. Cuando algo falla a las 3 a. m. necesitas que la respuesta esté en un dashboard, no en grep de logs.
+> **Estado: en su mayoría diseño, no implementado.** Lo único real hoy es el logging estructurado con **pino** (`apps/api/src/lib/logger.ts`). **No existen** endpoint `/metrics`, Prometheus, Grafana, Sentry ni Bull Board. Este documento describe el plan; impleméntalo cuando el dolor lo justifique. Ver [`status.md`](../status.md).
+
+Cuando algo falla necesitas que la respuesta esté en un sitio, no en grep de logs.
 
 ## Pirámide
 
