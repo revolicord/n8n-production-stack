@@ -11,6 +11,7 @@ import {
   listFunnelStages,
   listLeadFollowupHistory,
   updateFollowupTemplate,
+  updateFunnelStage,
 } from '../../services/followups.js';
 import { getSubscriberByUuid } from '../../services/subscribers.js';
 
@@ -51,6 +52,11 @@ export const UpdateFollowupBodySchema = z.object({
 });
 
 const UuidParamSchema = z.string().uuid();
+
+const UpdateFunnelStageBodySchema = z.object({
+  nurture_video_url: z.string().nullable().optional(),
+  call_link: z.string().nullable().optional(),
+});
 
 function isDuplicateSequence(err: unknown): boolean {
   return (
@@ -261,6 +267,45 @@ export default async function followupsRoutes(app: FastifyInstance): Promise<voi
 
     req.log.info({ template_id: paramParsed.data }, 'followup template deactivated');
     return reply.code(200).send({ id: paramParsed.data, isActive: false });
+  });
+
+  // PUT /admin/funnel-stages/:stageId
+  app.put<{ Params: { stageId: string } }>('/admin/funnel-stages/:stageId', async (req, reply) => {
+    if (!(await verifyAdminAuth(req, app))) {
+      return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });
+    }
+
+    const paramParsed = UuidParamSchema.safeParse(req.params.stageId);
+    if (!paramParsed.success) {
+      return reply
+        .code(400)
+        .send({ error: { code: 'INVALID_PAYLOAD', details: paramParsed.error.issues } });
+    }
+
+    const stage = await getFunnelStageById(getDb(), paramParsed.data);
+    if (!stage) {
+      return reply.code(404).send({ error: { code: 'NOT_FOUND' } });
+    }
+
+    const bodyParsed = UpdateFunnelStageBodySchema.safeParse(req.body);
+    if (!bodyParsed.success) {
+      return reply
+        .code(400)
+        .send({ error: { code: 'INVALID_PAYLOAD', details: bodyParsed.error.issues } });
+    }
+
+    const drizzlePatch: Partial<{ nurtureVideoUrl: string | null; callLink: string | null }> = {};
+    if ('nurture_video_url' in bodyParsed.data)
+      drizzlePatch.nurtureVideoUrl = bodyParsed.data.nurture_video_url ?? null;
+    if ('call_link' in bodyParsed.data) drizzlePatch.callLink = bodyParsed.data.call_link ?? null;
+
+    const updated = await updateFunnelStage(getDb(), paramParsed.data, drizzlePatch);
+    if (!updated) {
+      return reply.code(404).send({ error: { code: 'NOT_FOUND' } });
+    }
+
+    req.log.info({ stage_id: updated.id }, 'funnel stage updated');
+    return reply.code(200).send(updated);
   });
 
   // GET /admin/leads/:subscriberId/followup-history

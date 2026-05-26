@@ -217,6 +217,45 @@ function renderMain() {
   }
 }
 
+function stageConfigPanel(stage) {
+  return `
+    <div class="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 mb-6">
+      <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Variables de personalización</h3>
+      <div class="grid grid-cols-1 gap-3">
+        <div>
+          <label class="text-xs text-gray-400 block mb-1">Video de nurture <span class="text-gray-600 font-mono">{{nurture_video}}</span></label>
+          <input type="url" id="nurture-video-${stage.id}"
+            value="${escHtml(stage.nurtureVideoUrl ?? '')}"
+            placeholder="https://youtube.com/watch?v=..."
+            class="w-full bg-[#111] border border-gray-700 rounded px-3 py-1.5 text-sm text-gray-200 focus:border-teal-500 focus:outline-none">
+        </div>
+        <div>
+          <label class="text-xs text-gray-400 block mb-1">Link de llamada <span class="text-gray-600 font-mono">{{call_link}}</span></label>
+          <input type="url" id="call-link-${stage.id}"
+            value="${escHtml(stage.callLink ?? '')}"
+            placeholder="https://calendly.com/..."
+            class="w-full bg-[#111] border border-gray-700 rounded px-3 py-1.5 text-sm text-gray-200 focus:border-teal-500 focus:outline-none">
+        </div>
+      </div>
+      <button onclick="saveStageConfig('${stage.id}')"
+        class="mt-3 px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white text-xs rounded transition-colors">
+        Guardar variables
+      </button>
+    </div>
+  `;
+}
+
+function placeholderToolbar(textareaId) {
+  return `
+    <div class="placeholder-toolbar">
+      <span class="text-xs text-gray-600">Insertar:</span>
+      <span class="ph-badge" onclick="insertPlaceholder('{{name}}', '${textareaId}')">{{name}}</span>
+      <span class="ph-badge" onclick="insertPlaceholder('{{nurture_video}}', '${textareaId}')">{{nurture_video}}</span>
+      <span class="ph-badge" onclick="insertPlaceholder('{{call_link}}', '${textareaId}')">{{call_link}}</span>
+    </div>
+  `;
+}
+
 function renderStagePanel(main) {
   const stage = STATE.stages.find((s) => s.id === STATE.activeStageId);
   if (!stage) {
@@ -240,6 +279,7 @@ function renderStagePanel(main) {
           Guardar cambios
         </button>
       </div>
+      ${stageConfigPanel(stage)}
       ${cards.length ? cards : '<p class="text-gray-500 text-sm">No hay follow-ups en esta etapa.</p>'}
     </div>
   `;
@@ -280,6 +320,7 @@ function templateCard(t, stage) {
 
 function textCardBody(t) {
   return `
+    ${placeholderToolbar(`text-${t.id}`)}
     <textarea id="text-${t.id}" rows="3"
       class="w-full bg-[#111] border border-gray-700 rounded px-3 py-2 text-sm text-gray-200 focus:border-teal-500 focus:outline-none mb-3"
       onchange="markDirty('${t.id}')">${escHtml(t.textTemplate ?? '')}</textarea>
@@ -312,6 +353,7 @@ function contentCardBody(t) {
     : '';
 
   return `
+    ${placeholderToolbar(`text-${t.id}`)}
     <textarea id="text-${t.id}" rows="3"
       class="w-full bg-[#111] border border-gray-700 rounded px-3 py-2 text-sm text-gray-200 focus:border-teal-500 focus:outline-none mb-3"
       onchange="saveContentText('${t.id}', '${txtMsg?.id ?? ''}', this.value)"
@@ -889,6 +931,44 @@ async function uploadAsset(file) {
   return url;
 }
 
+// ── Placeholder insertion ─────────────────────────────────────────────────────
+function insertPlaceholder(ph, id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const s = el.selectionStart ?? el.value.length;
+  const e = el.selectionEnd ?? el.value.length;
+  el.value = el.value.slice(0, s) + ph + el.value.slice(e);
+  el.selectionStart = el.selectionEnd = s + ph.length;
+  el.focus();
+  el.dispatchEvent(new Event('change'));
+}
+
+// ── Stage config (nurture_video_url / call_link) ──────────────────────────────
+async function saveStageConfig(stageId) {
+  const nurtureInput = document.getElementById(`nurture-video-${stageId}`);
+  const callInput = document.getElementById(`call-link-${stageId}`);
+  const patch = {
+    nurture_video_url: nurtureInput?.value.trim() || null,
+    call_link: callInput?.value.trim() || null,
+  };
+  try {
+    const updated = await api(`/admin/funnel-stages/${stageId}`, {
+      method: 'PUT',
+      body: JSON.stringify(patch),
+    });
+    if (updated) {
+      const stage = STATE.stages.find((s) => s.id === stageId);
+      if (stage) {
+        stage.nurtureVideoUrl = updated.nurtureVideoUrl;
+        stage.callLink = updated.callLink;
+      }
+      toast('Variables guardadas');
+    }
+  } catch (e) {
+    toast(`Error guardando variables: ${e.message}`, false);
+  }
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function escHtml(str) {
   return String(str ?? '')
@@ -936,3 +1016,5 @@ window.uploadResourceImage = uploadResourceImage;
 window.clearContentImage = clearContentImage;
 window.clearMessageImage = clearMessageImage;
 window.clearResourceImage = clearResourceImage;
+window.insertPlaceholder = insertPlaceholder;
+window.saveStageConfig = saveStageConfig;

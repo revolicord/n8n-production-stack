@@ -122,6 +122,22 @@ export async function listFunnelStages(
   return db.select().from(funnelStages).where(condition).orderBy(asc(funnelStages.position));
 }
 
+export async function updateFunnelStage(
+  db: DbClient,
+  stageId: string,
+  patch: Partial<{
+    nurtureVideoUrl: string | null;
+    callLink: string | null;
+  }>,
+): Promise<FunnelStage | null> {
+  const rows = await db
+    .update(funnelStages)
+    .set(patch)
+    .where(eq(funnelStages.id, stageId))
+    .returning();
+  return rows[0] ?? null;
+}
+
 export async function listLeadFollowupHistory(
   db: DbClient,
   args: { tenantId: string; subscriberId: string; limit?: number },

@@ -47,3 +47,30 @@ textarea {
   background: #14b8a614;
   border-left: 3px solid #14b8a6;
 }
+
+/* Placeholder insertion toolbar */
+.placeholder-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.ph-badge {
+  cursor: pointer;
+  padding: 1px 8px;
+  border-radius: 9999px;
+  background: #1e293b;
+  color: #64748b;
+  font-size: 11px;
+  font-family: monospace;
+  border: 1px solid #334155;
+  transition: background-color 0.15s, color 0.15s;
+  user-select: none;
+}
+
+.ph-badge:hover {
+  background: #334155;
+  color: #94a3b8;
+}

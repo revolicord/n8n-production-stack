@@ -264,6 +264,8 @@ export const funnelStages = apiSchema.table(
     goal: text('goal'),
     validNextStages: text('valid_next_stages').array().notNull().default(sql`'{}'::text[]`),
     maxFollowups: integer('max_followups').default(3),
+    nurtureVideoUrl: text('nurture_video_url'),
+    callLink: text('call_link'),
     isActive: boolean('is_active').default(true),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
