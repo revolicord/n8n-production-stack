@@ -42,7 +42,8 @@ export async function processBatchJob(job: Job<ProcessBatchJobData>): Promise<Pr
   const currentToken = await getDebounceToken(getRedis(), { tenantId, subscriberId });
   const firstMsgTs = await getFirstMsgTs(getRedis(), { tenantId, subscriberId });
   const exceededMaxWait = firstMsgTs !== null && Date.now() - firstMsgTs >= config.MAX_WAIT_MS;
-  const isForced = reason === 'hard_limit' || reason === 'post_lock_drain';
+  const isForced =
+    reason === 'hard_limit' || reason === 'post_lock_drain' || reason === 'system_event';
   const isLatest = currentToken === token;
 
   if (!isLatest && !exceededMaxWait && !isForced) {

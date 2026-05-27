@@ -7,7 +7,7 @@ export interface ProcessBatchJobData {
   tenantId: string;
   subscriberId: string;
   token: string;
-  reason?: 'debounce' | 'hard_limit' | 'post_lock_drain';
+  reason?: 'debounce' | 'hard_limit' | 'post_lock_drain' | 'system_event';
 }
 
 export const defaultJobOptions: JobsOptions = {
