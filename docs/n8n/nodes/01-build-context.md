@@ -165,7 +165,10 @@ const igCtx = body.instagram_context || {};
 const signals = (sub.metadata && sub.metadata.signals)
   || (body.lead_state && body.lead_state.signals)
   || null;
-const calendlyUrl = (body.tenant && body.tenant.config && body.tenant.config.calendly_url) || null;
+const baseCalendlyUrl = (body.tenant && body.tenant.config && body.tenant.config.calendly_url) || null;
+const calendlyUrl = baseCalendlyUrl && sub.id
+  ? baseCalendlyUrl + (baseCalendlyUrl.includes('?') ? '&' : '?') + 'utm_content=' + sub.id
+  : baseCalendlyUrl;
 
 const staticPrompt = $('System Prompt').first()
   && $('System Prompt').first().json
