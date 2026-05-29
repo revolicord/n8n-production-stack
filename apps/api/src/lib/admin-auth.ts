@@ -11,7 +11,8 @@ export async function verifyAdminAuth(
   if (verifyBearerToken(req.headers.authorization, cfg.N8N_CALLBACK_TOKEN)) {
     return true;
   }
-  // Camino 2: JWT firmado por el endpoint /admin/login
+  // Camino 2: JWT con role:'admin' firmado por el proxy del dashboard Next.js
+  // (apps/dashboard .../api/admin/[...path]) usando ADMIN_JWT_SECRET.
   try {
     const decoded = await req.jwtVerify<{ role?: string }>();
     return decoded.role === 'admin';

@@ -13,7 +13,6 @@ La API está implementada con Fastify en `apps/api/`. Todos los endpoints viven 
 | POST | `/tenants/:slug/tools/sync` | n8n / script | Sincroniza flows desde ManyChat |
 | POST | `/admin/turn-completed` | n8n (al final del agente) | Cierra turno, libera lock |
 | POST | `/admin/leads/:id/stage` | n8n (Router) | Avanza etapa del lead |
-| POST | `/admin/login` | Dashboard | Obtiene JWT de admin (password → token) |
 | GET | `/admin/tenants` | Dashboard | Lista tenants activos |
 | GET | `/admin/tenants/:id/funnel-stages` | Dashboard | Lista etapas del embudo de un tenant |
 | GET | `/admin/funnel-stages/:id/followups` | Dashboard / UI | Lista plantillas de follow-up de una etapa |
@@ -42,11 +41,14 @@ Los endpoints `/admin/*` admiten **dos caminos** (dual-auth, `lib/admin-auth.ts`
 Authorization: Bearer <N8N_CALLBACK_TOKEN>
 ```
 
-**Camino 2 — JWT de admin** (dashboard):
-1. `POST /admin/login` con `{ "password": "<ADMIN_PASSWORD>" }` → recibe `{ token, expires_in: 43200 }`
-2. Usar el token: `Authorization: Bearer <token>`
+**Camino 2 — JWT de admin** (panel `/settings` del dashboard Next.js):
+El proxy admin del dashboard (`apps/dashboard/.../api/admin/[...path]`) valida la cookie de sesión
+del panel (`panel_session`) y **re-firma** un JWT corto (TTL 5 min, `role:'admin'`) con
+`ADMIN_JWT_SECRET` —el mismo secreto que usa este API— y lo reenvía como `Authorization: Bearer <jwt>`.
+El API solo verifica el JWT (`req.jwtVerify`, `role === 'admin'`); no hay endpoint de login en el API.
 
-El JWT expira a las 12 h. El login overlay del dashboard detecta la expiración y muestra el formulario.
+> El antiguo `POST /admin/login` (password → JWT 12 h) y el SPA servido en `/dashboard` fueron
+> retirados al consolidar el panel en `dashboard.revolicord.com/settings` (ADR-0021).
 
 Los endpoints de liveness/readiness no requieren auth.  
 `/webhook/manychat` usa su propio token de ManyChat (cabecera `X-MC-Token`).
@@ -91,5 +93,6 @@ Todos los errores usan la misma estructura:
 
 - [Follow-up Templates](./followup-templates.md) — ADR-0015 CRUD completo (incluye `type='content'` y `followup_messages`)
 - [Agent Resources](./agent-resources.md) — ADR-0019 recursos de cierre/objeción para el agente
-- [Dashboard SPA](./dashboard-spa.md) — Arquitectura del frontend: ciclo de vida, convención camelCase/snake_case, layout de cards
-- [Dashboard Smoke Checklist](./dashboard-smoke.md) — 12 pasos de smoke e2e tras cada deploy
+- [Consolidación del panel `/settings`](../adr/0021-consolidate-admin-panel-settings.md) — ADR-0021: migración del SPA legacy a rutas nativas del dashboard Next.js + proxy admin
+- [Dashboard SPA](./dashboard-spa.md) — ⚠️ LEGACY (retirado en ADR-0021): arquitectura del antiguo SPA servido por Fastify en `/dashboard`
+- [Dashboard Smoke Checklist](./dashboard-smoke.md) — ⚠️ parcialmente obsoleto: el panel admin vive ahora en `dashboard.revolicord.com/settings`

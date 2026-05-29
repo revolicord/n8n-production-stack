@@ -24,6 +24,21 @@ export async function verifyPanelSession(token: string): Promise<boolean> {
   }
 }
 
+// Admin proxy: re-firma un JWT corto con ADMIN_JWT_SECRET (mismo secreto que el
+// API Fastify) para autenticarse contra los endpoints /admin/*. role:'admin' es
+// lo que verifyAdminAuth del API espera. TTL corto: el token solo vive el tiempo
+// de un request proxeado.
+const adminJwtSecret = process.env.ADMIN_JWT_SECRET ?? 'dev-secret-change-in-production';
+const ADMIN_SECRET = new TextEncoder().encode(adminJwtSecret);
+
+export async function signAdminToken(): Promise<string> {
+  return new SignJWT({ role: 'admin' })
+    .setProtectedHeader({ alg: ALG })
+    .setIssuedAt()
+    .setExpirationTime('5m')
+    .sign(ADMIN_SECRET);
+}
+
 // Pure-JS timing-safe comparison — works in Edge Runtime and Node.js
 export function safeEqualString(a: string, b: string): boolean {
   const enc = new TextEncoder();

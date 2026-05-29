@@ -1,12 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import jwt from '@fastify/jwt';
 import multipart from '@fastify/multipart';
 import sensible from '@fastify/sensible';
-import staticPlugin from '@fastify/static';
 import Fastify from 'fastify';
 import { getConfig } from './config.js';
 import { closeQueue } from './lib/queue.js';
@@ -40,7 +37,11 @@ async function main() {
   });
 
   await app.register(helmet, {
-    contentSecurityPolicy: false, // API JSON + dashboard HTML servido desde /dashboard
+    // API JSON-only: el panel admin vive en el dashboard Next.js (dashboard.revolicord.com).
+    // CSP estricta — esta superficie nunca renderiza HTML ni se embebe en frames.
+    contentSecurityPolicy: {
+      directives: { defaultSrc: ["'none'"], frameAncestors: ["'none'"] },
+    },
   });
   await app.register(cors, {
     // En producción: mismo origen (el dashboard se sirve desde el mismo Fastify).
@@ -56,15 +57,6 @@ async function main() {
     limits: { fileSize: 8 * 1024 * 1024 }, // 8 MB max; validado también en la ruta
   });
   await app.register(sensible);
-
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = dirname(__filename);
-  await app.register(staticPlugin, {
-    root: resolve(__dirname, '..', 'public'),
-    prefix: '/dashboard/',
-    decorateReply: false,
-  });
-  app.get('/dashboard', (_req, reply) => reply.redirect('/dashboard/'));
 
   app.addHook('onSend', async (req, reply, payload) => {
     reply.header('x-correlation-id', req.id);

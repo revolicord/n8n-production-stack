@@ -99,10 +99,10 @@ export function Sidebar({ tenant, stages: _stages, allTenants }: SidebarProps) {
 
         <div className="border-t border-qc-border mx-3 my-1.5" />
         <SidebarItem
-          href="https://api.revolicord.com/dashboard"
-          external
+          href="/settings"
           icon={IconSettings}
           label="Settings"
+          active={pathname.startsWith('/settings')}
         />
       </nav>
 

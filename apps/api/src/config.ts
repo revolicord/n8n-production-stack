@@ -11,7 +11,6 @@ const ConfigSchema = z.object({
   MC_WEBHOOK_TOKEN: z.string().min(16),
   N8N_CALLBACK_TOKEN: z.string().min(16),
   ADMIN_JWT_SECRET: z.string().min(32),
-  ADMIN_PASSWORD: z.string().min(8),
 
   N8N_BASE_URL: z.string().url(),
   PUBLIC_API_URL: z.string().url(),
