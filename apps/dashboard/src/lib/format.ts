@@ -17,6 +17,11 @@ export function fmtDelta(d: number): string {
   return `${sign}${d}%`;
 }
 
+/** Formato "DD.M" igual que el Excel de Alex: día con padding, mes sin padding (ej. "04.2"). */
+export function fmtDayMonth(d: Date): string {
+  return `${String(d.getUTCDate()).padStart(2, '0')}.${d.getUTCMonth() + 1}`;
+}
+
 export const MONTH_LABELS_ES = [
   'Ene',
   'Feb',
