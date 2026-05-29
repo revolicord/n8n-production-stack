@@ -26,6 +26,7 @@ Estos documentos están en orden de lectura. **No saltarse ninguno antes de empe
 | 11 | [`11_DEPLOY_RUNBOOK.md`](./11_DEPLOY_RUNBOOK.md) | Dockerfile, Traefik labels, docker-stack.yml, DNS |
 | 12 | [`12_TESTING_AND_SMOKE.md`](./12_TESTING_AND_SMOKE.md) | Checklist manual end-to-end por sprint |
 | 13 | [`13_OUT_OF_SCOPE_AND_FUTURE.md`](./13_OUT_OF_SCOPE_AND_FUTURE.md) | Qué NO entra en este paquete y por qué |
+| 14 | [`14_KANBAN_PROSPECTOS.md`](./14_KANBAN_PROSPECTOS.md) | Vista Kanban (read-only) de Prospectos: toggle Tabla↔Kanban, board por etapas |
 
 Mockups visuales (abrir en el navegador local):
 
