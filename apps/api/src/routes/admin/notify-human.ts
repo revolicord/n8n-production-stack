@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { verifyAdminAuth } from '../../lib/admin-auth.js';
 import { getDb } from '../../lib/db.js';
+import { adminSecurity, doc, uuidParams, zodDoc } from '../../lib/openapi.js';
 import { getRedis } from '../../lib/redis.js';
 import { createNotification, tryClaimNotificationThrottle } from '../../services/notifications.js';
 import { getSubscriberByUuid } from '../../services/subscribers.js';
@@ -30,6 +31,16 @@ export const NotifyHumanBodySchema = z.object({
 export default async function notifyHumanRoute(app: FastifyInstance): Promise<void> {
   app.post<{ Params: { subscriberId: string } }>(
     '/admin/leads/:subscriberId/notify-human',
+    doc({
+      tags: ['admin/leads'],
+      summary: 'Escalar la conversación a un humano (tool notify_human)',
+      description:
+        'Crea una notificación kind=agent que el worker entrega a Telegram. No pausa al lead. ' +
+        'Throttle de 10 min compartido con la detección determinista (202 con throttled=true si aplica).',
+      security: adminSecurity,
+      params: uuidParams('subscriberId'),
+      body: zodDoc(NotifyHumanBodySchema),
+    }),
     async (req, reply) => {
       if (!(await verifyAdminAuth(req, app))) {
         return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });

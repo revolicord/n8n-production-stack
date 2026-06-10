@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { verifyAdminAuth } from '../../lib/admin-auth.js';
 import { getDb } from '../../lib/db.js';
+import { adminSecurity, doc, uuidParams, zodDoc } from '../../lib/openapi.js';
 import {
   createStageTransition,
   getLeadStage,
@@ -65,6 +66,14 @@ const SetStageBodySchema = z
 export default async function setStageRoute(app: FastifyInstance): Promise<void> {
   app.post<{ Params: { subscriberId: string } }>(
     '/admin/leads/:subscriberId/stage',
+    doc({
+      tags: ['admin/leads'],
+      summary: 'Avanzar la etapa del funnel de un lead',
+      description: `Transiciones válidas: A→MS→B→C→D (cualquiera→disqualified salvo D). Si la etapa destino es C, D o disqualified se archivan los follow-ups activos ('stage_advanced'). Si new_stage es 'disqualified', reason debe ser uno de: ${DISQUALIFIED_REASONS.join(', ')}.`,
+      security: adminSecurity,
+      params: uuidParams('subscriberId'),
+      body: zodDoc(SetStageBodySchema),
+    }),
     async (req, reply) => {
       if (!(await verifyAdminAuth(req, app))) {
         return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });

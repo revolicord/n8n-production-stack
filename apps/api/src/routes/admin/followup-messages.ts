@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { verifyAdminAuth } from '../../lib/admin-auth.js';
 import { getDb } from '../../lib/db.js';
+import { adminSecurity, doc, uuidParams, zodDoc } from '../../lib/openapi.js';
 import {
   createFollowupMessage,
   deleteFollowupMessage,
@@ -81,6 +82,12 @@ export default async function followupMessagesRoutes(app: FastifyInstance): Prom
   // GET /admin/followup-templates/:templateId/messages
   app.get<{ Params: { templateId: string } }>(
     '/admin/followup-templates/:templateId/messages',
+    doc({
+      tags: ['admin/followups'],
+      summary: 'Listar mensajes de un template type=content',
+      security: adminSecurity,
+      params: uuidParams('templateId'),
+    }),
     async (req, reply) => {
       if (!(await verifyAdminAuth(req, app))) {
         return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });
@@ -100,6 +107,15 @@ export default async function followupMessagesRoutes(app: FastifyInstance): Prom
   // POST /admin/followup-templates/:templateId/messages
   app.post<{ Params: { templateId: string } }>(
     '/admin/followup-templates/:templateId/messages',
+    doc({
+      tags: ['admin/followups'],
+      summary: 'Crear mensaje en un template type=content',
+      description:
+        'message_type=text requiere text_content; message_type=image requiere media_url.',
+      security: adminSecurity,
+      params: uuidParams('templateId'),
+      body: zodDoc(CreateMessageBodySchema),
+    }),
     async (req, reply) => {
       if (!(await verifyAdminAuth(req, app))) {
         return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });
@@ -138,78 +154,97 @@ export default async function followupMessagesRoutes(app: FastifyInstance): Prom
   );
 
   // PUT /admin/followup-messages/:id
-  app.put<{ Params: { id: string } }>('/admin/followup-messages/:id', async (req, reply) => {
-    if (!(await verifyAdminAuth(req, app))) {
-      return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });
-    }
-    const { id } = req.params;
-    if (!UuidParam.safeParse(id).success) {
-      return reply.code(400).send({ error: { code: 'BAD_REQUEST', message: 'id inválido' } });
-    }
-    const bodyParsed = UpdateMessageBodySchema.safeParse(req.body);
-    if (!bodyParsed.success) {
-      return reply
-        .code(400)
-        .send({ error: { code: 'BAD_REQUEST', issues: bodyParsed.error.issues } });
-    }
-    const body = bodyParsed.data;
-    const db = getDb();
+  app.put<{ Params: { id: string } }>(
+    '/admin/followup-messages/:id',
+    doc({
+      tags: ['admin/followups'],
+      summary: 'Actualizar mensaje de follow-up (parcial)',
+      security: adminSecurity,
+      params: uuidParams('id'),
+      body: zodDoc(UpdateMessageBodySchema),
+    }),
+    async (req, reply) => {
+      if (!(await verifyAdminAuth(req, app))) {
+        return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });
+      }
+      const { id } = req.params;
+      if (!UuidParam.safeParse(id).success) {
+        return reply.code(400).send({ error: { code: 'BAD_REQUEST', message: 'id inválido' } });
+      }
+      const bodyParsed = UpdateMessageBodySchema.safeParse(req.body);
+      if (!bodyParsed.success) {
+        return reply
+          .code(400)
+          .send({ error: { code: 'BAD_REQUEST', issues: bodyParsed.error.issues } });
+      }
+      const body = bodyParsed.data;
+      const db = getDb();
 
-    const existing = await getFollowupMessageById(db, id);
-    if (!existing) {
-      return reply
-        .code(404)
-        .send({ error: { code: 'NOT_FOUND', message: 'mensaje no encontrado' } });
-    }
+      const existing = await getFollowupMessageById(db, id);
+      if (!existing) {
+        return reply
+          .code(404)
+          .send({ error: { code: 'NOT_FOUND', message: 'mensaje no encontrado' } });
+      }
 
-    // Merge con la fila existente y revalidar invariante type/field
-    const effectiveType = body.message_type ?? existing.messageType;
-    const effectiveText = 'text_content' in body ? body.text_content : existing.textContent;
-    const effectiveMedia = 'media_url' in body ? body.media_url : existing.mediaUrl;
+      // Merge con la fila existente y revalidar invariante type/field
+      const effectiveType = body.message_type ?? existing.messageType;
+      const effectiveText = 'text_content' in body ? body.text_content : existing.textContent;
+      const effectiveMedia = 'media_url' in body ? body.media_url : existing.mediaUrl;
 
-    if (!isMessageConsistent(effectiveType, effectiveText, effectiveMedia)) {
-      return reply.code(400).send({
-        error: {
-          code: 'INVALID_PAYLOAD',
-          message:
-            'text_content requerido si message_type=text; media_url requerido si message_type=image',
-        },
-      });
-    }
+      if (!isMessageConsistent(effectiveType, effectiveText, effectiveMedia)) {
+        return reply.code(400).send({
+          error: {
+            code: 'INVALID_PAYLOAD',
+            message:
+              'text_content requerido si message_type=text; media_url requerido si message_type=image',
+          },
+        });
+      }
 
-    const patch: Parameters<typeof updateFollowupMessage>[2] = {};
-    if (body.message_type !== undefined) patch.messageType = body.message_type;
-    if (body.text_content !== undefined) patch.textContent = body.text_content;
-    if (body.media_url !== undefined) patch.mediaUrl = body.media_url;
-    if (body.sort_order !== undefined) patch.sortOrder = body.sort_order;
-    if (body.ai_image_context !== undefined) patch.aiImageContext = body.ai_image_context;
+      const patch: Parameters<typeof updateFollowupMessage>[2] = {};
+      if (body.message_type !== undefined) patch.messageType = body.message_type;
+      if (body.text_content !== undefined) patch.textContent = body.text_content;
+      if (body.media_url !== undefined) patch.mediaUrl = body.media_url;
+      if (body.sort_order !== undefined) patch.sortOrder = body.sort_order;
+      if (body.ai_image_context !== undefined) patch.aiImageContext = body.ai_image_context;
 
-    const updated = await updateFollowupMessage(db, id, patch);
-    if (!updated) {
-      return reply
-        .code(404)
-        .send({ error: { code: 'NOT_FOUND', message: 'mensaje no encontrado' } });
-    }
-    return reply.code(200).send(toResponse(updated));
-  });
+      const updated = await updateFollowupMessage(db, id, patch);
+      if (!updated) {
+        return reply
+          .code(404)
+          .send({ error: { code: 'NOT_FOUND', message: 'mensaje no encontrado' } });
+      }
+      return reply.code(200).send(toResponse(updated));
+    },
+  );
 
   // DELETE /admin/followup-messages/:id
-  app.delete<{ Params: { id: string } }>('/admin/followup-messages/:id', async (req, reply) => {
-    if (!(await verifyAdminAuth(req, app))) {
-      return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });
-    }
-    const { id } = req.params;
-    if (!UuidParam.safeParse(id).success) {
-      return reply.code(400).send({ error: { code: 'BAD_REQUEST', message: 'id inválido' } });
-    }
-    const db = getDb();
-    const existing = await getFollowupMessageById(db, id);
-    if (!existing) {
-      return reply
-        .code(404)
-        .send({ error: { code: 'NOT_FOUND', message: 'mensaje no encontrado' } });
-    }
-    await deleteFollowupMessage(db, id);
-    return reply.code(204).send();
-  });
+  app.delete<{ Params: { id: string } }>(
+    '/admin/followup-messages/:id',
+    doc({
+      tags: ['admin/followups'],
+      summary: 'Eliminar mensaje de follow-up (hard delete)',
+      security: adminSecurity,
+      params: uuidParams('id'),
+    }),
+    async (req, reply) => {
+      if (!(await verifyAdminAuth(req, app))) {
+        return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });
+      }
+      const { id } = req.params;
+      if (!UuidParam.safeParse(id).success) {
+        return reply.code(400).send({ error: { code: 'BAD_REQUEST', message: 'id inválido' } });
+      }
+      const db = getDb();
+      const existing = await getFollowupMessageById(db, id);
+      if (!existing) {
+        return reply
+          .code(404)
+          .send({ error: { code: 'NOT_FOUND', message: 'mensaje no encontrado' } });
+      }
+      await deleteFollowupMessage(db, id);
+      return reply.code(204).send();
+    },
+  );
 }

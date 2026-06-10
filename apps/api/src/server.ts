@@ -4,6 +4,8 @@ import helmet from '@fastify/helmet';
 import jwt from '@fastify/jwt';
 import multipart from '@fastify/multipart';
 import sensible from '@fastify/sensible';
+import swagger from '@fastify/swagger';
+import swaggerUi from '@fastify/swagger-ui';
 import Fastify from 'fastify';
 import { getConfig } from './config.js';
 import { closeQueue } from './lib/queue.js';
@@ -36,12 +38,17 @@ async function main() {
     trustProxy: true,
   });
 
-  await app.register(helmet, {
-    // API JSON-only: el panel admin vive en el dashboard Next.js (dashboard.revolicord.com).
-    // CSP estricta — esta superficie nunca renderiza HTML ni se embebe en frames.
-    contentSecurityPolicy: {
-      directives: { defaultSrc: ["'none'"], frameAncestors: ["'none'"] },
-    },
+  // API JSON-only: el panel admin vive en el dashboard Next.js (dashboard.revolicord.com).
+  // CSP estricta — esta superficie nunca renderiza HTML ni se embebe en frames.
+  // Excepción: /docs (Swagger UI) sirve HTML+JS y usa su propio CSP (staticCSP).
+  await app.register(helmet, { global: false });
+  app.addHook('onRequest', async (req, reply) => {
+    if (req.url === '/docs' || req.url.startsWith('/docs/')) return;
+    await reply.helmet({
+      contentSecurityPolicy: {
+        directives: { defaultSrc: ["'none'"], frameAncestors: ["'none'"] },
+      },
+    });
   });
   await app.register(cors, {
     // En producción: mismo origen (el dashboard se sirve desde el mismo Fastify).
@@ -57,6 +64,62 @@ async function main() {
     limits: { fileSize: 8 * 1024 * 1024 }, // 8 MB max; validado también en la ruta
   });
   await app.register(sensible);
+
+  // OpenAPI (ADR-0022): spec generado desde las rutas; UI interactiva en /docs,
+  // spec crudo en /docs/json. Los schemas son solo documentación (ver lib/openapi.ts).
+  await app.register(swagger, {
+    openapi: {
+      openapi: '3.0.3',
+      info: {
+        title: 'DM Setter API',
+        description:
+          'API entre ManyChat/Telegram y los workflows de n8n: debounce, locks, turnos, ' +
+          'escalado a humano y administración del funnel. Los endpoints /admin/* aceptan ' +
+          'bearer estático (N8N_CALLBACK_TOKEN) o JWT admin del dashboard.',
+        version: '0.0.1',
+      },
+      servers: [{ url: '/', description: 'Mismo origen' }],
+      tags: [
+        { name: 'health', description: 'Liveness / readiness' },
+        { name: 'webhooks', description: 'Entradas externas (ManyChat, Telegram)' },
+        { name: 'admin/leads', description: 'Acciones sobre leads (n8n + dashboard)' },
+        { name: 'admin/notifications', description: 'Notificaciones de escalado a humano' },
+        {
+          name: 'admin/followups',
+          description: 'Funnel stages, templates y mensajes de follow-up',
+        },
+        { name: 'admin/agent-resources', description: 'Recursos de cierre/objeción del agente' },
+        { name: 'admin/misc', description: 'Tenants, assets y callbacks de turno' },
+        { name: 'tools', description: 'Catálogo de flows ManyChat para n8n' },
+      ],
+      components: {
+        securitySchemes: {
+          bearerAuth: {
+            type: 'http',
+            scheme: 'bearer',
+            description: 'N8N_CALLBACK_TOKEN estático o JWT con role=admin (ADMIN_JWT_SECRET)',
+          },
+          mcToken: {
+            type: 'apiKey',
+            in: 'header',
+            name: 'x-mc-token',
+            description: 'MC_WEBHOOK_TOKEN compartido con ManyChat',
+          },
+          telegramSecret: {
+            type: 'apiKey',
+            in: 'header',
+            name: 'x-telegram-bot-api-secret-token',
+            description: 'Secreto configurado en setWebhook de Telegram',
+          },
+        },
+      },
+    },
+  });
+  await app.register(swaggerUi, {
+    routePrefix: '/docs',
+    staticCSP: true,
+    uiConfig: { docExpansion: 'list', deepLinking: true, persistAuthorization: true },
+  });
 
   app.addHook('onSend', async (req, reply, payload) => {
     reply.header('x-correlation-id', req.id);

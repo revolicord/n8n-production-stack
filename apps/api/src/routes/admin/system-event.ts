@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { getConfig } from '../../config.js';
 import { verifyAdminAuth } from '../../lib/admin-auth.js';
 import { getDb } from '../../lib/db.js';
+import { adminSecurity, doc, uuidParams, zodDoc } from '../../lib/openapi.js';
 import { getProcessBatchQueue } from '../../lib/queue.js';
 import { getRedis } from '../../lib/redis.js';
 import { debouncePush } from '../../services/debounce.js';
@@ -43,6 +44,16 @@ export default async function systemEventRoute(app: FastifyInstance): Promise<vo
 
   app.post<{ Params: { subscriberId: string } }>(
     '/admin/leads/:subscriberId/system-event',
+    doc({
+      tags: ['admin/leads'],
+      summary: 'Inyectar un evento de sistema al agente',
+      description:
+        'Mete el evento (ej. booking_confirmed) como BufferMessage reply_type=system_event en el flujo ' +
+        'normal del worker: se procesa de inmediato sin debounce y el agente lo ve como <system_event>. Responde 202.',
+      security: adminSecurity,
+      params: uuidParams('subscriberId'),
+      body: zodDoc(SystemEventBodySchema),
+    }),
     async (req, reply) => {
       if (!(await verifyAdminAuth(req, app))) {
         return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });

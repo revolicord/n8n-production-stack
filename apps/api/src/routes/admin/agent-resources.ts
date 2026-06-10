@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { verifyAdminAuth } from '../../lib/admin-auth.js';
 import { getDb } from '../../lib/db.js';
+import { adminSecurity, doc, uuidParams, zodDoc } from '../../lib/openapi.js';
 import {
   createAgentResource,
   deactivateAgentResource,
@@ -61,30 +62,52 @@ export default async function agentResourcesRoutes(app: FastifyInstance): Promis
   app.get<{
     Params: { tenantId: string };
     Querystring: { category?: string };
-  }>('/admin/tenants/:tenantId/agent-resources', async (req, reply) => {
-    if (!(await verifyAdminAuth(req, app))) {
-      return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });
-    }
-    const paramParsed = UuidParamSchema.safeParse(req.params.tenantId);
-    if (!paramParsed.success) {
-      return reply
-        .code(400)
-        .send({ error: { code: 'INVALID_PAYLOAD', details: paramParsed.error.issues } });
-    }
-    const resources = await listAgentResources(getDb(), {
-      tenantId: paramParsed.data,
-      category: req.query.category,
-    });
-    req.log.info(
-      { tenant_id: paramParsed.data, count: resources.length },
-      'agent resources listed',
-    );
-    return reply.code(200).send({ resources });
-  });
+  }>(
+    '/admin/tenants/:tenantId/agent-resources',
+    doc({
+      tags: ['admin/agent-resources'],
+      summary: 'Listar recursos del agente de un tenant',
+      security: adminSecurity,
+      params: uuidParams('tenantId'),
+      querystring: {
+        type: 'object',
+        properties: { category: { type: 'string', enum: ['cierre', 'objecion', 'general'] } },
+      },
+    }),
+    async (req, reply) => {
+      if (!(await verifyAdminAuth(req, app))) {
+        return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });
+      }
+      const paramParsed = UuidParamSchema.safeParse(req.params.tenantId);
+      if (!paramParsed.success) {
+        return reply
+          .code(400)
+          .send({ error: { code: 'INVALID_PAYLOAD', details: paramParsed.error.issues } });
+      }
+      const resources = await listAgentResources(getDb(), {
+        tenantId: paramParsed.data,
+        category: req.query.category,
+      });
+      req.log.info(
+        { tenant_id: paramParsed.data, count: resources.length },
+        'agent resources listed',
+      );
+      return reply.code(200).send({ resources });
+    },
+  );
 
   // POST /admin/tenants/:tenantId/agent-resources
   app.post<{ Params: { tenantId: string } }>(
     '/admin/tenants/:tenantId/agent-resources',
+    doc({
+      tags: ['admin/agent-resources'],
+      summary: 'Crear recurso del agente',
+      description:
+        'Requiere al menos text_content o media_url. 409 DUPLICATE_SLUG si el slug ya existe en el tenant.',
+      security: adminSecurity,
+      params: uuidParams('tenantId'),
+      body: zodDoc(CreateAgentResourceBodySchema),
+    }),
     async (req, reply) => {
       if (!(await verifyAdminAuth(req, app))) {
         return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });
@@ -126,68 +149,87 @@ export default async function agentResourcesRoutes(app: FastifyInstance): Promis
   );
 
   // PUT /admin/agent-resources/:id
-  app.put<{ Params: { id: string } }>('/admin/agent-resources/:id', async (req, reply) => {
-    if (!(await verifyAdminAuth(req, app))) {
-      return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });
-    }
-    const paramParsed = UuidParamSchema.safeParse(req.params.id);
-    if (!paramParsed.success) {
-      return reply
-        .code(400)
-        .send({ error: { code: 'INVALID_PAYLOAD', details: paramParsed.error.issues } });
-    }
-    const existing = await getAgentResourceById(getDb(), paramParsed.data);
-    if (!existing) {
-      return reply.code(404).send({ error: { code: 'NOT_FOUND' } });
-    }
-    const bodyParsed = UpdateAgentResourceBodySchema.safeParse(req.body);
-    if (!bodyParsed.success) {
-      return reply
-        .code(400)
-        .send({ error: { code: 'INVALID_PAYLOAD', details: bodyParsed.error.issues } });
-    }
-    const patch = bodyParsed.data;
-    const drizzlePatch: Parameters<typeof updateAgentResource>[2] = {};
-    if (patch.category !== undefined) drizzlePatch.category = patch.category;
-    if (patch.slug !== undefined) drizzlePatch.slug = patch.slug;
-    if (patch.display_name !== undefined) drizzlePatch.displayName = patch.display_name;
-    if ('trigger_hint' in patch) drizzlePatch.triggerHint = patch.trigger_hint ?? null;
-    if ('text_content' in patch) drizzlePatch.textContent = patch.text_content ?? null;
-    if ('media_url' in patch) drizzlePatch.mediaUrl = patch.media_url ?? null;
-    if (patch.sort_order !== undefined) drizzlePatch.sortOrder = patch.sort_order;
-
-    try {
-      const updated = await updateAgentResource(getDb(), paramParsed.data, drizzlePatch);
-      if (!updated) {
+  app.put<{ Params: { id: string } }>(
+    '/admin/agent-resources/:id',
+    doc({
+      tags: ['admin/agent-resources'],
+      summary: 'Actualizar recurso del agente (parcial)',
+      security: adminSecurity,
+      params: uuidParams('id'),
+      body: zodDoc(UpdateAgentResourceBodySchema),
+    }),
+    async (req, reply) => {
+      if (!(await verifyAdminAuth(req, app))) {
+        return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });
+      }
+      const paramParsed = UuidParamSchema.safeParse(req.params.id);
+      if (!paramParsed.success) {
+        return reply
+          .code(400)
+          .send({ error: { code: 'INVALID_PAYLOAD', details: paramParsed.error.issues } });
+      }
+      const existing = await getAgentResourceById(getDb(), paramParsed.data);
+      if (!existing) {
         return reply.code(404).send({ error: { code: 'NOT_FOUND' } });
       }
-      req.log.info({ resource_id: updated.id }, 'agent resource updated');
-      return reply.code(200).send(updated);
-    } catch (err) {
-      if (isDuplicateSlug(err)) {
-        return reply.code(409).send({ error: { code: 'DUPLICATE_SLUG' } });
+      const bodyParsed = UpdateAgentResourceBodySchema.safeParse(req.body);
+      if (!bodyParsed.success) {
+        return reply
+          .code(400)
+          .send({ error: { code: 'INVALID_PAYLOAD', details: bodyParsed.error.issues } });
       }
-      throw err;
-    }
-  });
+      const patch = bodyParsed.data;
+      const drizzlePatch: Parameters<typeof updateAgentResource>[2] = {};
+      if (patch.category !== undefined) drizzlePatch.category = patch.category;
+      if (patch.slug !== undefined) drizzlePatch.slug = patch.slug;
+      if (patch.display_name !== undefined) drizzlePatch.displayName = patch.display_name;
+      if ('trigger_hint' in patch) drizzlePatch.triggerHint = patch.trigger_hint ?? null;
+      if ('text_content' in patch) drizzlePatch.textContent = patch.text_content ?? null;
+      if ('media_url' in patch) drizzlePatch.mediaUrl = patch.media_url ?? null;
+      if (patch.sort_order !== undefined) drizzlePatch.sortOrder = patch.sort_order;
+
+      try {
+        const updated = await updateAgentResource(getDb(), paramParsed.data, drizzlePatch);
+        if (!updated) {
+          return reply.code(404).send({ error: { code: 'NOT_FOUND' } });
+        }
+        req.log.info({ resource_id: updated.id }, 'agent resource updated');
+        return reply.code(200).send(updated);
+      } catch (err) {
+        if (isDuplicateSlug(err)) {
+          return reply.code(409).send({ error: { code: 'DUPLICATE_SLUG' } });
+        }
+        throw err;
+      }
+    },
+  );
 
   // DELETE /admin/agent-resources/:id  (soft delete)
-  app.delete<{ Params: { id: string } }>('/admin/agent-resources/:id', async (req, reply) => {
-    if (!(await verifyAdminAuth(req, app))) {
-      return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });
-    }
-    const paramParsed = UuidParamSchema.safeParse(req.params.id);
-    if (!paramParsed.success) {
-      return reply
-        .code(400)
-        .send({ error: { code: 'INVALID_PAYLOAD', details: paramParsed.error.issues } });
-    }
-    const existing = await getAgentResourceById(getDb(), paramParsed.data);
-    if (!existing) {
-      return reply.code(404).send({ error: { code: 'NOT_FOUND' } });
-    }
-    await deactivateAgentResource(getDb(), paramParsed.data);
-    req.log.info({ resource_id: paramParsed.data }, 'agent resource deactivated');
-    return reply.code(200).send({ id: paramParsed.data, isActive: false });
-  });
+  app.delete<{ Params: { id: string } }>(
+    '/admin/agent-resources/:id',
+    doc({
+      tags: ['admin/agent-resources'],
+      summary: 'Desactivar recurso del agente (soft delete)',
+      security: adminSecurity,
+      params: uuidParams('id'),
+    }),
+    async (req, reply) => {
+      if (!(await verifyAdminAuth(req, app))) {
+        return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });
+      }
+      const paramParsed = UuidParamSchema.safeParse(req.params.id);
+      if (!paramParsed.success) {
+        return reply
+          .code(400)
+          .send({ error: { code: 'INVALID_PAYLOAD', details: paramParsed.error.issues } });
+      }
+      const existing = await getAgentResourceById(getDb(), paramParsed.data);
+      if (!existing) {
+        return reply.code(404).send({ error: { code: 'NOT_FOUND' } });
+      }
+      await deactivateAgentResource(getDb(), paramParsed.data);
+      req.log.info({ resource_id: paramParsed.data }, 'agent resource deactivated');
+      return reply.code(200).send({ id: paramParsed.data, isActive: false });
+    },
+  );
 }

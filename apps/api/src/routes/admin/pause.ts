@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { verifyAdminAuth } from '../../lib/admin-auth.js';
 import { getDb } from '../../lib/db.js';
+import { adminSecurity, doc, uuidParams, zodDoc } from '../../lib/openapi.js';
 import {
   getSubscriberByUuid,
   pauseSubscriber,
@@ -21,6 +22,16 @@ const PauseBodySchema = z.object({
 export default async function pauseRoutes(app: FastifyInstance): Promise<void> {
   app.post<{ Params: { subscriberId: string } }>(
     '/admin/leads/:subscriberId/pause',
+    doc({
+      tags: ['admin/leads'],
+      summary: 'Pausar el bot para un lead',
+      description:
+        'Con status=paused el webhook hace skip y el lead no recibe respuestas del agente. ' +
+        'Sin duration_minutes la pausa es indefinida hasta reanudar manualmente.',
+      security: adminSecurity,
+      params: uuidParams('subscriberId'),
+      body: zodDoc(PauseBodySchema),
+    }),
     async (req, reply) => {
       if (!(await verifyAdminAuth(req, app))) {
         return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });
@@ -55,6 +66,12 @@ export default async function pauseRoutes(app: FastifyInstance): Promise<void> {
 
   app.post<{ Params: { subscriberId: string } }>(
     '/admin/leads/:subscriberId/resume',
+    doc({
+      tags: ['admin/leads'],
+      summary: 'Reanudar el bot para un lead',
+      security: adminSecurity,
+      params: uuidParams('subscriberId'),
+    }),
     async (req, reply) => {
       if (!(await verifyAdminAuth(req, app))) {
         return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });
