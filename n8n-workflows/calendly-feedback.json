@@ -1,0 +1,860 @@
+{
+  "updatedAt": "2026-05-28T17:15:50.086Z",
+  "createdAt": "2026-05-26T15:03:32.143Z",
+  "id": "OKIjOCPMJqEmz4yI",
+  "name": "calendly-feedback",
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "calendly-feedback",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -288,
+        -48
+      ],
+      "id": "25ddf8b6-4584-4d64-9098-1203f7e39df9",
+      "name": "Webhook",
+      "webhookId": "2c103d66-8604-4f21-b91a-be830110ebdc"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.body.payload.uri }}",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "{\n  \"Authorization\": \"Bearer eyJraWQiOiIxY2UxZTEzNjE3ZGNmNzY2YjNjZWJjY2Y4ZGM1YmFmYThhNjVlNjg0MDIzZjdjMzJiZTgzNDliMjM4MDEzNWI0IiwidHlwIjoiUEFUIiwiYWxnIjoiRVMyNTYifQ.eyJpc3MiOiJodHRwczovL2F1dGguY2FsZW5kbHkuY29tIiwiaWF0IjoxNzc5ODA2MTQwLCJqdGkiOiJjMGI3NGI3Mi1hZWI4LTRkNTUtODZkMi02NDI5YTJlNTRkODMiLCJ1c2VyX3V1aWQiOiI1ZDNmZDNjNy1mNWU2LTQyMWMtOTVkOC03NzczYTZhODgyYTIiLCJzY29wZSI6ImF2YWlsYWJpbGl0eTpyZWFkIGF2YWlsYWJpbGl0eTp3cml0ZSBldmVudF90eXBlczpyZWFkIGV2ZW50X3R5cGVzOndyaXRlIGxvY2F0aW9uczpyZWFkIHJvdXRpbmdfZm9ybXM6cmVhZCBzaGFyZXM6d3JpdGUgc2NoZWR1bGVkX2V2ZW50czpyZWFkIHNjaGVkdWxlZF9ldmVudHM6d3JpdGUgc2NoZWR1bGluZ19saW5rczp3cml0ZSBncm91cHM6cmVhZCBvcmdhbml6YXRpb25zOnJlYWQgb3JnYW5pemF0aW9uczp3cml0ZSB1c2VyczpyZWFkIGFjdGl2aXR5X2xvZzpyZWFkIGRhdGFfY29tcGxpYW5jZTp3cml0ZSBvdXRnb2luZ19jb21tdW5pY2F0aW9uczpyZWFkIHdlYmhvb2tzOnJlYWQgd2ViaG9va3M6d3JpdGUifQ.exEK4U0LGh0JXSLVM0fK856QsGIuI81Z327PhJRJ7svI8e2BMr6gthOF1_L0o-NhcTK99fLTyhcY6Z3GPl7O8Q\",\n  \"Content-Type\": \"application/json\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -32,
+        -272
+      ],
+      "id": "250a2e5f-6ca9-4894-943a-e0d0afe1f9c5",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.body.payload.uri }}",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "{\n  \"Authorization\": \"Bearer eyJraWQiOiIxY2UxZTEzNjE3ZGNmNzY2YjNjZWJjY2Y4ZGM1YmFmYThhNjVlNjg0MDIzZjdjMzJiZTgzNDliMjM4MDEzNWI0IiwidHlwIjoiUEFUIiwiYWxnIjoiRVMyNTYifQ.eyJpc3MiOiJodHRwczovL2F1dGguY2FsZW5kbHkuY29tIiwiaWF0IjoxNzc5ODA2MTQwLCJqdGkiOiJjMGI3NGI3Mi1hZWI4LTRkNTUtODZkMi02NDI5YTJlNTRkODMiLCJ1c2VyX3V1aWQiOiI1ZDNmZDNjNy1mNWU2LTQyMWMtOTVkOC03NzczYTZhODgyYTIiLCJzY29wZSI6ImF2YWlsYWJpbGl0eTpyZWFkIGF2YWlsYWJpbGl0eTp3cml0ZSBldmVudF90eXBlczpyZWFkIGV2ZW50X3R5cGVzOndyaXRlIGxvY2F0aW9uczpyZWFkIHJvdXRpbmdfZm9ybXM6cmVhZCBzaGFyZXM6d3JpdGUgc2NoZWR1bGVkX2V2ZW50czpyZWFkIHNjaGVkdWxlZF9ldmVudHM6d3JpdGUgc2NoZWR1bGluZ19saW5rczp3cml0ZSBncm91cHM6cmVhZCBvcmdhbml6YXRpb25zOnJlYWQgb3JnYW5pemF0aW9uczp3cml0ZSB1c2VyczpyZWFkIGFjdGl2aXR5X2xvZzpyZWFkIGRhdGFfY29tcGxpYW5jZTp3cml0ZSBvdXRnb2luZ19jb21tdW5pY2F0aW9uczpyZWFkIHdlYmhvb2tzOnJlYWQgd2ViaG9va3M6d3JpdGUifQ.exEK4U0LGh0JXSLVM0fK856QsGIuI81Z327PhJRJ7svI8e2BMr6gthOF1_L0o-NhcTK99fLTyhcY6Z3GPl7O8Q\",\n  \"Content-Type\": \"application/json\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        224,
+        80
+      ],
+      "id": "fbf1ec8a-42c3-419e-88ae-5333b02dda15",
+      "name": "HTTP Request1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "3544e75e-6a1d-4963-9424-edd8cbec8760",
+              "leftValue": "={{ $json.body.event }}",
+              "rightValue": "invitee.created",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "dee9e4a0-0f22-4a6d-bce0-797402ddc126",
+              "leftValue": "={{ $json.body.payload.tracking.utm_content }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -160,
+        -128
+      ],
+      "id": "ac9eb611-71dc-4bff-bdb9-f69c2b78248c",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "a9cd36eb-064d-489b-8511-7733ac5dcd2d",
+              "leftValue": "={{ $json.subscriber_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        256,
+        -144
+      ],
+      "id": "632fbb9b-c807-45a6-a044-d0ff990e45f3",
+      "name": "If Suscriber found"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.revolicord.com/admin/leads/{{ $('Get Subscriber').item.json.subscriber_id }}/stage",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer c37a1bb5741c19a484203b7f691fd445e92410e46d934c82c6170b5734acaa80"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n    \"new_stage\": \"D\",\n    \"reason\": \"calendly_booked\",\n    \"evidence\": \"={{ 'Calendly invitee.created @ ' + $('Webhook').first().json.body.payload.scheduled_event.start_time + ' — ' + \n  $('Webhook').first().json.body.payload.scheduled_event.uri }}\"\n  }\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        464,
+        -176
+      ],
+      "id": "8aaaf0d3-2ccd-47dd-aec2-0a5b0cecb116",
+      "name": "Set Stage D",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const p = $('Webhook').first().json.body.payload;\n  const ev = p.scheduled_event || {};\n  const booking = {\n    event_uri: ev.uri || p.event || null,\n    invitee_uri: p.uri || null,\n    start_time: ev.start_time || null,\n    end_time: ev.end_time || null,\n    join_url: (ev.location && ev.location.join_url) || null,\n    timezone: p.timezone || null,\n    reschedule_url: p.reschedule_url || null,\n    cancel_url: p.cancel_url || null,\n    invitee_email: p.email || null,\n    booked_at: new Date().toISOString(),\n  };\n  return [{ json: { ...$json, bookingJson: JSON.stringify({ booking }) } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        -176
+      ],
+      "id": "0cc6011a-fbe4-4641-b089-820ecf588b4c",
+      "name": "Build Booking JSON"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "  UPDATE api.subscribers\n  SET metadata = COALESCE(metadata, '{}'::jsonb) || $2::jsonb\n  WHERE id = $1::uuid\n",
+        "options": {
+          "queryReplacement": "={{ $('Get Subscriber').first().json.subscriber_id }}, {{ $json.bookingJson }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        880,
+        -176
+      ],
+      "id": "5a100c7a-a763-4417-be3e-24d057f8ceb0",
+      "name": "Persist Bookings",
+      "credentials": {
+        "postgres": {
+          "id": "xBbNbntvO0xJs5HM",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const p = $('Webhook').first().json.body.payload;\n  const start = (p.scheduled_event || {}).start_time;\n  const tz = p.timezone || 'America/Santo_Domingo';\n  const when = start\n    ? new Intl.DateTimeFormat('es', {\n        weekday: 'long', day: 'numeric', month: 'long',\n        hour: '2-digit', minute: '2-digit', timeZone: tz,\n      }).format(new Date(start))\n    : 'la fecha acordada';\n  return [{ json: { ...$json, whenLocal: when } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1088,
+        -176
+      ],
+      "id": "58d1e587-12d7-408c-93b2-40211913713d",
+      "name": "Format Datetime"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.revolicord.com/admin/leads/{{ $('Get Subscriber').first().json.subscriber_id }}/system-event",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer c37a1bb5741c19a484203b7f691fd445e92410e46d934c82c6170b5734acaa80"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n    \"event_type\": \"booking_confirmed\",\n    \"detail\": \"={{ 'agendó la llamada para ' + $json.whenLocal }}\"\n  }\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1296,
+        -176
+      ],
+      "id": "f181b54f-628e-49da-b1ad-be4c64941e01",
+      "name": "System Event",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    s.id                              AS subscriber_id,\n    s.manychat_subscriber_id,         \n    s.tenant_id,\n    s.display_name,\n    ls.current_stage,\n    t.config->>'manychat_api_key'     AS mc_api_key\n  FROM api.subscribers s\n  JOIN api.tenants t ON t.id = s.tenant_id\n  LEFT JOIN api.lead_stages ls\n    ON ls.subscriber_id = s.id AND ls.tenant_id = s.tenant_id\n  WHERE s.id = $1::uuid\n",
+        "options": {
+          "queryReplacement": "={{ $('Webhook').first().json.body.payload.tracking.utm_content }},"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        112,
+        -80
+      ],
+      "id": "cc8edcc7-4768-427b-8ddb-5b96be66a8c6",
+      "name": "Get Subscriber",
+      "credentials": {
+        "postgres": {
+          "id": "xBbNbntvO0xJs5HM",
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Get Subscriber",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Suscriber found": {
+      "main": [
+        [
+          {
+            "node": "Set Stage D",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Stage D": {
+      "main": [
+        [
+          {
+            "node": "Build Booking JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Booking JSON": {
+      "main": [
+        [
+          {
+            "node": "Persist Bookings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Persist Bookings": {
+      "main": [
+        [
+          {
+            "node": "Format Datetime",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Datetime": {
+      "main": [
+        [
+          {
+            "node": "System Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Subscriber": {
+      "main": [
+        [
+          {
+            "node": "If Suscriber found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "headers": {
+            "host": "paneln8n.revolicord.com",
+            "user-agent": "Calendly",
+            "content-length": "2052",
+            "accept": "*/*",
+            "accept-encoding": "deflate, gzip, br, zstd",
+            "content-type": "application/json",
+            "traceparent": "00-6a1875f90000000023a3fb5fe6ce6c6b-2494597b9aed7579-00",
+            "tracestate": "dd=p:2494597b9aed7579;s:0",
+            "x-datadog-parent-id": "2635830069333685625",
+            "x-datadog-sampling-priority": "0",
+            "x-datadog-tags": "_dd.p.tid=6a1875f900000000",
+            "x-datadog-trace-id": "2568172601844067435",
+            "x-forwarded-for": "34.150.134.219",
+            "x-forwarded-host": "paneln8n.revolicord.com",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "72aff728fab3",
+            "x-real-ip": "34.150.134.219"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "created_at": "2026-05-28T17:06:01.000000Z",
+            "created_by": "https://api.calendly.com/users/5d3fd3c7-f5e6-421c-95d8-7773a6a882a2",
+            "event": "invitee.created",
+            "payload": {
+              "cancel_url": "https://calendly.com/cancellations/d77593b1-6769-4dbe-b938-c09ac426078e",
+              "created_at": "2026-05-28T17:06:00.720241Z",
+              "email": "info@odoo.com",
+              "event": "https://api.calendly.com/scheduled_events/ddced429-4be4-433a-a4f5-6d8724b955a7",
+              "first_name": null,
+              "invitee_scheduled_by": null,
+              "last_name": null,
+              "name": "Hkdkd",
+              "new_invitee": null,
+              "no_show": null,
+              "old_invitee": null,
+              "payment": null,
+              "questions_and_answers": [],
+              "reconfirmation": null,
+              "reschedule_url": "https://calendly.com/reschedulings/d77593b1-6769-4dbe-b938-c09ac426078e",
+              "rescheduled": false,
+              "routing_form_submission": null,
+              "scheduled_event": {
+                "created_at": "2026-05-28T17:06:00.692573Z",
+                "end_time": "2026-06-04T14:00:00.000000Z",
+                "event_guests": [],
+                "event_memberships": [
+                  {
+                    "user": "https://api.calendly.com/users/5d3fd3c7-f5e6-421c-95d8-7773a6a882a2",
+                    "user_email": "tecnologia@revolicord.com",
+                    "user_name": "Yordis Bayeux"
+                  }
+                ],
+                "event_type": "https://api.calendly.com/event_types/f420dd9b-ad3b-41b7-bab7-5a18e574b0e5",
+                "invitees_counter": {
+                  "total": 1,
+                  "active": 1,
+                  "limit": 1
+                },
+                "location": {
+                  "join_url": "https://calendly.com/events/ddced429-4be4-433a-a4f5-6d8724b955a7/google_meet",
+                  "status": "processing",
+                  "type": "google_conference"
+                },
+                "meeting_notes_html": null,
+                "meeting_notes_plain": null,
+                "name": "llamada de descubrimiento",
+                "start_time": "2026-06-04T13:30:00.000000Z",
+                "status": "active",
+                "updated_at": "2026-05-28T17:06:00.692573Z",
+                "uri": "https://api.calendly.com/scheduled_events/ddced429-4be4-433a-a4f5-6d8724b955a7"
+              },
+              "scheduling_method": null,
+              "status": "active",
+              "text_reminder_number": null,
+              "timezone": "America/Santo_Domingo",
+              "tracking": {
+                "utm_campaign": null,
+                "utm_source": null,
+                "utm_medium": null,
+                "utm_content": "eb347da4-5565-491d-8eb2-71fe3255d513",
+                "utm_term": null,
+                "salesforce_uuid": null
+              },
+              "updated_at": "2026-05-28T17:06:00.720241Z",
+              "uri": "https://api.calendly.com/scheduled_events/ddced429-4be4-433a-a4f5-6d8724b955a7/invitees/d77593b1-6769-4dbe-b938-c09ac426078e"
+            }
+          },
+          "webhookUrl": "https://paneln8n.revolicord.com/webhook/calendly-feedback",
+          "executionMode": "production"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "versionId": "b65343c6-f140-4b4d-9953-89f9a1408edc",
+  "activeVersionId": "b65343c6-f140-4b4d-9953-89f9a1408edc",
+  "triggerCount": 1,
+  "shared": [
+    {
+      "updatedAt": "2026-05-26T15:03:32.143Z",
+      "createdAt": "2026-05-26T15:03:32.143Z",
+      "role": "workflow:owner",
+      "workflowId": "OKIjOCPMJqEmz4yI",
+      "projectId": "QMEqDuS2VokiT4AE"
+    }
+  ],
+  "activeVersion": {
+    "updatedAt": "2026-05-29T15:47:13.480Z",
+    "createdAt": "2026-05-28T17:15:50.093Z",
+    "versionId": "b65343c6-f140-4b4d-9953-89f9a1408edc",
+    "workflowId": "OKIjOCPMJqEmz4yI",
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "calendly-feedback",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [
+          -288,
+          -48
+        ],
+        "id": "25ddf8b6-4584-4d64-9098-1203f7e39df9",
+        "name": "Webhook",
+        "webhookId": "2c103d66-8604-4f21-b91a-be830110ebdc"
+      },
+      {
+        "parameters": {
+          "url": "={{ $json.body.payload.uri }}",
+          "sendHeaders": true,
+          "specifyHeaders": "json",
+          "jsonHeaders": "{\n  \"Authorization\": \"Bearer eyJraWQiOiIxY2UxZTEzNjE3ZGNmNzY2YjNjZWJjY2Y4ZGM1YmFmYThhNjVlNjg0MDIzZjdjMzJiZTgzNDliMjM4MDEzNWI0IiwidHlwIjoiUEFUIiwiYWxnIjoiRVMyNTYifQ.eyJpc3MiOiJodHRwczovL2F1dGguY2FsZW5kbHkuY29tIiwiaWF0IjoxNzc5ODA2MTQwLCJqdGkiOiJjMGI3NGI3Mi1hZWI4LTRkNTUtODZkMi02NDI5YTJlNTRkODMiLCJ1c2VyX3V1aWQiOiI1ZDNmZDNjNy1mNWU2LTQyMWMtOTVkOC03NzczYTZhODgyYTIiLCJzY29wZSI6ImF2YWlsYWJpbGl0eTpyZWFkIGF2YWlsYWJpbGl0eTp3cml0ZSBldmVudF90eXBlczpyZWFkIGV2ZW50X3R5cGVzOndyaXRlIGxvY2F0aW9uczpyZWFkIHJvdXRpbmdfZm9ybXM6cmVhZCBzaGFyZXM6d3JpdGUgc2NoZWR1bGVkX2V2ZW50czpyZWFkIHNjaGVkdWxlZF9ldmVudHM6d3JpdGUgc2NoZWR1bGluZ19saW5rczp3cml0ZSBncm91cHM6cmVhZCBvcmdhbml6YXRpb25zOnJlYWQgb3JnYW5pemF0aW9uczp3cml0ZSB1c2VyczpyZWFkIGFjdGl2aXR5X2xvZzpyZWFkIGRhdGFfY29tcGxpYW5jZTp3cml0ZSBvdXRnb2luZ19jb21tdW5pY2F0aW9uczpyZWFkIHdlYmhvb2tzOnJlYWQgd2ViaG9va3M6d3JpdGUifQ.exEK4U0LGh0JXSLVM0fK856QsGIuI81Z327PhJRJ7svI8e2BMr6gthOF1_L0o-NhcTK99fLTyhcY6Z3GPl7O8Q\",\n  \"Content-Type\": \"application/json\"\n}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.4,
+        "position": [
+          -32,
+          -272
+        ],
+        "id": "250a2e5f-6ca9-4894-943a-e0d0afe1f9c5",
+        "name": "HTTP Request"
+      },
+      {
+        "parameters": {
+          "url": "={{ $json.body.payload.uri }}",
+          "sendHeaders": true,
+          "specifyHeaders": "json",
+          "jsonHeaders": "{\n  \"Authorization\": \"Bearer eyJraWQiOiIxY2UxZTEzNjE3ZGNmNzY2YjNjZWJjY2Y4ZGM1YmFmYThhNjVlNjg0MDIzZjdjMzJiZTgzNDliMjM4MDEzNWI0IiwidHlwIjoiUEFUIiwiYWxnIjoiRVMyNTYifQ.eyJpc3MiOiJodHRwczovL2F1dGguY2FsZW5kbHkuY29tIiwiaWF0IjoxNzc5ODA2MTQwLCJqdGkiOiJjMGI3NGI3Mi1hZWI4LTRkNTUtODZkMi02NDI5YTJlNTRkODMiLCJ1c2VyX3V1aWQiOiI1ZDNmZDNjNy1mNWU2LTQyMWMtOTVkOC03NzczYTZhODgyYTIiLCJzY29wZSI6ImF2YWlsYWJpbGl0eTpyZWFkIGF2YWlsYWJpbGl0eTp3cml0ZSBldmVudF90eXBlczpyZWFkIGV2ZW50X3R5cGVzOndyaXRlIGxvY2F0aW9uczpyZWFkIHJvdXRpbmdfZm9ybXM6cmVhZCBzaGFyZXM6d3JpdGUgc2NoZWR1bGVkX2V2ZW50czpyZWFkIHNjaGVkdWxlZF9ldmVudHM6d3JpdGUgc2NoZWR1bGluZ19saW5rczp3cml0ZSBncm91cHM6cmVhZCBvcmdhbml6YXRpb25zOnJlYWQgb3JnYW5pemF0aW9uczp3cml0ZSB1c2VyczpyZWFkIGFjdGl2aXR5X2xvZzpyZWFkIGRhdGFfY29tcGxpYW5jZTp3cml0ZSBvdXRnb2luZ19jb21tdW5pY2F0aW9uczpyZWFkIHdlYmhvb2tzOnJlYWQgd2ViaG9va3M6d3JpdGUifQ.exEK4U0LGh0JXSLVM0fK856QsGIuI81Z327PhJRJ7svI8e2BMr6gthOF1_L0o-NhcTK99fLTyhcY6Z3GPl7O8Q\",\n  \"Content-Type\": \"application/json\"\n}",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.4,
+        "position": [
+          224,
+          80
+        ],
+        "id": "fbf1ec8a-42c3-419e-88ae-5333b02dda15",
+        "name": "HTTP Request1"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "3544e75e-6a1d-4963-9424-edd8cbec8760",
+                "leftValue": "={{ $json.body.event }}",
+                "rightValue": "invitee.created",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals"
+                }
+              },
+              {
+                "id": "dee9e4a0-0f22-4a6d-bce0-797402ddc126",
+                "leftValue": "={{ $json.body.payload.tracking.utm_content }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "string",
+                  "operation": "notEmpty",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          -160,
+          -128
+        ],
+        "id": "ac9eb611-71dc-4bff-bdb9-f69c2b78248c",
+        "name": "If"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "a9cd36eb-064d-489b-8511-7733ac5dcd2d",
+                "leftValue": "={{ $json.subscriber_id }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "string",
+                  "operation": "notEmpty",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          256,
+          -144
+        ],
+        "id": "632fbb9b-c807-45a6-a044-d0ff990e45f3",
+        "name": "If Suscriber found"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.revolicord.com/admin/leads/{{ $('Get Subscriber').item.json.subscriber_id }}/stage",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Authorization",
+                "value": "=Bearer c37a1bb5741c19a484203b7f691fd445e92410e46d934c82c6170b5734acaa80"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={\n    \"new_stage\": \"D\",\n    \"reason\": \"calendly_booked\",\n    \"evidence\": \"={{ 'Calendly invitee.created @ ' + $('Webhook').first().json.body.payload.scheduled_event.start_time + ' — ' + \n  $('Webhook').first().json.body.payload.scheduled_event.uri }}\"\n  }\n",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.4,
+        "position": [
+          464,
+          -176
+        ],
+        "id": "8aaaf0d3-2ccd-47dd-aec2-0a5b0cecb116",
+        "name": "Set Stage D",
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "const p = $('Webhook').first().json.body.payload;\n  const ev = p.scheduled_event || {};\n  const booking = {\n    event_uri: ev.uri || p.event || null,\n    invitee_uri: p.uri || null,\n    start_time: ev.start_time || null,\n    end_time: ev.end_time || null,\n    join_url: (ev.location && ev.location.join_url) || null,\n    timezone: p.timezone || null,\n    reschedule_url: p.reschedule_url || null,\n    cancel_url: p.cancel_url || null,\n    invitee_email: p.email || null,\n    booked_at: new Date().toISOString(),\n  };\n  return [{ json: { ...$json, bookingJson: JSON.stringify({ booking }) } }];\n"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          672,
+          -176
+        ],
+        "id": "0cc6011a-fbe4-4641-b089-820ecf588b4c",
+        "name": "Build Booking JSON"
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "  UPDATE api.subscribers\n  SET metadata = COALESCE(metadata, '{}'::jsonb) || $2::jsonb\n  WHERE id = $1::uuid\n",
+          "options": {
+            "queryReplacement": "={{ $('Get Subscriber').first().json.subscriber_id }}, {{ $json.bookingJson }}"
+          }
+        },
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.6,
+        "position": [
+          880,
+          -176
+        ],
+        "id": "5a100c7a-a763-4417-be3e-24d057f8ceb0",
+        "name": "Persist Bookings",
+        "credentials": {
+          "postgres": {
+            "id": "xBbNbntvO0xJs5HM",
+            "name": "Postgres account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const p = $('Webhook').first().json.body.payload;\n  const start = (p.scheduled_event || {}).start_time;\n  const tz = p.timezone || 'America/Santo_Domingo';\n  const when = start\n    ? new Intl.DateTimeFormat('es', {\n        weekday: 'long', day: 'numeric', month: 'long',\n        hour: '2-digit', minute: '2-digit', timeZone: tz,\n      }).format(new Date(start))\n    : 'la fecha acordada';\n  return [{ json: { ...$json, whenLocal: when } }];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1088,
+          -176
+        ],
+        "id": "58d1e587-12d7-408c-93b2-40211913713d",
+        "name": "Format Datetime"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.revolicord.com/admin/leads/{{ $('Get Subscriber').first().json.subscriber_id }}/system-event",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Authorization",
+                "value": "=Bearer c37a1bb5741c19a484203b7f691fd445e92410e46d934c82c6170b5734acaa80"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={\n    \"event_type\": \"booking_confirmed\",\n    \"detail\": \"={{ 'agendó la llamada para ' + $json.whenLocal }}\"\n  }\n",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.4,
+        "position": [
+          1296,
+          -176
+        ],
+        "id": "f181b54f-628e-49da-b1ad-be4c64941e01",
+        "name": "System Event",
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT\n    s.id                              AS subscriber_id,\n    s.manychat_subscriber_id,         \n    s.tenant_id,\n    s.display_name,\n    ls.current_stage,\n    t.config->>'manychat_api_key'     AS mc_api_key\n  FROM api.subscribers s\n  JOIN api.tenants t ON t.id = s.tenant_id\n  LEFT JOIN api.lead_stages ls\n    ON ls.subscriber_id = s.id AND ls.tenant_id = s.tenant_id\n  WHERE s.id = $1::uuid\n",
+          "options": {
+            "queryReplacement": "={{ $('Webhook').first().json.body.payload.tracking.utm_content }},"
+          }
+        },
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.6,
+        "position": [
+          112,
+          -80
+        ],
+        "id": "cc8edcc7-4768-427b-8ddb-5b96be66a8c6",
+        "name": "Get Subscriber",
+        "credentials": {
+          "postgres": {
+            "id": "xBbNbntvO0xJs5HM",
+            "name": "Postgres account"
+          }
+        }
+      }
+    ],
+    "connections": {
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "If",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "If": {
+        "main": [
+          [
+            {
+              "node": "HTTP Request",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          []
+        ]
+      },
+      "HTTP Request": {
+        "main": [
+          [
+            {
+              "node": "Get Subscriber",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "If Suscriber found": {
+        "main": [
+          [
+            {
+              "node": "Set Stage D",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Set Stage D": {
+        "main": [
+          [
+            {
+              "node": "Build Booking JSON",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Build Booking JSON": {
+        "main": [
+          [
+            {
+              "node": "Persist Bookings",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Persist Bookings": {
+        "main": [
+          [
+            {
+              "node": "Format Datetime",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Format Datetime": {
+        "main": [
+          [
+            {
+              "node": "System Event",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get Subscriber": {
+        "main": [
+          [
+            {
+              "node": "If Suscriber found",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "Tecnologia Revolicorrd",
+    "name": "Version b65343c6",
+    "description": "",
+    "autosaved": false
+  },
+  "tags": []
+}
