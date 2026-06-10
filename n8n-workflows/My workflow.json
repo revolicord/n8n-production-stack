@@ -1,0 +1,347 @@
+{
+  "updatedAt": "2026-05-24T00:25:43.749Z",
+  "createdAt": "2026-05-01T22:25:53.056Z",
+  "id": "DJn0n7hGSRGFkru3",
+  "name": "My workflow",
+  "active": false,
+  "isArchived": true,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "f7d601ca-88d1-41b3-acfa-585fc8c8514e",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "8efdc7c8-94f3-4717-b936-8761f5c30e2d",
+      "name": "Webhook",
+      "webhookId": "f7d601ca-88d1-41b3-acfa-585fc8c8514e"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "4b33e8c7-f06b-48ed-a482-98ce6e0035f6",
+              "name": "body.first_name",
+              "value": "={{ $json.body.first_name }}",
+              "type": "string"
+            },
+            {
+              "id": "3db60f17-18e3-4b23-842a-84c98e31e37c",
+              "name": "body.last_name",
+              "value": "={{ $json.body.last_name }}",
+              "type": "string"
+            },
+            {
+              "id": "a438b4a0-172e-4956-b24c-bc1b61ddcbff",
+              "name": "body.full_name",
+              "value": "={{ $json.body.full_name }}",
+              "type": "string"
+            },
+            {
+              "id": "ebdd010b-5658-4cdf-a27a-8905afc6b308",
+              "name": "body.email",
+              "value": "={{ $json.body.email }}",
+              "type": "string"
+            },
+            {
+              "id": "46ef43f1-b303-40ef-bc0d-fba8e270886e",
+              "name": "body.phone",
+              "value": "={{ $json.body.phone }}",
+              "type": "string"
+            },
+            {
+              "id": "03ef1783-8e28-4916-a4f0-05dc6b94fbb8",
+              "name": "body.last_input_text",
+              "value": "={{ $json.body.last_input_text }}",
+              "type": "string"
+            },
+            {
+              "id": "3403fb70-dd9f-40e2-9dba-778636401d48",
+              "name": "body.subscribed",
+              "value": "={{ $json.body.subscribed }}",
+              "type": "string"
+            },
+            {
+              "id": "0296d032-7261-4af7-a2cf-e3a37b2be1ed",
+              "name": "body.contact_id",
+              "value": "={{ $json.body.contact_id }}",
+              "type": "string"
+            },
+            {
+              "id": "720a14b8-17a2-42ad-8fe8-6b2326e808f4",
+              "name": "body.last_reply_type",
+              "value": "={{ $json.body.last_reply_type }}",
+              "type": "string"
+            },
+            {
+              "id": "daed4efc-aa07-4fed-b47a-0f359dcce65d",
+              "name": "body.ig_last_interaction",
+              "value": "={{ $json.body.ig_last_interaction }}",
+              "type": "string"
+            },
+            {
+              "id": "b5874e71-7fdd-45f9-bcdb-00ccf9b63eac",
+              "name": "body.ig_last_seen",
+              "value": "={{ $json.body.ig_last_seen }}",
+              "type": "string"
+            },
+            {
+              "id": "2f835b27-418f-4ab6-96e2-82f8a926861c",
+              "name": "body.ig_messaging_window",
+              "value": "={{ $json.body.ig_messaging_window }}",
+              "type": "string"
+            },
+            {
+              "id": "0442d7e5-cfeb-4045-bc87-9d3123bd1dd0",
+              "name": "body.ig_followers_count",
+              "value": "={{ $json.body.ig_followers_count }}",
+              "type": "string"
+            },
+            {
+              "id": "f27ee36b-fc85-4582-a503-859a7a4aa1a9",
+              "name": "body.ig_username",
+              "value": "={{ $json.body.ig_username }}",
+              "type": "string"
+            },
+            {
+              "id": "8738a82b-7ac9-4e4b-8e48-61d54c155299",
+              "name": "body.ig_opt_in",
+              "value": "={{ $json.body.ig_opt_in }}",
+              "type": "string"
+            },
+            {
+              "id": "cca53202-8c60-4e10-8c34-b19351a6023e",
+              "name": "body.ig_follows_you",
+              "value": "={{ $json.body.ig_follows_you }}",
+              "type": "string"
+            },
+            {
+              "id": "63ac8207-5cc2-42d4-82d0-80ecdeaff832",
+              "name": "body.ig_verified",
+              "value": "={{ $json.body.ig_verified }}",
+              "type": "string"
+            },
+            {
+              "id": "b40bb548-9768-4931-a90f-6a2ba7ff2ef2",
+              "name": "body.ig_has_business",
+              "value": "={{ $json.body.ig_has_business }}",
+              "type": "string"
+            },
+            {
+              "id": "b52864ac-4e25-4093-9345-b4086429cae3",
+              "name": "body.ig_page_name",
+              "value": "={{ $json.body.ig_page_name }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        208,
+        0
+      ],
+      "id": "18f26956-6524-4aa5-8c69-91cda64fcba3",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "2f79624b-030c-4220-bcf2-9e308dfc7f25",
+              "name": "body.contact_id",
+              "value": "={{ $json.body.contact_id }}",
+              "type": "string"
+            },
+            {
+              "id": "df807b67-9bb6-4aa3-a80c-8d52b8597590",
+              "name": "body.last_input_text",
+              "value": "={{ $json.body.last_input_text }}",
+              "type": "string"
+            },
+            {
+              "id": "a1c2df50-8b78-4d9b-b13e-6962ee15ba43",
+              "name": "content",
+              "value": "content20260507015518_402197",
+              "type": "string"
+            },
+            {
+              "id": "6964c693-9c5f-4e9f-b03a-3361d3cd05fb",
+              "name": "responsepart1",
+              "value": "111",
+              "type": "string"
+            },
+            {
+              "id": "8c7baa8a-bf35-499a-9dda-0725232149b8",
+              "name": "responsepart2",
+              "value": "222",
+              "type": "string"
+            },
+            {
+              "id": "9a368fb1-0bca-4389-9348-ee76177b236f",
+              "name": "responsepart3",
+              "value": "333",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        624,
+        0
+      ],
+      "id": "a40a2f55-190e-4dab-8a05-d26a193c708e",
+      "name": "Edit Fields1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.manychat.com/fb/sending/sendFlow",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer 4829715:03d75c75de42f22f31ea2d02f68cfce2"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"subscriber_id\": \"{{ $('Edit Fields1').item.json.body.contact_id }}\",\n  \"flow_ns\": \"{{ $('Edit Fields1').item.json.content }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1056,
+        0
+      ],
+      "id": "a830f7f1-5aec-4089-bac6-0280bb669cdb",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.manychat.com/fb/subscriber/setCustomFields",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer 4829715:03d75c75de42f22f31ea2d02f68cfce2"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"subscriber_id\": {{ $json.body.contact_id }},\n  \"fields\": [\n    {\n      \"field_name\": \"response part1\",\n      \"field_value\": \"{{ $json.responsepart1 }}\"\n    },\n    {\n      \"field_name\": \"response part2\",\n      \"field_value\": \"{{ $json.responsepart2 }}\"\n    },\n    {\n      \"field_name\": \"response part3\",\n      \"field_value\": \"{{ $json.responsepart3 }}\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        832,
+        -160
+      ],
+      "id": "c05fccca-d83d-499f-9473-9cc3dc34ebef",
+      "name": "HTTP Request1"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        416,
+        0
+      ],
+      "id": "e3884cbe-7fa6-414c-b0e8-05370c1ab97b",
+      "name": "Wait",
+      "webhookId": "6353d371-08d0-47e6-bcf5-f03296244e5c"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        []
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields1": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        []
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {},
+  "versionId": "402d5a6c-260b-4c55-8e42-07a256c3bf2e",
+  "activeVersionId": null,
+  "triggerCount": 1,
+  "shared": [
+    {
+      "updatedAt": "2026-05-01T22:25:53.056Z",
+      "createdAt": "2026-05-01T22:25:53.056Z",
+      "role": "workflow:owner",
+      "workflowId": "DJn0n7hGSRGFkru3",
+      "projectId": "QMEqDuS2VokiT4AE"
+    }
+  ],
+  "activeVersion": null,
+  "tags": []
+}
