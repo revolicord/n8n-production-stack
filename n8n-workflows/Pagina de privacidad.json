@@ -1,0 +1,196 @@
+{
+  "updatedAt": "2026-05-30T20:57:44.490Z",
+  "createdAt": "2026-05-30T20:22:55.865Z",
+  "id": "ECqIEbedjXQ3FeEF",
+  "name": "Pagina de privacidad",
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "const html = `<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Privacy Policy - conexion_n8n</title></head><body style='font-family:Arial;max-width:800px;margin:40px auto;padding:20px;color:#333'><h1>Privacy Policy</h1><p><strong>Last updated: May 30, 2026</strong></p><p>This Privacy Policy describes how conexion_n8n handles your information when you use our application.</p><h2>Information We Collect</h2><p>We access basic Instagram account information including username and messages, solely to provide automated messaging services.</p><h2>How We Use Your Information</h2><p>We process your information only to respond to user inquiries and provide support through our Services.</p><h2>Data Sharing</h2><p>We do not sell or share your personal information with third parties except as required by law.</p><h2>Contact</h2><p>Questions? Email us at <a href='mailto:iatamlabsllc@gmail.com'>iatamlabsllc@gmail.com</a></p></body></html>`;\nreturn [{ json: { response: html } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        16,
+        -80
+      ],
+      "id": "f6f247bc-677b-45c0-837f-a6c5657fa365",
+      "name": "Generar HTML"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.response }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/html"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        320,
+        -16
+      ],
+      "id": "3d35241a-2e5e-4fbe-b393-199b3e752f28",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "path": "privacy",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -512,
+        -16
+      ],
+      "id": "c922a996-a466-4c44-873c-6543577995d6",
+      "name": "Webhook1",
+      "webhookId": "privacy-policy-conexion"
+    }
+  ],
+  "connections": {
+    "Generar HTML": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook1": {
+      "main": [
+        [
+          {
+            "node": "Generar HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": null,
+  "pinData": {},
+  "versionId": "fdd89165-9c7e-4f67-b6cb-88698527b693",
+  "activeVersionId": "fdd89165-9c7e-4f67-b6cb-88698527b693",
+  "triggerCount": 1,
+  "shared": [
+    {
+      "updatedAt": "2026-05-30T20:22:55.865Z",
+      "createdAt": "2026-05-30T20:22:55.865Z",
+      "role": "workflow:owner",
+      "workflowId": "ECqIEbedjXQ3FeEF",
+      "projectId": "QMEqDuS2VokiT4AE"
+    }
+  ],
+  "activeVersion": {
+    "updatedAt": "2026-05-30T20:29:21.158Z",
+    "createdAt": "2026-05-30T20:29:18.503Z",
+    "versionId": "fdd89165-9c7e-4f67-b6cb-88698527b693",
+    "workflowId": "ECqIEbedjXQ3FeEF",
+    "nodes": [
+      {
+        "parameters": {
+          "jsCode": "const html = `<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Privacy Policy - conexion_n8n</title></head><body style='font-family:Arial;max-width:800px;margin:40px auto;padding:20px;color:#333'><h1>Privacy Policy</h1><p><strong>Last updated: May 30, 2026</strong></p><p>This Privacy Policy describes how conexion_n8n handles your information when you use our application.</p><h2>Information We Collect</h2><p>We access basic Instagram account information including username and messages, solely to provide automated messaging services.</p><h2>How We Use Your Information</h2><p>We process your information only to respond to user inquiries and provide support through our Services.</p><h2>Data Sharing</h2><p>We do not sell or share your personal information with third parties except as required by law.</p><h2>Contact</h2><p>Questions? Email us at <a href='mailto:iatamlabsllc@gmail.com'>iatamlabsllc@gmail.com</a></p></body></html>`;\nreturn [{ json: { response: html } }];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          16,
+          -80
+        ],
+        "id": "f6f247bc-677b-45c0-837f-a6c5657fa365",
+        "name": "Generar HTML"
+      },
+      {
+        "parameters": {
+          "respondWith": "text",
+          "responseBody": "={{ $json.response }}",
+          "options": {
+            "responseHeaders": {
+              "entries": [
+                {
+                  "name": "Content-Type",
+                  "value": "text/html"
+                }
+              ]
+            }
+          }
+        },
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.5,
+        "position": [
+          320,
+          -16
+        ],
+        "id": "3d35241a-2e5e-4fbe-b393-199b3e752f28",
+        "name": "Respond to Webhook"
+      },
+      {
+        "parameters": {
+          "path": "privacy",
+          "responseMode": "responseNode",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          -512,
+          -16
+        ],
+        "id": "c922a996-a466-4c44-873c-6543577995d6",
+        "name": "Webhook1",
+        "webhookId": "privacy-policy-conexion"
+      }
+    ],
+    "connections": {
+      "Generar HTML": {
+        "main": [
+          [
+            {
+              "node": "Respond to Webhook",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Webhook1": {
+        "main": [
+          [
+            {
+              "node": "Generar HTML",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "Tecnologia Revolicorrd",
+    "name": "Version fdd89165",
+    "description": "",
+    "autosaved": true
+  },
+  "tags": []
+}
