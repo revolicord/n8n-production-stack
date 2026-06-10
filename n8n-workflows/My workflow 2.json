@@ -1,0 +1,72 @@
+{
+  "updatedAt": "2026-05-15T04:59:34.638Z",
+  "createdAt": "2026-05-15T04:57:47.543Z",
+  "id": "jQbuddLcRHkLEPZ9",
+  "name": "My workflow 2",
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "path": "mcp-server"
+      },
+      "type": "@n8n/n8n-nodes-langchain.mcpTrigger",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "720f9c8a-144b-40dd-8c47-0c4ee4a04955",
+      "name": "MCP Server Trigger",
+      "webhookId": "3b796b84-0007-47dc-96ac-d2879c1c87f7"
+    }
+  ],
+  "connections": {},
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": null,
+  "pinData": {},
+  "versionId": "9bd23369-8a9d-4260-81d8-a56f4d9e5cc9",
+  "activeVersionId": "3c131222-e696-47cd-971a-d8746f224c06",
+  "triggerCount": 1,
+  "shared": [
+    {
+      "updatedAt": "2026-05-15T04:57:47.543Z",
+      "createdAt": "2026-05-15T04:57:47.543Z",
+      "role": "workflow:owner",
+      "workflowId": "jQbuddLcRHkLEPZ9",
+      "projectId": "QMEqDuS2VokiT4AE"
+    }
+  ],
+  "activeVersion": {
+    "updatedAt": "2026-05-15T04:58:56.479Z",
+    "createdAt": "2026-05-15T04:58:11.235Z",
+    "versionId": "3c131222-e696-47cd-971a-d8746f224c06",
+    "workflowId": "jQbuddLcRHkLEPZ9",
+    "nodes": [
+      {
+        "parameters": {
+          "path": "mcp-server"
+        },
+        "type": "@n8n/n8n-nodes-langchain.mcpTrigger",
+        "typeVersion": 2,
+        "position": [
+          0,
+          0
+        ],
+        "id": "720f9c8a-144b-40dd-8c47-0c4ee4a04955",
+        "name": "MCP Server Trigger",
+        "webhookId": "3b796b84-0007-47dc-96ac-d2879c1c87f7"
+      }
+    ],
+    "connections": {},
+    "authors": "Tecnologia Revolicorrd",
+    "name": "Version 3c131222",
+    "description": "",
+    "autosaved": true
+  },
+  "tags": []
+}
