@@ -200,6 +200,12 @@ services:
       # Rendimiento
       N8N_PAYLOAD_SIZE_MAX: 16
       OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS: "true"
+      # GitHub backup de workflows
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      GITHUB_OWNER: ${GITHUB_OWNER}
+      GITHUB_REPO: ${GITHUB_REPO}
+      GITHUB_BRANCH: ${GITHUB_BRANCH}
+      GITHUB_PATH: ${GITHUB_PATH}
     volumes:
       - n8n_main_data:/home/node/.n8n
     healthcheck:
@@ -311,6 +317,12 @@ services:
       GENERIC_TIMEZONE: America/Santo_Domingo
       TZ: America/Santo_Domingo
       N8N_DEFAULT_BINARY_DATA_MODE: database
+      # GitHub backup de workflows
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      GITHUB_OWNER: ${GITHUB_OWNER}
+      GITHUB_REPO: ${GITHUB_REPO}
+      GITHUB_BRANCH: ${GITHUB_BRANCH}
+      GITHUB_PATH: ${GITHUB_PATH}
       # Cuántos workflows puede ejecutar en paralelo cada worker
       N8N_CONCURRENCY_PRODUCTION_LIMIT: 10
       # Expone /healthz en el worker (requiere esta flag)

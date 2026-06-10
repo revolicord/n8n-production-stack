@@ -42,11 +42,13 @@ read -rp "  Panel n8n        (ej: n8n.tudominio.com):           " N8N_HOST
 read -rp "  MinIO S3         (ej: minio.tudominio.com):         " MINIO_DOMAIN
 read -rp "  MinIO Consola    (ej: minio-console.tudominio.com): " MINIO_CONSOLE_DOMAIN
 read -rp "  API DM Setter    (ej: api.tudominio.com):           " API_HOST
+read -rp "  Dashboard        (ej: dashboard.tudominio.com):     " DASHBOARD_HOST
 
 [[ -z "$N8N_HOST" ]]             && error "Panel n8n es obligatorio."
 [[ -z "$MINIO_DOMAIN" ]]         && error "MinIO S3 es obligatorio."
 [[ -z "$MINIO_CONSOLE_DOMAIN" ]] && error "MinIO Consola es obligatorio."
 [[ -z "$API_HOST" ]]             && error "API host es obligatorio."
+[[ -z "$DASHBOARD_HOST" ]]       && error "Dashboard host es obligatorio."
 
 TRAEFIK_NETWORK="traefik-public"
 
@@ -64,6 +66,27 @@ N8N_CALLBACK_TOKEN=$(openssl rand -hex 32)
 ADMIN_JWT_SECRET=$(openssl rand -hex 64)
 ADMIN_PASSWORD=$(openssl rand -base64 24 | tr -d '/+=\n' | head -c 24)
 
+# Dashboard
+PANEL_PASSWORD=$(openssl rand -base64 24 | tr -d '/+=\n' | head -c 24)
+PANEL_JWT_SECRET=$(openssl rand -hex 64)
+
+# ── 3b. GitHub backup de workflows ──────────────────────────
+section "Configuración de backup de workflows a GitHub..."
+echo ""
+info "Necesitas un Personal Access Token (PAT) de GitHub con permisos Contents: Read/Write"
+info "Crear en: GitHub → Settings → Developer settings → Fine-grained tokens"
+echo ""
+read -rp "  GitHub PAT token: " GITHUB_TOKEN
+[[ -z "$GITHUB_TOKEN" ]] && error "GitHub token es obligatorio para el backup de workflows."
+read -rp "  GitHub owner/org [revolicord]: " GITHUB_OWNER
+GITHUB_OWNER="${GITHUB_OWNER:-revolicord}"
+read -rp "  GitHub repo [n8n-production-stack]: " GITHUB_REPO
+GITHUB_REPO="${GITHUB_REPO:-n8n-production-stack}"
+read -rp "  Branch [master]: " GITHUB_BRANCH
+GITHUB_BRANCH="${GITHUB_BRANCH:-master}"
+read -rp "  Carpeta de workflows [n8n-workflows]: " GITHUB_PATH
+GITHUB_PATH="${GITHUB_PATH:-n8n-workflows}"
+
 # ── 4. Escribir .env ─────────────────────────────────────────
 cat > "$ENV_FILE" <<ENVEOF
 # N8N Production — generado $(date '+%Y-%m-%d %H:%M')
@@ -72,6 +95,8 @@ cat > "$ENV_FILE" <<ENVEOF
 N8N_HOST=${N8N_HOST}
 MINIO_DOMAIN=${MINIO_DOMAIN}
 MINIO_CONSOLE_DOMAIN=${MINIO_CONSOLE_DOMAIN}
+API_HOST=${API_HOST}
+DASHBOARD_HOST=${DASHBOARD_HOST}
 # ---- Red Traefik --------------------------------------------
 TRAEFIK_NETWORK=${TRAEFIK_NETWORK}
 # ---- PostgreSQL ---------------------------------------------
@@ -83,13 +108,27 @@ N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
 # ---- MinIO --------------------------------------------------
 MINIO_ROOT_USER=${MINIO_ROOT_USER}
 MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+MINIO_ENDPOINT=http://minio:9000
+MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
+MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
+MINIO_PUBLIC_URL=https://${MINIO_DOMAIN}
+MINIO_BUCKET_ASSETS=assets
 # ---- API DM Setter ------------------------------------------
-API_HOST=${API_HOST}
 API_IMAGE=dm-api:local
 MC_WEBHOOK_TOKEN=${MC_WEBHOOK_TOKEN}
 N8N_CALLBACK_TOKEN=${N8N_CALLBACK_TOKEN}
 ADMIN_JWT_SECRET=${ADMIN_JWT_SECRET}
 ADMIN_PASSWORD=${ADMIN_PASSWORD}
+# ---- Dashboard ----------------------------------------------
+DASHBOARD_IMAGE=dm-dashboard:local
+PANEL_PASSWORD=${PANEL_PASSWORD}
+PANEL_JWT_SECRET=${PANEL_JWT_SECRET}
+# ---- GitHub backup de workflows n8n -------------------------
+GITHUB_TOKEN=${GITHUB_TOKEN}
+GITHUB_OWNER=${GITHUB_OWNER}
+GITHUB_REPO=${GITHUB_REPO}
+GITHUB_BRANCH=${GITHUB_BRANCH}
+GITHUB_PATH=${GITHUB_PATH}
 ENVEOF
 info ".env generado."
 
@@ -224,10 +263,13 @@ echo -e "  Panel n8n:      ${GREEN}https://${N8N_HOST}${NC}"
 echo -e "  MinIO S3:       ${GREEN}https://${MINIO_DOMAIN}${NC}"
 echo -e "  MinIO Consola:  ${GREEN}https://${MINIO_CONSOLE_DOMAIN}${NC}"
 echo -e "  API DM Setter:  ${GREEN}https://${API_HOST}${NC}"
+echo -e "  Dashboard:      ${GREEN}https://${DASHBOARD_HOST}${NC}"
 echo ""
 echo -e "  ${YELLOW}Credenciales guardadas en: ${ROOT_DIR}/.env${NC}"
-echo -e "  ${YELLOW}MinIO user: ${MINIO_ROOT_USER}${NC}"
-echo -e "  ${YELLOW}MinIO pass: ${MINIO_ROOT_PASSWORD}${NC}"
+echo -e "  ${YELLOW}MinIO user:       ${MINIO_ROOT_USER}${NC}"
+echo -e "  ${YELLOW}MinIO pass:       ${MINIO_ROOT_PASSWORD}${NC}"
+echo -e "  ${YELLOW}Dashboard pass:   ${PANEL_PASSWORD}${NC}"
+echo -e "  ${YELLOW}GitHub backup:    ${GITHUB_OWNER}/${GITHUB_REPO} → ${GITHUB_PATH}/${NC}"
 echo ""
 echo -e "  ${YELLOW}MC_WEBHOOK_TOKEN (config en ManyChat header X-MC-Token):${NC}"
 echo -e "  ${YELLOW}  ${MC_WEBHOOK_TOKEN}${NC}"
