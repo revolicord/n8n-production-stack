@@ -1,0 +1,376 @@
+{
+  "updatedAt": "2026-05-12T18:54:03.969Z",
+  "createdAt": "2026-05-11T14:40:44.260Z",
+  "id": "ZpwTuJCIMxWmzGI0",
+  "name": "agent-run copy1",
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "agent-run",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        2336,
+        512
+      ],
+      "id": "9f61c6ed-9ab5-41bd-a20e-58d7f097797b",
+      "name": "Webhook",
+      "webhookId": "e21bca06-7597-4287-91b9-a282a73b5239"
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $('Webhook').first().json;\nconst body = raw.body ?? raw;\nconst tools = $('Get Tools').first().json.tools || [];\n\nconst messages = body.messages\n  .map(m => {\n    if (m.reply_type === 'thumbs_up') return '👍 [el contacto envió pulgar arriba]';\n    if (m.media_urls && m.media_urls.length > 0 && !m.text) return `[${m.reply_type ?? 'media'} recibido]`;\n    return m.text ?? '[mensaje sin texto]';\n  })\n  .filter(Boolean)\n  .join('\\n');\n\nconst subscriberName = body.subscriber.display_name\n  || body.subscriber.ig_username || 'Usuario';\n\nconst stage = body.subscriber.metadata?.stage ?? 'nuevo';\n\nconst toolsList = tools.length > 0\n  ? '\\n\\nContenido disponible (usa activar_flow con el flow_id exacto):\\n'\n    + tools.map(t => `- flow_id: \"${t.flow_id}\" — cuándo usarlo: ${t.description}`).join('\\n')\n  : '';\n\nreturn [{\n  json: {\n    chatInput: messages,\n    systemPrompt: `Eres un asistente de ventas amable de Revolicord. Responde siempre en el idioma del usuario. Sé conciso y cálido, máximo 2-3 oraciones. Sin markdown. El usuario se llama ${subscriberName}. Etapa actual del lead: ${stage}`,\n    subscriberId: body.subscriber.manychat_subscriber_id,\n    mcApiKey: body.tenant?.config?.manychat_api_key || '',\n    conversationId: body.conversation.id,\n    turnId: body.turn_id,\n    callbackUrl: body.callback_url,\n    callbackToken: body.callback_token\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2576,
+        528
+      ],
+      "id": "38cd4f4a-45b1-4103-ac59-272bd78dc719",
+      "name": "Build Context"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.chatInput }}",
+        "options": {
+          "systemMessage": "={{ $json.systemPrompt }}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        2688,
+        608
+      ],
+      "id": "ecce2e0b-a965-4fd8-9fd0-17f78737bf1f",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": "llama-3.3-70b-versatile",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        2592,
+        736
+      ],
+      "id": "8ed429aa-1497-4416-bad0-89f6d87cb51f",
+      "name": "Groq Chat Model",
+      "credentials": {
+        "groqApi": {
+          "id": "kqZgCsc83vW6TnJ7",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.subscriberId }}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.3,
+      "position": [
+        2688,
+        800
+      ],
+      "id": "bbea442b-869c-4c5f-be43-e6b853d5200d",
+      "name": "Postgres Chat Memory",
+      "credentials": {
+        "postgres": {
+          "id": "xBbNbntvO0xJs5HM",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.manychat.com/fb/sending/sendFlow",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $('Build Context').first().json.mcApiKey }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"subscriber_id\": \"{{ $('Build Context').first().json.subscriberId }}\",\n  \"flow_ns\": \"{{ $fromAI('flow_id', 'El flow_id exacto del contenido a enviar según la lista disponible') }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        2816,
+        832
+      ],
+      "id": "51da0b4c-7bf8-40ae-a84c-bcf30a04dfee",
+      "name": "activar_flow"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.callbackUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.callbackToken }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "turn_id",
+              "value": "={{ $json.turn_id }}"
+            },
+            {
+              "name": "status",
+              "value": "={{ $json.status }}"
+            },
+            {
+              "name": "response_text",
+              "value": "={{ $json.response_text }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        3280,
+        592
+      ],
+      "id": "695f6ca6-3e08-49dd-a8be-8f49b7b33a61",
+      "name": "Callback"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.manychat.com/fb/sending/sendFlow",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer 4829715:03d75c75de42f22f31ea2d02f68cfce2"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"subscriber_id\": \"{{ $('Edit Fields1').item.json.body.contact_id }}\",\n  \"flow_ns\": \"{{ $('Edit Fields1').item.json.content }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        3120,
+        816
+      ],
+      "id": "5a90d730-3871-4058-bd6b-215bc14f9911",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://api.revolicord.com/tenants/' + ($json.body?.tenant?.slug ?? $json.tenant?.slug) + '/tools' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer c37a1bb5741c19a484203b7f691fd445e92410e46d934c82c6170b5734acaa80"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2464,
+        624
+      ],
+      "id": "cedc8f3c-5124-42e4-a6a2-800c4fddfe51",
+      "name": "Get Tools"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n    json: {\n      turn_id: $('Build Context').first().json.turnId,\n      status: 'completed',\n      response_text: $('AI Agent').first().json.output,\n      callbackUrl: $('Build Context').first().json.callbackUrl,\n      callbackToken: $('Build Context').first().json.callbackToken\n    }\n  }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3136,
+        624
+      ],
+      "id": "3d266a9e-65a9-4e96-9ace-573f7ab5a355",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.manychat.com/fb/sending/sendContent",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer 4829715:03d75c75de42f22f31ea2d02f68cfce2"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ subscriber_id: $('Build Context').first().json.subscriberId, data: { version: 'v2', content: { type: 'instagram', messages: [{ type: 'text', text: $json.output }] } } }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2960,
+        544
+      ],
+      "id": "64c9dc75-0f96-4847-9bf6-99fdcfaabbdb",
+      "name": "enviar texto"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get Tools",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Context": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres Chat Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "activar_flow": {
+      "ai_tool": [
+        []
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "enviar texto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Tools": {
+      "main": [
+        [
+          {
+            "node": "Build Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "enviar texto": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {},
+  "versionId": "78c49422-6b8d-40f0-ac1f-26a5d3a864f4",
+  "activeVersionId": null,
+  "triggerCount": 1,
+  "shared": [
+    {
+      "updatedAt": "2026-05-11T14:40:44.260Z",
+      "createdAt": "2026-05-11T14:40:44.260Z",
+      "role": "workflow:owner",
+      "workflowId": "ZpwTuJCIMxWmzGI0",
+      "projectId": "QMEqDuS2VokiT4AE"
+    }
+  ],
+  "activeVersion": null,
+  "tags": []
+}
