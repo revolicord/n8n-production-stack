@@ -59,6 +59,50 @@ fi
 
 section "N8N PRODUCCIÓN — DOCKER SWARM + TRAEFIK"
 
+# ── 0. Pantalla de requisitos previos ────────────────────────
+echo ""
+echo -e "${CYAN}  Antes de continuar, confirma que tienes listo lo siguiente:${NC}"
+echo ""
+echo -e "  ${YELLOW}SERVIDOR${NC}"
+echo    "  ☐  Ubuntu 22.04 / Debian 12 (recomendado)"
+echo    "  ☐  Puertos 80 y 443 abiertos en el firewall del VPS/servidor"
+echo    "  ☐  Docker instalado  (o el script lo instalará con get.docker.com)"
+echo ""
+echo -e "  ${YELLOW}DNS — 5 subdominios apuntando a la IP de este servidor:${NC}"
+echo    "  ☐  n8n.tudominio.com             → Panel n8n + UI de workflows"
+echo    "  ☐  minio.tudominio.com           → Almacenamiento S3 (activos, imágenes)"
+echo    "  ☐  minio-console.tudominio.com   → Consola web de MinIO"
+echo    "  ☐  api.tudominio.com             → API DM Setter (webhook ManyChat)"
+echo    "  ☐  dashboard.tudominio.com       → Panel de métricas y prospectos"
+echo    "  ↳  Los certificados SSL se generan automáticamente (Let's Encrypt)."
+echo    "     Sin DNS correcto, los certificados fallan y los servicios no arrancan."
+echo ""
+echo -e "  ${YELLOW}MANYCHAT${NC}"
+echo    "  ☐  Cuenta ManyChat con Instagram conectada"
+echo    "  ☐  Flujo con acción 'External Request' listo para configurar"
+echo    "     (la URL y el token de autenticación se generan durante esta instalación)"
+echo ""
+echo -e "  ${YELLOW}GITHUB (backup de workflows n8n)${NC}"
+echo    "  ☐  Repositorio GitHub donde guardar los backups de workflows"
+echo    "  ☐  Personal Access Token (PAT) con permiso  Contents: Read & Write"
+echo    "     Crear en: GitHub → Settings → Developer settings → Fine-grained tokens"
+echo ""
+echo -e "  ${YELLOW}TELEGRAM (opcional — escalado a humano)${NC}"
+echo    "  ☐  Bot creado en @BotFather → /newbot  (guarda el token que te da)"
+echo    "  ☐  Chat ID del destino de notificaciones"
+echo    "     (usa @userinfobot o @RawDataBot para obtener tu chat_id)"
+echo -e "  ${RED}  ☐  CRÍTICO: después de instalar, el agente DEBE abrir el bot en Telegram${NC}"
+echo -e "  ${RED}     y enviar /start una sola vez. Sin este paso Telegram rechaza los${NC}"
+echo -e "  ${RED}     mensajes del bot con error 403 y las notificaciones no llegan.${NC}"
+echo ""
+echo -e "  ${YELLOW}EMAIL${NC}"
+echo    "  ☐  Dirección de email válida para registrar los certificados SSL"
+echo    "     (Let's Encrypt la usa solo para avisos de expiración, no spam)"
+echo ""
+echo -e "${CYAN}══════════════════════════════════════${NC}"
+read -rp "  ¿Tienes todo listo? Presiona Enter para continuar o Ctrl+C para cancelar: " _PREREQ_CONFIRM
+echo ""
+
 # ── Helpers ──────────────────────────────────────────────────
 
 # Pide valor solo si la variable no está ya definida.
@@ -164,6 +208,18 @@ else
 fi
 gen_if_missing TELEGRAM_WEBHOOK_SECRET "openssl rand -hex 16"
 PAUSE_REMINDER_HOURS="${PAUSE_REMINDER_HOURS:-6}"
+if [[ -n "${TELEGRAM_BOT_TOKEN}" ]]; then
+  echo ""
+  warn "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  warn "  PASO MANUAL OBLIGATORIO tras la instalación:"
+  warn "  El agente (o cualquier destinatario de TELEGRAM_DEFAULT_CHAT_ID)"
+  warn "  debe abrir el bot en Telegram y enviar /start al menos una vez."
+  warn "  Telegram prohíbe que los bots inicien conversaciones con usuarios"
+  warn "  que no les han escrito primero. Sin este paso, las notificaciones"
+  warn "  de escalado fallan silenciosamente con error 403 Forbidden."
+  warn "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
+fi
 
 # ── 7. Escribir .env ─────────────────────────────────────────
 cat > "$ENV_FILE" <<ENVEOF
@@ -387,6 +443,11 @@ echo ""
 warn "Los certificados SSL pueden tardar 1-2 minutos en generarse."
 warn "Si los dominios no apuntaban al servidor: docker service update --force traefik"
 if [[ -n "${TELEGRAM_BOT_TOKEN}" ]]; then
-  info "Telegram configurado. Recuerda registrar el webhook:"
+  echo ""
+  info "Telegram configurado. Pasos finales para activarlo:"
+  echo "  A. Registrar el webhook de callbacks (una sola vez):"
   echo "       bash scripts/telegram-set-webhook.sh"
+  echo "  B. El agente debe abrir el bot en Telegram y enviar /start"
+  echo "     antes de que llegue la primera notificación. Sin este paso"
+  echo "     Telegram devuelve 403 Forbidden y las alertas no se envían."
 fi
