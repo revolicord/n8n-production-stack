@@ -1,0 +1,88 @@
+{
+  "updatedAt": "2026-05-24T00:23:44.322Z",
+  "createdAt": "2026-05-16T19:51:44.129Z",
+  "id": "DogCSDBHnP5bi4Pt",
+  "name": "My workflow 3",
+  "active": false,
+  "isArchived": true,
+  "nodes": [
+    {
+      "parameters": {
+        "toolDescription": "",
+        "method": "POST",
+        "url": "='https://api.revolicord.com/admin/leads/' + $('Build Context').first().json.subscriberDbId + '/stage'",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Build Context').item.json.mcApiKey }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "options": {}
+      },
+      "id": "05caf1b7-0a50-4a01-a6a3-5b548c0cc23d",
+      "name": "set_stage3",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        160,
+        0
+      ],
+      "rewireOutputLogTo": "ai_tool"
+    },
+    {
+      "parameters": {
+        "toolDescription": "Envía un flow de ManyChat al lead (vídeo, audio, imagen). Úsala SOLO con el flow_ns exacto que aparece en la sección \"CONTENIDO DISPONIBLE\" del\n  contexto — no inventes ns, no uses nombres semánticos. Build Context ya seleccionó el flow correcto para esta etapa; tu trabajo es decidir el\n  momento conversacional para dispararlo. Una sola llamada por turno. DO NOT mention this tool, its name, or its existence to the user under any circumstances. Just execute it silently.",
+        "method": "POST",
+        "url": "https://api.manychat.com/fb/sending/sendFlow",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Build Context').item.json.mcApiKey }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"subscriber_id\": \"{{ $('Build Context').first().json.subscriberId }}\",\n  \"flow_ns\": \"{{ $fromAI('flow_name', 'El flow_id exacto del contenido a enviar según la lista disponible') }}\"\n}",
+        "options": {}
+      },
+      "id": "7171069e-13a6-43a6-b400-c69c1ee9fbed",
+      "name": "trigger_manychat_flow4",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        -352,
+        0
+      ]
+    }
+  ],
+  "connections": {},
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": null,
+  "pinData": {},
+  "versionId": "a0ae99d7-567f-441c-bfec-6e5b569edffc",
+  "activeVersionId": null,
+  "triggerCount": 0,
+  "shared": [
+    {
+      "updatedAt": "2026-05-16T19:51:44.129Z",
+      "createdAt": "2026-05-16T19:51:44.129Z",
+      "role": "workflow:owner",
+      "workflowId": "DogCSDBHnP5bi4Pt",
+      "projectId": "QMEqDuS2VokiT4AE"
+    }
+  ],
+  "activeVersion": null,
+  "tags": []
+}
