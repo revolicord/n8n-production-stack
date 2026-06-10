@@ -68,6 +68,7 @@ RECORDATORIO: job repetible 'pause-reminder' (PAUSE_REMINDER_HOURS, default 6h) 
 - `POST /admin/leads/:id/pause` / `/resume` — pausa manual (indefinida o con `duration_minutes`).
 - `POST /webhook/telegram` — callbacks de los botones (header `X-Telegram-Bot-Api-Secret-Token`); registrar con `scripts/telegram-set-webhook.sh`.
 - Env: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_DEFAULT_CHAT_ID`, `TELEGRAM_WEBHOOK_SECRET`, `PAUSE_REMINDER_HOURS`; por tenant: `telegram_chat_id`, `notification_keywords`.
+- **Requisito previo**: el agente (u operador) debe abrir el bot en Telegram y enviar `/start` al menos una vez. Telegram prohíbe que bots inicien conversaciones con usuarios que no les han escrito primero — sin este paso el bot falla con `403 Forbidden: bot can't initiate conversation`.
 - Pendiente n8n (UI): acción `notify_human` en el Router + prompt v8 — ver `n8n/nodes/11-notify-human.md`.
 
 ### 3.3 Información transferida en la alerta de Telegram
@@ -109,6 +110,7 @@ RECORDATORIO: job repetible 'pause-reminder' (PAUSE_REMINDER_HOURS, default 6h) 
 - [x] Definir política cuando el lead pide humano → `notify_human` + pausa manual por el humano (no automática)
 - [x] Flag de pausa por suscriptor → `status='paused'` + `paused_until` (endpoints pause/resume, botón Telegram, dashboard); recordatorio repetible `pause-reminder`
 - [ ] Cablear la acción `notify_human` en el Router de n8n + copiar prompt v8 (UI) — ver `n8n/nodes/11-notify-human.md`
-- [ ] Configurar en producción: `TELEGRAM_*` en `.env`, `notification_keywords` en tenant.config, `scripts/telegram-set-webhook.sh`
+- [x] Configurar en producción: `TELEGRAM_*` en `.env`, `notification_keywords` en tenant.config, `scripts/telegram-set-webhook.sh`
+- [ ] **Iniciar el bot en Telegram**: el agente (o cualquier chat_id destino) debe enviar `/start` al bot una vez para que Telegram permita que el bot le envíe mensajes. Sin este paso el bot falla silenciosamente con `403 Forbidden: bot can't initiate conversation`.
 - [ ] Confirmar SLAs de respuesta humana
 - [ ] Definir si hay un humano de respaldo si Alex no está disponible
