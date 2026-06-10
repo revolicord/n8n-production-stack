@@ -1,118 +1,145 @@
 # Quantum Creators · Setter MVP — Seguimiento de implementación
 
-> Documento vivo. Actualizado el 2026-05-15 tras implementación de ADRs 0010–0015.
+> Documento vivo. Actualizado el 2026-05-29.
 
 ## Estado en una frase
 
-El schema de BD está completo (ADRs 0010–0015 migrados). La migración **no ha sido aplicada a producción** — falta `DATABASE_URL` + seed + cablear nodos en n8n. El prompt del setter y el workflow `agent-run` básico ya funcionan; los nuevos nodos están especificados listos para copiar.
+El core del setter (agent-run + followup-runner) y el panel admin `/settings` están en producción. El API corre imagen antigua — hace falta `make rebuild-api` para aplicar ADR-0021. Calendly Frentes 1, 2 y 3-B (n8n) pendientes del founder.
+
+---
 
 ## Decisiones tomadas
 
-- **Funnel canónico:** Quantum Creators, 5 etapas `A/MS/B/C/D` + terminales (`disqualified`, `lost`, `escalated_human_call`). Confirmado con el founder el 2026-05-14. La documentación previa con etapas `nuevo/interesado/prospecto/cliente` (tenant "revolicord") queda **obsoleta**.
+- **Funnel canónico:** Quantum Creators, 5 etapas `A/MS/B/C/D` + terminales (`disqualified`, `lost`, `escalated_human_call`). Confirmado con el founder el 2026-05-14.
 - **Persona del agente:** "Alex" (ver decisión abierta #1, sin cerrar).
-- **El prompt vive** en el Set node `System Prompt` del workflow de n8n (ver `n8n/nodes/00c-system-prompt.md`); la fuente versionada es `n8n/prompts/setter-v1.md`. (Hasta v4 vivía en `tenants.config.system_prompt`; cambiado en v5 — 2026-05-16 — para iterar sin SQL.)
-- **ADR-0014 Path B:** `current_stage_id UUID FK` se agrega a `lead_stages` (no a `subscribers`), preservando el schema existente. Ver `docs/adr/IMPLEMENTATION-REPORT.md`.
-
-## Lo que YA funciona — no tocar
-
-- Workflow `agent-run` cableado: `Webhook → Build Context → AI Agent → enviar texto → Prepare Callback → Callback`.
-- Modelo Claude `sonnet 4.6` + Postgres Chat Memory.
-- 2 tools conectadas: `trigger_manychat_flow`, `set_stage`.
-- Capa de debounce/turnos en Fastify (ManyChat → Fastify → n8n).
-- **Schema de BD**: migración `0002_polite_groot.sql` generada y validada (typecheck ✅). Tablas nuevas: `funnel_stages`, `stage_flows`, `followup_templates`, `lead_followup_log`, `lead_crons`. Columna `current_stage_id FK` añadida a `lead_stages`.
+- **El prompt vive** en el Set node `System Prompt` del workflow de n8n (ver `n8n/prompts/setter-v1.md`). (Hasta v4 vivía en `tenants.config.system_prompt`; cambiado en v5 — 2026-05-16.)
+- **ADR-0014 Path B:** `current_stage_id UUID FK` en `lead_stages` (no en `subscribers`).
+- **Panel admin:** reescrito como rutas `/settings/*` nativas del dashboard Next.js (ADR-0021, Fase 4 completada 2026-05-29). SPA legacy eliminado.
+- **Calendly matching:** UTM — `calendly_url?utm_content={subscriber.id}`. Todo en n8n. Cero migración.
+- **Calendly sistema-event:** Frente 3-A (API) en producción — endpoint `POST /admin/leads/:id/system-event` (PR #2, commit `93577ad`). Frentes 1+2+3-B pendientes del founder.
 
 ---
 
-## P0 — bloquea el MVP
+## Lo que YA funciona — en producción
 
-Sin esto el prompt no corre bien end-to-end.
+- Workflow `agent-run` (ID `6QJs9dHcR8NX8MZe`): **15 nodos, ACTIVO**
+  - Webhook → Get Stage Config + Get CRM Context (paralelo) → Merge → Build Context → AI Agent (Claude Sonnet 4.6) → enviar texto → Upsert Lead Cron → Mark Followups Responded → Code → Callback.
+  - ADR-0010, ADR-0011, ADR-0013 implementados.
+- Workflow `followup-runner` (ID `hEXWrZBCqNyZGf2v`): **14 nodos, ACTIVO** — cron cada 5 min.
+- Schema de BD: migraciones `0001`–`0013` aplicadas. Tablas: `funnel_stages`, `stage_flows`, `followup_templates`, `followup_messages`, `lead_followup_log`, `lead_crons`, `agent_resources`. FK `current_stage_id` en `lead_stages`. Columnas `call_link`/`nurture_video_url` en `funnel_stages`.
+- Seed QC: tenant `revolicord` (UUID `9d338f06`), etapas A/MS/B/C/D, 9 followup_templates, stage_flows (con `PENDIENTE_ns_*`).
+- Panel de configuración Next.js `/settings`: general, fase-b, fase-c, cierres, objeciones. Proxy admin re-firma JWT. Uploads a MinIO por proxy.
+- MinIO bucket `assets` público de lectura — subida de imágenes para follow-ups multimedia.
+- Endpoint `POST /admin/leads/:id/system-event` — B2: BufferMessage con `reply_type:'system_event'` por el flujo normal del worker. Autenticación Bearer.
+- Vista Kanban (read-only) en pestaña Prospectos del dashboard (commits `77cafb8`, `778fa6f`).
+- Capa de debounce/turnos Fastify (ManyChat → Fastify → n8n).
+- 2 tools en el agente: `trigger_manychat_flow`, `set_stage`.
 
-- [ ] **Aplicar migración 0002** a la BD de producción: `DATABASE_URL="postgres://..." pnpm db:migrate` desde `packages/db/`. Crea las 5 tablas nuevas y agrega `current_stage_id` a `lead_stages`.
-- [ ] **Ejecutar seed QC** (`packages/db/drizzle/seed_qc_funnel.sql`): reemplazar `<TENANT_ID>` con el UUID real del tenant → crea etapas A/MS/B/C/D + stage_flows + followup_templates.
-- [ ] **Ejecutar backfill**: después del seed, correr el UPDATE comentado en `seed_qc_funnel.sql` para llenar `lead_stages.current_stage_id` en filas existentes.
-- [ ] **Cargar el prompt** en el Set node `System Prompt` del workflow `agent-run` (copiar el bloque de `n8n/prompts/setter-v1.md` al campo `staticPrompt` del Set node).
-- [ ] **Completar el copy del producto** en `setter-v1.md`: `{{QC_PRODUCT_ONELINER}}` y `{{QC_PRODUCT_NOTAS}}`. Solo lo sabe Alex. Sin esto el agente habla del producto con placeholders.
-- [ ] **`set_stage`: ampliar los valores válidos** de `new_stage` a `A | MS | B | C | disqualified`. El endpoint `POST /admin/leads/:id/stage` fue diseñado para `nuevo/interesado/...`. Debe: aceptar valores nuevos, validar transiciones, guardar `reason` + `evidence`.
-- [ ] **Cablear nodos nuevos en `agent-run`** (n8n UI): agregar `Get Stage Config` y `Get Subscriber CRM Context` antes de `Build Context`; reemplazar JS de `Build Context` con el de `n8n/nodes/01-build-context.md`; agregar `Upsert Lead Cron` después de `enviar texto`.
-- [ ] **Confirmar `flow_ns` reales de ManyChat QC**: el seed usa `PENDIENTE_ns_video_hook` y `PENDIENTE_ns_video_vsl`. Verificar en la cuenta de ManyChat y actualizar `stage_flows` en la BD.
-- [ ] **`calendly_url` en `tenants.config`**: link único de discovery para que Build Context lo inyecte. (El round-robin de closers es P1.)
-- [ ] **Activar los flows en ManyChat**: están como STOPPED. Activarlos y anotar cada `flow_ns`.
+---
+
+## P0 — bloquea la prueba real end-to-end
+
+- [x] ~~Aplicar migración 0002~~ — aplicada, y además 0003–0013 ya en prod.
+- [x] ~~Ejecutar seed QC~~ — aplicado.
+- [x] ~~Cargar el prompt~~ — en Set node `System Prompt` del workflow.
+- [x] ~~Cablear nodos nuevos en `agent-run`~~ — 15 nodos activos con Build Context actualizado.
+- [x] ~~Crear workflow `followup-runner` en n8n~~ — activo (ID `hEXWrZBCqNyZGf2v`).
+- [ ] **Copy del producto** en `setter-v1.md`: `{{QC_PRODUCT_ONELINER}}` y `{{QC_PRODUCT_NOTAS}}`. Solo lo sabe Alex.
+- [ ] **`flow_ns` reales de ManyChat QC**: el seed usa `PENDIENTE_ns_video_hook` y `PENDIENTE_ns_video_vsl`. Verificar en la cuenta de ManyChat y actualizar `stage_flows` en la BD.
+- [ ] **Activar los flows en ManyChat**: están como STOPPED.
+- [ ] **`make rebuild-api`**: la imagen actual del API es anterior a ADR-0021 (Fase 4 del panel). Rebuild obligatorio. ⚠️ NO correr `make deploy` antes del rebuild — el stack.yml ya no pasa `ADMIN_PASSWORD` y el código viejo lo exige (Zod .min(8)) → crash loop.
+- [ ] **Verificar credencial Anthropic** en n8n UI: nodo `Anthropic Chat Model` del `agent-run`.
+- [ ] **Test end-to-end**: enviar DM de Instagram y verificar que el agente responde correctamente.
+
+---
 
 ## P1 — completa el setter
 
-El happy path va sin esto, pero el setter no está "completo".
-
-- [x] **Schema follow-ups**: tablas `followup_templates` y `lead_followup_log` diseñadas, migración generada, seed con templates para A/MS/B/C. Pendiente solo la aplicación en producción (ver P0).
-- [x] **Spec `followup-runner`**: workflow completamente especificado en `n8n/workflows/followup-runner.md` (6 nodos, queries SQL, lógica de avance/archivado, INSERT en `n8n_chat_histories`). Pendiente: crear el workflow en la UI de n8n.
-- [x] **Contexto dual agente**: bloque CRM (`Get Subscriber CRM Context` + `buildCrmBlock()`) especificado e integrado en `Build Context`. Pendiente: cablear en n8n.
-- [ ] **Crear workflow `followup-runner` en n8n**: Schedule Trigger cada 5 min siguiendo `n8n/workflows/followup-runner.md`. Sin esto, el sistema no envía seguimientos automáticos.
-- [ ] **Actualizar system prompt** (`setter-v1.md`): agregar instrucción sobre `[SEGUIMIENTO AUTOMÁTICO #N]` para que el agente use los seguimientos como contexto sin mencionarlos explícitamente.
-- [ ] **Escalado a humano**: tabla `notifications` + tool `notify_human` + lógica tras follow-up #5 (`escalated_human_call`). Añadir al prompt cuando la tool exista.
-- [ ] **Round-robin de closers**: tabla `closers` + endpoint Fastify con lock atómico + tool `send_calendly_link`. Hasta entonces: link único en config (P0).
-- [ ] **Calendly webhook**: endpoint Fastify dedicado que verifica firma → marca etapa `D` → dispara notificación. Es lo único que mueve C→D.
-- [ ] **Inyección de presencia**: el payload del API hacia n8n debe incluir `instagram_context.{last_seen, last_interaction}`. El prompt ya los consume; el payload aún no los manda.
-- [ ] **Persistencia de señales del agente**: que el agente guarde notas/señales en `lead_stages.metadata` y Build Context las reinyecte.
-- [ ] **Banco de objeciones**: tabla `objection_bank` + tool `get_objection_bank`.
-- [ ] **`mark_disqualified`**: `set_stage("disqualified", reason, evidence)` ya cubre el caso — no construir tool aparte.
-
-## P2 — robustez y escala
-
-- [ ] **Memoria multinivel**: hoy solo Postgres Chat Memory (cronológico, sin recall semántico). Falta la capa episódica/semántica (pgvector / Zep / Mem0) + resumen "frío" de la conversación cada 5 turnos (doc 13). Sin esto, un lead que vuelve tras semanas se trata sin contexto profundo.
-- [ ] **Restricciones de la API de Meta/ManyChat**: límite ~200 DMs/hora por cuenta, ventana de mensajería de 24 h, variación semántica del texto (evitar texto idéntico a >25 destinatarios/hora), encolado + backoff exponencial. Verificar qué cubre ManyChat por nosotros y qué hay que gestionar en la capa Fastify.
-- [ ] **Formato de salida estructurado**: doc 13 propone que el agente devuelva JSON (`actions`, `response_to_user`, `stage_change`, `internal_notes`). Hoy la salida es texto plano que va directo a "enviar texto". Migrar a JSON requiere un nodo parser en n8n — decidir si compensa.
-- [ ] **Telemetría / KPIs**: Open Rate, Reply Rate, CTR, Qualification Rate, Call-to-Appointment Rate, Show Rate, Speed-to-Lead, MSR/PRR/CSR/ABR. Benchmarks en `fundamentals/Informe ... Appointment Setting en Instagram`. Queries y dashboard en `docs/_archive/docs-dm-settings/14`.
-- [ ] **HITL por confianza**: cuando la incertidumbre del modelo supera un umbral o detecta sentimiento muy negativo / tema legal → escalar a humano con resumen + borrador sugerido, en vez de actuar.
-- [ ] **PII / GDPR**: DPA con Groq (y cualquier proveedor de modelo), garantía de zero-data-retention, auditabilidad de qué contexto exacto recibió el modelo en cada turno.
-- [ ] **Versionado de prompts**: disciplina de git en `n8n/prompts/` (v1 → v2…) o tabla `prompt_versions`. Para no perder iteraciones del setter y poder hacer A/B.
-- [ ] **Revisar el modelo**: `llama-3.3-70b` es de gama media para tool-calling multi-etapa. Si en pruebas el agente salta etapas, inventa flows o ignora restricciones, evaluar un modelo clase Claude / GPT-4o.
+- [x] Schema follow-ups + followup-runner ACTIVO.
+- [x] Contexto dual agente (bloque CRM) cableado en agent-run.
+- [x] Panel de configuración `/settings` Next.js completo (general, fase-b, fase-c, cierres, objeciones).
+- [x] MinIO assets + followup-messages (`type='content'`) — ADR-0018.
+- [x] Tres tipos de follow-up (text, content, flow) — ADR-0020.
+- [x] `agent_resources` (cierres, objeciones, general) — ADR-0019.
+- [x] Endpoint Calendly C→D (`system-event`) — ADR Frente 3-A en prod.
+- [x] `call_link`/`nurture_video_url` en funnel_stages — migración 0013 aplicada; placeholder `{{call_link}}` y `{{nurture_video}}` disponibles.
+- [ ] **Calendly Frente 1 (n8n)**: `docs/n8n/calendly-impl-1-links-dinamicos.md` — links UTM en 3 puntos:
+  - Build Context: `calendlyUrl` ya tiene `?utm_content=` appended (commit `ac043bd` — docs listos, founder lo aplica en n8n UI).
+  - followup-runner `get-due-leads`: añadir `fs.call_link` al SELECT + interpolar `{{call_link}}` con UTM en prepare-data y build-content-messages. ⚠️ Hoy `{{call_link}}` se envía literal.
+- [ ] **Calendly Frente 2 (n8n)**: `docs/n8n/calendly-impl-2-workflow.md` — workflow `calendly-feedback` (Webhook→Guard→Get Subscriber→Set Stage D→persist booking). Pendiente del founder.
+- [ ] **Calendly Frente 3-B (n8n)**: `docs/n8n/calendly-impl-3-feedback-agente.md` — Build Context (buildSystemEventText + ramificar chatInput), system prompt (regla eventos sistema), extender workflow calendly-feedback (Format datetime + HTTP a /system-event). Pendiente del founder.
+- [ ] **UTM risk**: verificar que `?utm_content=` llega en `payload.tracking.utm_content` cuando se agenda en el link real de Calendly. El payload de prueba traía `null`.
+- [ ] **Actualizar system prompt** (`setter-v1.md`): agregar instrucción `[SEGUIMIENTO AUTOMÁTICO #N]` + regla eventos sistema para Calendly.
+- [ ] **followup-runner nodo 06 → Switch** (3 ramas: text / content / flow): el nodo actual es IF de 2 ramas; templates `type='content'` caen en rama `false` e intentan `sendFlow` con `flow_ns=NULL` → error silencioso. Ver ADR-0020.
+- [ ] **followup-runner nodo 02 → json_agg**: el LATERAL join actual debe reemplazarse con `json_agg` de `followup_messages` para que la rama `content` funcione. Ver ADR-0020.
+- [ ] **ADR-0017 Turn Timeout Watchdog**: watchdog periódico que detecta turns huérfanos (lock expirado + estado `dispatched`). Código pendiente: `workers/watchdog.ts`, `findStuckDispatched()` en turns.ts, queue `WATCHDOG_QUEUE`. Propuesto, no implementado.
+- [ ] Escalado a humano: tabla `notifications` + tool `notify_human` + lógica tras follow-up #5.
+- [ ] Round-robin de closers: tabla `closers` + endpoint Fastify + tool `send_calendly_link`.
+- [ ] Persistencia de señales del agente en `lead_stages.metadata`.
+- [ ] Banco de objeciones: tabla `objection_bank` + tool `get_objection_bank`.
 
 ---
 
-## Documentación a reconciliar
+## P2 — robustez y escala
+
+- [ ] Memoria multinivel (pgvector / Zep / Mem0 + resumen "frío" cada 5 turnos).
+- [ ] Restricciones API Meta/ManyChat: límite ~200 DMs/hora, ventana 24 h, variación semántica.
+- [ ] Formato de salida estructurado (JSON con `actions`, `response_to_user`, etc.).
+- [ ] Telemetría / KPIs: Open Rate, Reply Rate, CTR, Qualification Rate, Speed-to-Lead.
+- [ ] HITL por confianza / sentimiento negativo.
+- [ ] PII / GDPR: DPA, zero-data-retention, auditabilidad.
+- [ ] Versionado de prompts (tabla `prompt_versions` o disciplina git en `n8n/prompts/`).
+
+---
+
+## Documentación
 
 | Archivo | Estado |
 |---------|--------|
-| `n8n/prompts/setter-v1.md` | ✅ Prompt de producción. Pendiente: agregar instrucción `[SEGUIMIENTO AUTOMÁTICO #N]`. |
-| `n8n/SETTER-MVP-TRACKING.md` | ✅ Este documento — actualizado 2026-05-15. |
-| `n8n/stages.md` | ✅ Actualizado a `A/MS/B/C/D` + terminales. |
-| `n8n/system-prompt.md` | ✅ Apunta a `setter-v1.md`. |
-| `n8n/nodes/01-build-context.md` | ✅ Actualizado — selección ponderada + bloque CRM + elimina FLOW_MAP hardcodeado. |
-| `n8n/nodes/00-get-stage-config.md` | ✅ Creado — query para leer funnel_stages + stage_flows. |
-| `n8n/nodes/00b-get-crm-context.md` | ✅ Creado — query para bloque CRM del agente. |
-| `n8n/nodes/99-upsert-lead-cron.md` | ✅ Creado — UPSERT post-respuesta + marca followups respondidos. |
-| `n8n/workflows/followup-runner.md` | ✅ Creado — spec completo del workflow (6 nodos, queries SQL). |
-| `docs/adr/IMPLEMENTATION-REPORT.md` | ✅ Creado — reporte de implementación ADRs 0010–0015. |
-| `packages/db/src/schema.ts` | ✅ Actualizado — 5 tablas nuevas + `current_stage_id` en `lead_stages`. |
-| `packages/db/drizzle/0002_polite_groot.sql` | ✅ Creado — migración lista para aplicar en producción. |
-| `packages/db/drizzle/seed_qc_funnel.sql` | ✅ Creado — seed QC, requiere `<TENANT_ID>` real. |
-| `n8n/nodes/02-ai-agent.md` | ⏳ Pendiente: sigue listando solo 2 tools. Actualizar cuando existan las tools de P1. |
-| `n8n/flows-catalog.md` | ⏳ Pendiente: `ns` etiquetados "revolicord". Confirmar los `ns` reales de QC y actualizar `stage_flows` en BD. |
-| `n8n/README.md` | ⏳ Pendiente: actualizar el diagrama de nodos con el nuevo chain y el cron de follow-ups. |
-| `n8n/agent-run.json` | ⚠️ Vacío (0 bytes) — el JSON del workflow no se versiona (tiene tokens). Intencional. |
-| `docs/_archive/docs-dm-settings/00 readme.md` | ⚠️ Menor: referencia `07-docker-compose-y-deploy.md` pero el archivo real es `07-docker-swarm-y-deploy.md`. |
-| Nombre del negocio | ⚠️ Repo `revolicord/n8n-production-stack` vs. tenant Quantum Creators. Confirmar modelo: Revolicord = agencia, QC = primer tenant. Alinear `flows-catalog.md` y `slug` del tenant. |
+| `n8n/prompts/setter-v1.md` | ✅ Prompt de producción. Pendiente: instrucción `[SEGUIMIENTO AUTOMÁTICO #N]` + regla sistema-event. |
+| `n8n/SETTER-MVP-TRACKING.md` | ✅ Este documento — actualizado 2026-05-29. |
+| `n8n/stages.md` | ✅ `A/MS/B/C/D` + terminales. |
+| `n8n/nodes/01-build-context.md` | ✅ UTM docs añadidos (commit `ac043bd`). Pending: founder aplica cambio en n8n UI. |
+| `n8n/nodes/00-get-stage-config.md` | ✅ Query funnel_stages + stage_flows. |
+| `n8n/nodes/00b-get-crm-context.md` | ✅ Query bloque CRM. |
+| `n8n/nodes/99-upsert-lead-cron.md` | ✅ UPSERT post-respuesta. |
+| `n8n/workflows/followup-runner.md` | ✅ Spec base del workflow. |
+| `n8n/workflows/followup-runner/06-type-is-text.md` | ⚠️ IF de 2 ramas — actualizar a Switch 3 ramas (ADR-0020). |
+| `n8n/workflows/followup-runner/02-get-due-leads.md` | ⚠️ LATERAL join → reemplazar con json_agg (ADR-0020). |
+| `n8n/calendly-feedback-plan.md` | ✅ Plan completo (2026-05-27). |
+| `n8n/calendly-impl-1-links-dinamicos.md` | ✅ Listo para founder. |
+| `n8n/calendly-impl-2-workflow.md` | ✅ Listo para founder. |
+| `n8n/calendly-impl-3-feedback-agente.md` | ✅ Listo para founder. |
+| `docs/adr/0017-turn-timeout-watchdog.md` | ⏳ Propuesto — pendiente implementación. |
+| `docs/adr/0018-followup-messages-minio-assets.md` | ✅ Implementado. |
+| `docs/adr/0019-agent-resources.md` | ✅ Implementado. |
+| `docs/adr/0020-tres-tipos-followup-text-content-flow.md` | ✅ ADR aceptado — nodos n8n pendientes actualización en UI. |
+| `docs/adr/0021-consolidate-admin-panel-settings.md` | ✅ Fase 4 completada (2026-05-29). SPA borrado. |
+| `packages/db/src/schema.ts` | ✅ Todas las tablas. |
+| `n8n/nodes/02-ai-agent.md` | ⏳ Pendiente: actualizar tools cuando existan las P1. |
+| `n8n/flows-catalog.md` | ⏳ `ns` etiquetados "revolicord". Confirmar `ns` reales de QC. |
+| `n8n/README.md` | ⏳ Pendiente: actualizar diagrama con new chain + cron follow-ups + Calendly. |
 
 ---
 
 ## Decisiones de negocio abiertas — las necesita Alex
 
-1. **Persona del agente.** ¿El agente *es* "Alex" (se hace pasar por el founder) o es "del equipo de Alex"? La segunda opción es más sostenible: explica la latencia entre mensajes y reduce el riesgo si un lead descubre que es automatizado. `docs/_archive/docs-dm-settings/13` dice que es "Alex" — el prompt sigue eso de momento.
-2. **Copy del producto.** One-liner de Quantum Creators, qué incluye el programa, para quién es y para quién NO. Bloquea P0.
-3. **Timing de la primera respuesta.** Los dos informes de `fundamentals/` se contradicen: uno recomienda 5-20 min de retraso deliberado (no parecer bot), el otro dice que 0-1 min convierte 21× más. El sistema tiene un debounce de 8 s. Esto NO es del prompt — es política de la capa de debounce/scheduling. Decidir.
-4. **Criterios finos de descalificación.** Umbral de "cuenta de baja calidad" (nº de seguidores, antigüedad), lista exacta de países válidos.
-5. **Cadencia y textos de follow-up.** Doc 13 propone días 1,2,3,5,7,9,11,13 con texto/audio/meme. Confirmar la cadencia y redactar los textos reales.
+1. **Copy del producto.** One-liner de Quantum Creators, qué incluye el programa, para quién es y para quién NO. Bloquea test end-to-end.
+2. **`flow_ns` reales de ManyChat QC.** Semillas usan `PENDIENTE_ns_video_hook` y `PENDIENTE_ns_video_vsl`.
+3. **Timing de la primera respuesta.** Debounce actual: 8 s (configurable). Decidir si mantener.
+4. **Cadencia y textos de follow-up.** Confirmar la cadencia de días y redactar los textos reales.
+5. **Persona del agente.** ¿"Alex" o "del equipo de Alex"?
+6. **UTM risk.** Verificar que `?utm_content=` atraviesa el dominio `quantumcreators.es` hasta Calendly.
 
 ---
 
 ## Cómo probar el MVP — cuando P0 esté cerrado
 
-Prueba manual end-to-end (basada en el Ejemplo 1 de `docs/_archive/docs-dm-settings/13`):
-
 1. Enviar "hola" como DM a la cuenta de Instagram conectada.
 2. Verificar: el agente responde cálido + breve, dispara `video_hook`, hace `set_stage("A", ...)`.
 3. Responder "ya lo vi, interesante".
-4. Verificar: `set_stage("MS", ...)` con `evidence` = la frase del usuario, dispara el flow del Vídeo 2 (VSL).
+4. Verificar: `set_stage("MS", ...)`, dispara el flow del Vídeo 2 (VSL).
 5. Responder "👍 me encanta".
-6. Verificar: `set_stage("B", ...)`, y en el siguiente paso el agente envía el link de Calendly + `set_stage("C", ...)`.
-7. Probar los casos de borde del prompt: preguntar el precio en A, preguntar "¿eres un bot?", soltar una objeción de dinero. Verificar que el agente NO da precio, NO admite ser bot, y NO descalifica al primer "no".
-8. Reservar en Calendly → verificar que el sistema (no el agente) marca etapa `D`. ⚠️ Esto depende del webhook de Calendly (P1).
+6. Verificar: `set_stage("B", ...)`, el agente envía link de Calendly + `set_stage("C", ...)`.
+7. Probar casos de borde: precio en A, "¿eres un bot?", objeción de dinero.
+8. Agendar en Calendly → verificar que el sistema marca etapa `D` (depende de Frentes 1+2+3-B).

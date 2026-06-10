@@ -69,6 +69,35 @@ export async function getSubscriberByUuid(
   return rows[0] ?? null;
 }
 
+/**
+ * Pausa manual del bot para un lead (escalado a humano). `pausedUntil=null`
+ * = pausa indefinida hasta reanudar manualmente; isSubscriberActive() ya
+ * bloquea el dispatch en ambos casos.
+ */
+export async function pauseSubscriber(
+  db: DbClient,
+  args: { subscriberId: string; pausedUntil?: Date | null },
+): Promise<Subscriber | null> {
+  const rows = await db
+    .update(subscribers)
+    .set({ status: 'paused', pausedUntil: args.pausedUntil ?? null })
+    .where(eq(subscribers.id, args.subscriberId))
+    .returning();
+  return rows[0] ?? null;
+}
+
+export async function resumeSubscriber(
+  db: DbClient,
+  args: { subscriberId: string },
+): Promise<Subscriber | null> {
+  const rows = await db
+    .update(subscribers)
+    .set({ status: 'active', pausedUntil: null })
+    .where(eq(subscribers.id, args.subscriberId))
+    .returning();
+  return rows[0] ?? null;
+}
+
 export function isSubscriberActive(s: Subscriber, now: Date = new Date()): boolean {
   if (s.status === 'blocked') return false;
   if (s.status === 'paused') {

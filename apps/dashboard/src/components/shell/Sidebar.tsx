@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  IconBellRinging,
   IconCalendarMonth,
   IconChartArcs,
   IconChartBar,
@@ -21,9 +22,11 @@ interface SidebarProps {
   tenant: Tenant;
   stages: Stage[];
   allTenants?: Tenant[];
+  /** Escalaciones sin resolver — badge rojo en el item "Escalaciones". */
+  pendingEscalations?: number;
 }
 
-export function Sidebar({ tenant, stages: _stages, allTenants }: SidebarProps) {
+export function Sidebar({ tenant, stages: _stages, allTenants, pendingEscalations }: SidebarProps) {
   const pathname = usePathname();
   const year = new Date().getUTCFullYear();
   const month = String(new Date().getUTCMonth() + 1).padStart(2, '0');
@@ -78,6 +81,13 @@ export function Sidebar({ tenant, stages: _stages, allTenants }: SidebarProps) {
           icon={IconUsers}
           label="Prospectos"
           active={pathname.startsWith('/prospects')}
+        />
+        <SidebarItem
+          href="/escalaciones"
+          icon={IconBellRinging}
+          label="Escalaciones"
+          active={pathname.startsWith('/escalaciones')}
+          badge={pendingEscalations}
         />
 
         <div className="border-t border-qc-border mx-3 my-1.5" />

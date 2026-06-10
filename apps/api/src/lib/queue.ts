@@ -29,9 +29,35 @@ export function getProcessBatchQueue(): Queue<ProcessBatchJobData> {
   return cachedQueue;
 }
 
+// ── Cola de notificaciones de escalado (entrega a Telegram) ──
+export const NOTIFY_QUEUE = 'notify';
+
+export interface NotifyJobData {
+  notificationId: string;
+}
+
+let cachedNotifyQueue: Queue<NotifyJobData> | null = null;
+
+export function getNotifyQueue(): Queue<NotifyJobData> {
+  if (!cachedNotifyQueue) {
+    cachedNotifyQueue = new Queue<NotifyJobData>(NOTIFY_QUEUE, {
+      connection: createRedisConnection(),
+      defaultJobOptions,
+    });
+  }
+  return cachedNotifyQueue;
+}
+
+// Job repetible que recuerda por Telegram los leads aún pausados.
+export const PAUSE_REMINDER_QUEUE = 'pause-reminder';
+
 export async function closeQueue(): Promise<void> {
   if (cachedQueue) {
     await cachedQueue.close();
     cachedQueue = null;
+  }
+  if (cachedNotifyQueue) {
+    await cachedNotifyQueue.close();
+    cachedNotifyQueue = null;
   }
 }

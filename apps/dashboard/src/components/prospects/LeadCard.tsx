@@ -13,8 +13,20 @@ export function LeadCard({ lead }: LeadCardProps) {
   const name = lead.displayName ?? '—';
 
   return (
-    <div className="rounded-md border border-qc-border bg-qc-surface2 px-2.5 py-2">
-      <div className="text-[12px] font-medium text-qc-textBody truncate">{name}</div>
+    <div
+      className={`rounded-md border px-2.5 py-2 ${
+        lead.isPaused ? 'border-red-500/40 bg-red-500/[0.06]' : 'border-qc-border bg-qc-surface2'
+      }`}
+    >
+      <div
+        className={`text-[12px] font-medium truncate ${lead.isPaused ? 'text-red-400' : 'text-qc-textBody'}`}
+        title={
+          lead.isPaused ? 'Bot pausado para este lead — reanudar desde Escalaciones' : undefined
+        }
+      >
+        {lead.isPaused ? '⏸ ' : ''}
+        {name}
+      </div>
       {lead.igUsername && lead.profileUrl ? (
         <a
           href={lead.profileUrl}

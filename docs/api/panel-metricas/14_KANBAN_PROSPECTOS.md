@@ -140,8 +140,10 @@ convergido. Runbook completo en `docs/api/dashboard-deploy-runbook.md`.
 
 - Drag & drop / mutaciones de etapa (`set_stage`) — rompería la regla "panel solo lee".
 - Foto de perfil de IG (requiere Instagram Graph API).
-- Filtros, búsqueda, paginación.
 - Edición de notas (lo cubre el SPA admin / `/settings`).
+
+> **Actualización:** paginación, búsqueda y filtro por etapa ya están implementados
+> (read-only, server-side, sin migraciones). Ver `15_PAGINACION_PROSPECTOS.md`.
 
 ### Posible mejora futura
 En el Kanban, con muchas etapas (catálogo + terminales) las columnas que exceden el ancho

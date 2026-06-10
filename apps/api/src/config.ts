@@ -28,6 +28,16 @@ const ConfigSchema = z.object({
   MINIO_SECRET_KEY: z.string().min(1),
   MINIO_BUCKET_ASSETS: z.string().default('assets'),
   MINIO_PUBLIC_URL: z.string().url(),
+
+  // Escalado a humano vía Telegram. Opcionales: sin token la notificación se
+  // persiste en DB pero la entrega Telegram se omite (log warn, no falla).
+  TELEGRAM_BOT_TOKEN: z.string().default(''),
+  TELEGRAM_DEFAULT_CHAT_ID: z.string().default(''),
+  TELEGRAM_WEBHOOK_SECRET: z.string().min(16).or(z.literal('')).default(''),
+  // Base del dashboard para deep-links en los mensajes de Telegram.
+  DASHBOARD_PUBLIC_URL: z.string().url().optional(),
+  // Recordatorio periódico de leads pausados (0 = desactivado).
+  PAUSE_REMINDER_HOURS: z.coerce.number().int().nonnegative().default(6),
 });
 
 export type AppConfig = z.infer<typeof ConfigSchema>;

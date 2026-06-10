@@ -1,0 +1,93 @@
+import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
+import { verifyAdminAuth } from '../../lib/admin-auth.js';
+import { getDb } from '../../lib/db.js';
+import { editMessageText, escapeHtml } from '../../lib/telegram.js';
+import {
+  getNotificationById,
+  listNotifications,
+  resolveNotification,
+} from '../../services/notifications.js';
+import { getSubscriberByUuid, resumeSubscriber } from '../../services/subscribers.js';
+
+const ListQuerySchema = z.object({
+  tenant_id: z.string().uuid(),
+  status: z.enum(['pending', 'resolved']).optional(),
+  limit: z.coerce.number().int().positive().max(500).default(100),
+});
+
+const ResolveBodySchema = z.object({
+  resolved_by: z.string().min(1).default('dashboard'),
+  // Si true, además reanuda al lead (status='active').
+  resume: z.boolean().default(false),
+});
+
+/**
+ * Gestión de notificaciones de escalado (consumidas por el dashboard vía el
+ * proxy /api/admin/*): listar y resolver. Al resolver se intenta editar el
+ * mensaje original de Telegram para reflejar el estado (best-effort).
+ */
+export default async function notificationsRoutes(app: FastifyInstance): Promise<void> {
+  app.get('/admin/notifications', async (req, reply) => {
+    if (!(await verifyAdminAuth(req, app))) {
+      return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });
+    }
+    const parsed = ListQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: { code: 'INVALID_QUERY', details: parsed.error.issues },
+      });
+    }
+    const { tenant_id, status, limit } = parsed.data;
+    const items = await listNotifications(getDb(), { tenantId: tenant_id, status, limit });
+    return reply.send({ notifications: items });
+  });
+
+  app.post<{ Params: { id: string } }>('/admin/notifications/:id/resolve', async (req, reply) => {
+    if (!(await verifyAdminAuth(req, app))) {
+      return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });
+    }
+    const parsed = ResolveBodySchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: { code: 'INVALID_PAYLOAD', details: parsed.error.issues },
+      });
+    }
+
+    const existing = await getNotificationById(getDb(), req.params.id);
+    if (!existing) {
+      return reply.code(404).send({ error: { code: 'NOT_FOUND' } });
+    }
+
+    const resolved = await resolveNotification(getDb(), {
+      id: req.params.id,
+      resolvedBy: parsed.data.resolved_by,
+    });
+    if (!resolved) {
+      // Ya estaba resuelta: idempotente, devolvemos el estado actual.
+      return reply.send({ notification: existing });
+    }
+
+    if (parsed.data.resume) {
+      await resumeSubscriber(getDb(), { subscriberId: resolved.subscriberId });
+    }
+
+    // Best-effort: reflejar el estado en el mensaje de Telegram original.
+    if (resolved.telegramChatId && resolved.telegramMessageId) {
+      try {
+        const subscriber = await getSubscriberByUuid(getDb(), resolved.subscriberId);
+        const name = subscriber?.displayName ?? subscriber?.igUsername ?? resolved.subscriberId;
+        await editMessageText({
+          chatId: resolved.telegramChatId,
+          messageId: resolved.telegramMessageId,
+          text: `✅ <b>Resuelto</b> por ${escapeHtml(parsed.data.resolved_by)} — lead ${escapeHtml(name)}${subscriber?.igUsername ? ` (@${escapeHtml(subscriber.igUsername)})` : ''}`,
+        });
+      } catch (err) {
+        req.log.warn({ err }, 'failed to edit telegram message on resolve');
+      }
+    }
+
+    req.log.info({ notification_id: resolved.id }, 'notification resolved');
+    return reply.send({ notification: resolved });
+  });
+}

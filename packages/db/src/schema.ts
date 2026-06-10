@@ -509,6 +509,43 @@ export const agentResources = apiSchema.table(
 );
 
 // ───────────────────────────────────────────────────────────────
+// notifications — escalado a humano (audio / keywords / tool del agente)
+// Producidas por webhook-manychat (determinista) o por n8n vía
+// /admin/leads/:id/notify-human; entregadas a Telegram por el worker 'notify'.
+// ───────────────────────────────────────────────────────────────
+export const notifications = apiSchema.table(
+  'notifications',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    subscriberId: uuid('subscriber_id')
+      .notNull()
+      .references(() => subscribers.id, { onDelete: 'cascade' }),
+    conversationId: uuid('conversation_id'),
+    turnId: uuid('turn_id'),
+    kind: text('kind').notNull(), // 'audio' | 'keyword' | 'agent'
+    source: text('source').notNull(), // 'code' | 'agent'
+    reason: text('reason'),
+    summary: text('summary'),
+    status: text('status').notNull().default('pending'), // 'pending' | 'resolved'
+    telegramChatId: text('telegram_chat_id'),
+    telegramMessageId: text('telegram_message_id'),
+    metadata: jsonb('metadata').notNull().default(sql`'{}'::jsonb`),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+    resolvedBy: text('resolved_by'),
+  },
+  (t) => ({
+    tenantStatusIdx: index('notifications_tenant_status_idx').on(t.tenantId, t.status, t.createdAt),
+    pendingIdx: index('notifications_pending_idx')
+      .on(t.tenantId, t.createdAt)
+      .where(sql`status = 'pending'`),
+  }),
+);
+
+// ───────────────────────────────────────────────────────────────
 // Inferred types
 // ───────────────────────────────────────────────────────────────
 export type Tenant = typeof tenants.$inferSelect;
@@ -544,3 +581,5 @@ export type StageTransitionsMap = typeof stageTransitionsMap.$inferSelect;
 export type NewStageTransitionsMap = typeof stageTransitionsMap.$inferInsert;
 export type AgentResource = typeof agentResources.$inferSelect;
 export type NewAgentResource = typeof agentResources.$inferInsert;
+export type Notification = typeof notifications.$inferSelect;
+export type NewNotification = typeof notifications.$inferInsert;

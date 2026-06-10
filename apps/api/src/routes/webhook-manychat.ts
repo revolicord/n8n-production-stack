@@ -1,5 +1,5 @@
-import { ManyChatWebhookSchema } from '@dm-api/shared';
-import type { FastifyInstance } from 'fastify';
+import { type ManyChatWebhookEvent, ManyChatWebhookSchema } from '@dm-api/shared';
+import type { FastifyBaseLogger, FastifyInstance } from 'fastify';
 import { getConfig } from '../config.js';
 import { verifyMcToken } from '../lib/auth.js';
 import { getDb } from '../lib/db.js';
@@ -9,10 +9,76 @@ import { getRedis } from '../lib/redis.js';
 import { type BufferMessage, debouncePush, getBufferLength } from '../services/debounce.js';
 import { tryClaimIdempotency } from '../services/idempotency.js';
 import { insertMessageRaw } from '../services/messages.js';
+import {
+  type NotificationKind,
+  createNotification,
+  tryClaimNotificationThrottle,
+} from '../services/notifications.js';
 import { getOrCreateSubscriber, isSubscriberActive } from '../services/subscribers.js';
 import { getTenantBySlug, parseTenantConfig } from '../services/tenants.js';
 
 const IDEMPOTENCY_TTL_MS = 24 * 3600 * 1000;
+
+/**
+ * Clasificación pura del trigger de escalado: audio gana sobre keyword.
+ * Exportada para tests; el match de keywords es por substring case-insensitive.
+ */
+export function matchEscalationTrigger(
+  message: ManyChatWebhookEvent['message'],
+  keywords: string[] | undefined,
+): { kind: NotificationKind; reason: string } | null {
+  if (message.media.some((m) => m.type === 'audio')) {
+    return { kind: 'audio', reason: 'El lead envió un mensaje de audio' };
+  }
+  if (keywords && keywords.length > 0 && message.text) {
+    const text = message.text.toLowerCase();
+    const matched = keywords.find((k) => k.trim() && text.includes(k.trim().toLowerCase()));
+    if (matched) {
+      return { kind: 'keyword', reason: `Palabra clave: "${matched}"` };
+    }
+  }
+  return null;
+}
+
+/**
+ * Detección determinista de escalado (audio / keywords del tenant). Corre
+ * fire-and-forget tras persistir el mensaje: nunca bloquea ni rompe el ACK a
+ * ManyChat; el throttle Redis evita spam en ráfagas del mismo tipo.
+ */
+async function detectEscalation(args: {
+  tenantId: string;
+  subscriberId: string;
+  messageId: string;
+  event: ManyChatWebhookEvent;
+  keywords: string[] | undefined;
+  log: FastifyBaseLogger;
+}): Promise<void> {
+  const { tenantId, subscriberId, messageId, event, keywords, log } = args;
+
+  const trigger = matchEscalationTrigger(event.message, keywords);
+  if (!trigger) return;
+  const { kind, reason } = trigger;
+
+  const fresh = await tryClaimNotificationThrottle(getRedis(), { tenantId, subscriberId, kind });
+  if (!fresh) {
+    log.debug({ subscriber_id: subscriberId, kind }, 'escalation throttled');
+    return;
+  }
+
+  const notification = await createNotification(getDb(), {
+    tenantId,
+    subscriberId,
+    kind,
+    source: 'code',
+    reason,
+    summary: event.message.text ? event.message.text.slice(0, 300) : undefined,
+    metadata: { message_id: messageId },
+  });
+  log.info(
+    { subscriber_id: subscriberId, kind, notification_id: notification.id },
+    'escalation notification created',
+  );
+}
 
 export default async function webhookManyChatRoute(app: FastifyInstance): Promise<void> {
   const config = getConfig();
@@ -97,6 +163,18 @@ export default async function webhookManyChatRoute(app: FastifyInstance): Promis
       triggerSource: event.trigger?.source,
       triggerChannel: event.trigger?.channel,
       triggerRef: event.trigger?.ref,
+    });
+
+    // 7b. Escalado a humano (audio/keywords) — fire-and-forget, no bloquea el ACK
+    void detectEscalation({
+      tenantId: tenant.id,
+      subscriberId: subscriber.id,
+      messageId: messageRow.id,
+      event,
+      keywords: tenantConfig.notification_keywords,
+      log: req.log,
+    }).catch((err) => {
+      req.log.error({ err }, 'escalation detection failed');
     });
 
     // 8. Push al buffer Redis (Lua atómico) + nuevo token

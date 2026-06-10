@@ -27,35 +27,53 @@ El agente detecta una situación que no debe manejar y transfiere a humano (Alex
 
 | Trigger | Mecanismo actual | Estado |
 |---|------------------|--------|
-| Lead pide hablar con humano explícitamente | El agente NO tiene tool `notify_human` hoy. Política pendiente: el prompt v3 no contempla este caso. | ❌ NO implementado |
-| Lead muy caliente (quiere comprar ya) | El agente debería pasar a `C` con Calendly. Si pide canal humano, hoy no hay mecanismo. | ❌ NO implementado |
-| Insulto / queja agresiva | Sin tool — el prompt v3 no actúa específicamente. | ❌ NO implementado |
+| Lead pide hablar con humano explícitamente | Acción `notify_human(reason, summary)` del agente → `POST /admin/leads/:id/notify-human` → alerta Telegram (regla 7 del prompt v8). Complementado por keywords deterministas (`tenant.config.notification_keywords`) en `webhook-manychat.ts`. | ✅ Implementado 2026-06 (falta cablear la acción en el Router de n8n — ver `n8n/nodes/11-notify-human.md`) |
+| Lead manda audio | Detección determinista en `webhook-manychat.ts` (`media.type==='audio'`) → notificación kind=`audio` → Telegram + dashboard. Throttle Redis 10 min por tipo. | ✅ Implementado 2026-06 |
+| Lead muy caliente (quiere comprar ya) | El agente pasa a `C` con Calendly; si pide canal humano aplica `notify_human`. | ✅ Cubierto vía notify_human |
+| Insulto / queja agresiva | Regla 7 del prompt v8 → `notify_human`. | ✅ Implementado (pendiente Router n8n) |
 | Lead VIP / referido | No hay flag en la DB. | ❌ NO modelado |
 | Follow-up #5 sin respuesta | Marcar `escalated_human_call` → notificación a Alex para llamada manual por IG | ⏳ Spec en `followup-runner` y prompt v3; cron pendiente de cablear |
-| Pregunta sobre producto que el agente no sabe | Sin detección de incertidumbre; hoy el prompt v3 evita explicar y se apoya en el contenido multimedia | ❌ NO implementado |
-| "¿Eres una IA?" | Prompt v3 prohíbe admitirlo y mantiene la persona | ✅ Cubierto por prompt |
+| Pregunta sobre producto que el agente no sabe | Regla 7 del prompt v8 (incertidumbre alta) → `notify_human`. | ✅ Implementado (pendiente Router n8n) |
+| "¿Eres una IA?" | Prompt prohíbe admitirlo y mantiene la persona; las keywords (`eres un bot`, `robot`…) además disparan notificación kind=`keyword` para que un humano lo vigile. | ✅ Cubierto |
 | Objeción dura (no_money, etc.) | `set_stage("disqualified", reason, evidence)` — descalificación inmediata, no escalación | ✅ Cubierto |
 
 ---
 
-## 3. Mecanismo de Escalación (estado actual)
+## 3. Mecanismo de Escalación (implementado 2026-06)
 
-### 3.1 Lo que existe hoy
-- **`escalated_human_call`** como estado terminal del lead — gestionado por el `followup-runner` cuando agota cierto número de follow-ups (cadencia por definir).
-- **`disqualified`** como salida limpia — manejado por el agente con `set_stage`.
+### 3.1 Arquitectura
 
-### 3.2 Lo que falta (P1)
-- Tabla `notifications` para registrar notificaciones a humanos.
-- Tool `notify_human(reason, summary)` que el agente pueda invocar.
-- Canal de entrega: pendiente de elegir entre Slack / email / SMS / "etiqueta en ManyChat" / notificación push.
-- Endpoint Fastify para crear notificaciones.
-- Pausa automática del agente para ese suscriber (campo en `subscribers.status` o `paused_until`).
+```
+PRODUCTORES ──► services/notifications.ts ──► (1) INSERT api.notifications
+                                              (2) job BullMQ 'notify'
+  A. webhook-manychat.ts (determinista):
+       media.type==='audio'                          → kind='audio'
+       texto ~ tenant.config.notification_keywords   → kind='keyword'
+       (throttle Redis 10 min por tipo; fire-and-forget, no bloquea el ACK)
+  B. agente n8n → acción notify_human → POST /admin/leads/:id/notify-human → kind='agent'
 
-### 3.3 Información que se transferirá cuando exista
-- Link directo al lead en el panel admin (cuando exista).
-- Resumen del turno actual + últimos N mensajes.
-- Motivo declarado por el agente (si se invocó vía `notify_human`).
-- Etapa del funnel y `evidence` del último `set_stage`.
+CONSUMIDORES:
+  (1) worker 'notify' → Telegram sendMessage (deep-link + botones [⏸ Pausar][✅ Resuelto])
+  (2) dashboard → página /escalaciones + badge en sidebar; leads pausados en rojo en /prospects
+  (3) POST /webhook/telegram → callbacks de botones → pausa/reanuda/resuelve + edita el mensaje
+
+PAUSA (manual): status='paused' + pausedUntil=null → isSubscriberActive() bloquea el dispatch.
+RECORDATORIO: job repetible 'pause-reminder' (PAUSE_REMINDER_HOURS, default 6h) re-notifica leads pausados.
+```
+
+### 3.2 Piezas
+- Tabla `api.notifications` (migración `0014_notifications`).
+- `POST /admin/leads/:id/notify-human` (Bearer n8n / JWT admin) — productor del agente.
+- `GET /admin/notifications`, `POST /admin/notifications/:id/resolve` — gestión (dashboard).
+- `POST /admin/leads/:id/pause` / `/resume` — pausa manual (indefinida o con `duration_minutes`).
+- `POST /webhook/telegram` — callbacks de los botones (header `X-Telegram-Bot-Api-Secret-Token`); registrar con `scripts/telegram-set-webhook.sh`.
+- Env: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_DEFAULT_CHAT_ID`, `TELEGRAM_WEBHOOK_SECRET`, `PAUSE_REMINDER_HOURS`; por tenant: `telegram_chat_id`, `notification_keywords`.
+- Pendiente n8n (UI): acción `notify_human` en el Router + prompt v8 — ver `n8n/nodes/11-notify-human.md`.
+
+### 3.3 Información transferida en la alerta de Telegram
+- Nombre, @username y etapa del funnel del lead.
+- Motivo (`reason`) y resumen (`summary`) — del agente o del trigger determinista.
+- Link al perfil de IG y deep-link al panel (`/prospects?q=<username>`).
 
 ---
 
@@ -86,9 +104,11 @@ El agente detecta una situación que no debe manejar y transfiere a humano (Alex
 
 ## 6. Gaps y Preguntas Abiertas
 
-- [ ] Diseñar e implementar la tool `notify_human` y la tabla `notifications` (P1)
-- [ ] Elegir canal de notificación
-- [ ] Definir política exacta cuando el lead pide humano explícitamente (`set_stage` no aplica — no hay etapa "pidió humano")
+- [x] Diseñar e implementar la tool `notify_human` y la tabla `notifications` (2026-06)
+- [x] Elegir canal de notificación → Telegram (worker BullMQ + botones inline) + dashboard
+- [x] Definir política cuando el lead pide humano → `notify_human` + pausa manual por el humano (no automática)
+- [x] Flag de pausa por suscriptor → `status='paused'` + `paused_until` (endpoints pause/resume, botón Telegram, dashboard); recordatorio repetible `pause-reminder`
+- [ ] Cablear la acción `notify_human` en el Router de n8n + copiar prompt v8 (UI) — ver `n8n/nodes/11-notify-human.md`
+- [ ] Configurar en producción: `TELEGRAM_*` en `.env`, `notification_keywords` en tenant.config, `scripts/telegram-set-webhook.sh`
 - [ ] Confirmar SLAs de respuesta humana
 - [ ] Definir si hay un humano de respaldo si Alex no está disponible
-- [ ] Diseñar el flag de pausa por suscriptor cuando se escala (`subscribers.paused_until` ya existe en schema; falta la lógica que lo respete antes del dispatch)

@@ -12,6 +12,10 @@ export const TenantConfigSchema = z
     model: z.string().optional(),
     prompt_version: z.string().optional(),
     calendly_url: z.string().optional(),
+    // Escalado a humano: chat de Telegram por tenant (fallback: TELEGRAM_DEFAULT_CHAT_ID)
+    telegram_chat_id: z.string().optional(),
+    // Frases que disparan notificación kind='keyword' (match case-insensitive por substring)
+    notification_keywords: z.array(z.string()).optional(),
   })
   .passthrough();
 

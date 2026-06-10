@@ -11,4 +11,8 @@ export const redisKeys = {
     `firstmsg:${tenantId}:${subscriberId}`,
   lock: (tenantId: string, subscriberId: string): string => `lock:turn:${tenantId}:${subscriberId}`,
   rate: (tenantId: string, subscriberId: string): string => `rate:${tenantId}:${subscriberId}`,
+  // Throttle de notificaciones de escalado (SET NX + TTL) por tipo,
+  // para no spamear Telegram en ráfagas de audio/keywords.
+  notif: (tenantId: string, subscriberId: string, kind: string): string =>
+    `notif:${tenantId}:${subscriberId}:${kind}`,
 } as const;

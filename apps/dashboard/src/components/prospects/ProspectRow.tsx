@@ -10,10 +10,22 @@ export function ProspectRow({ lead, columns }: ProspectRowProps) {
   const name = lead.displayName ?? lead.igUsername ?? '—';
 
   return (
-    <tr className="hover:bg-qc-surface2">
-      {/* Nombre + link al perfil de IG */}
-      <td className="px-3 py-1.5 border border-qc-border whitespace-nowrap">
-        <span className="text-[12px] text-qc-textBody">{name}</span>
+    <tr className={`group hover:bg-qc-surface2 ${lead.isPaused ? 'bg-red-500/[0.06]' : ''}`}>
+      {/* Nombre + link al perfil de IG — columna fija (sticky left) en el scroll horizontal */}
+      <td className="px-3 py-1.5 border border-qc-border whitespace-nowrap sticky left-0 z-10 bg-qc-surface group-hover:bg-qc-surface2">
+        <span
+          className={`text-[12px] ${lead.isPaused ? 'text-red-400 font-medium' : 'text-qc-textBody'}`}
+        >
+          {name}
+        </span>
+        {lead.isPaused && (
+          <span
+            className="ml-1.5 rounded-full bg-red-500/15 px-1.5 py-0.5 text-[10px] text-red-400"
+            title="Bot pausado para este lead — reanudar desde Escalaciones"
+          >
+            ⏸ pausado
+          </span>
+        )}
         {lead.igUsername && lead.profileUrl && (
           <a
             href={lead.profileUrl}

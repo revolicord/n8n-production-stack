@@ -15,7 +15,8 @@
       "**/.turbo",
       "**/*.tsbuildinfo",
       "packages/db/drizzle/**",
-      "**/.next/**"
+      "**/.next/**",
+      "n8n-workflows/**"
     ]
   },
   "formatter": {

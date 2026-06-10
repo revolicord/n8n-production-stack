@@ -3,6 +3,9 @@ import agentResourcesRoutes from './admin/agent-resources.js';
 import assetsRoutes from './admin/assets.js';
 import followupMessagesRoutes from './admin/followup-messages.js';
 import followupsRoutes from './admin/followups.js';
+import notificationsRoutes from './admin/notifications.js';
+import notifyHumanRoute from './admin/notify-human.js';
+import pauseRoutes from './admin/pause.js';
 import setStageRoute from './admin/set-stage.js';
 import systemEventRoute from './admin/system-event.js';
 import tenantsRoutes from './admin/tenants.js';
@@ -10,13 +13,18 @@ import turnCompletedRoute from './admin/turn-completed.js';
 import healthRoutes from './health.js';
 import toolsRoutes from './tools.js';
 import webhookManyChatRoute from './webhook-manychat.js';
+import webhookTelegramRoute from './webhook-telegram.js';
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(healthRoutes);
   await app.register(webhookManyChatRoute);
+  await app.register(webhookTelegramRoute);
   await app.register(turnCompletedRoute);
   await app.register(setStageRoute);
   await app.register(systemEventRoute);
+  await app.register(notifyHumanRoute);
+  await app.register(notificationsRoutes);
+  await app.register(pauseRoutes);
   await app.register(tenantsRoutes);
   await app.register(followupsRoutes);
   await app.register(followupMessagesRoutes);
