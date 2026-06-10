@@ -1,0 +1,31 @@
+{
+  "updatedAt": "2026-05-24T00:26:55.969Z",
+  "createdAt": "2026-05-21T18:50:39.394Z",
+  "id": "3HP6wxqERFWdQPUA",
+  "name": "recibo de api de meta",
+  "active": false,
+  "isArchived": true,
+  "nodes": [],
+  "connections": {},
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": null,
+  "pinData": {},
+  "versionId": "a7fb8237-6a55-43c2-a53a-5b016bbf0564",
+  "activeVersionId": null,
+  "triggerCount": 1,
+  "shared": [
+    {
+      "updatedAt": "2026-05-21T18:50:39.394Z",
+      "createdAt": "2026-05-21T18:50:39.394Z",
+      "role": "workflow:owner",
+      "workflowId": "3HP6wxqERFWdQPUA",
+      "projectId": "QMEqDuS2VokiT4AE"
+    }
+  ],
+  "activeVersion": null,
+  "tags": []
+}
