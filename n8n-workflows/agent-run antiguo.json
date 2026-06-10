@@ -1,0 +1,627 @@
+{
+  "updatedAt": "2026-05-20T11:54:42.226Z",
+  "createdAt": "2026-05-12T18:52:55.382Z",
+  "id": "6QJs9dHcR8NX8MZe",
+  "name": "agent-run antiguo",
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "agent-run",
+        "options": {}
+      },
+      "id": "e9b47901-4050-4627-b500-6b09d07be4c7",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        112
+      ],
+      "webhookId": "1a2e5a82-f238-4351-a952-7b23933c82b5",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  fs.id           AS stage_id,\n  fs.slug,\n  fs.display_name,\n  fs.description,\n  fs.max_followups,\n  COALESCE(\n    json_agg(\n      json_build_object(\n        'flow_ns',             sf.flow_ns,\n        'human_name',          sf.human_name,\n        'media_type',          sf.media_type,\n        'content_description', sf.content_description,\n        'usage_condition',     COALESCE(sf.usage_condition, sf.description),\n        'weight',              sf.weight,\n        'variant_group',       sf.variant_group\n      )\n    ) FILTER (WHERE sf.id IS NOT NULL AND sf.is_active = TRUE AND sf.flow_ns NOT LIKE 'PENDIENTE%'),\n    '[]'::json\n  ) AS flows\nFROM api.funnel_stages fs\nLEFT JOIN api.stage_flows sf ON sf.stage_id = fs.id AND sf.is_active = TRUE\nWHERE fs.tenant_id = $1::uuid\n  AND fs.slug      = $2\n  AND fs.is_active = TRUE\nGROUP BY fs.id",
+        "options": {
+          "queryReplacement": "={{ $json.body.tenant.id }},{{ $json.body.subscriber.lead_stage || 'A' }}"
+        }
+      },
+      "id": "ba6881e0-44fe-48a0-a952-598433b4da41",
+      "name": "Get Stage Config",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        224,
+        16
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "xBbNbntvO0xJs5HM",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "b521f168-9f43-4314-9240-dfb63780c971",
+      "name": "Combine Contexts",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        448,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  lc.next_sequence_number - 1   AS followups_sent,\n  lc.updated_at                 AS last_activity,\n  lc.next_followup_at,\n  fs.display_name               AS stage_name,\n  fs.slug                       AS stage_slug,\n  fs.description                AS stage_objective,\n  fs.max_followups,\n  COALESCE(\n    json_agg(\n      json_build_object(\n        'seq',          lfl.sequence_number,\n        'sent_at',      lfl.sent_at,\n        'status',       lfl.status,\n        'responded_at', lfl.responded_at,\n        'text_sent',    lfl.text_sent\n      ) ORDER BY lfl.sequence_number\n    ) FILTER (WHERE lfl.id IS NOT NULL),\n    '[]'::json\n  ) AS followup_history\nFROM api.lead_crons lc\nJOIN api.funnel_stages fs ON fs.id = lc.current_stage_id\nLEFT JOIN api.lead_followup_log lfl\n  ON lfl.subscriber_id   = lc.subscriber_id\n  AND lfl.conversation_id = lc.conversation_id\nWHERE lc.subscriber_id   = $1::uuid\n  AND lc.conversation_id = $2::uuid\nGROUP BY lc.id, fs.display_name, fs.slug, fs.description, fs.max_followups",
+        "options": {
+          "queryReplacement": "={{ $('Webhook').first().json.body.subscriber.id }},{{ $('Webhook').first().json.body.conversation.id }}"
+        }
+      },
+      "id": "8613638c-0275-43f9-adc8-1a79e1d820a2",
+      "name": "Get Subscriber CRM Context",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        224,
+        208
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "xBbNbntvO0xJs5HM",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "function pickFlowWeighted(flows) {\n    if (!flows || flows.length === 0) return null;\n    const total = flows.reduce((s, f) => s + (f.weight ?? 1), 0);\n    let r = Math.random() * total;\n    for (const f of flows) { r -= (f.weight ?? 1); if (r <= 0) return f; }\n    return flows[flows.length - 1];\n  }\n\n  function buildFlowLine(f) {\n    const lines = [];\n    lines.push('→ flow_name (cópialo EXACTO, carácter por carácter, no lo traduzcas ni lo parafrasees):');\n    lines.push('  ' + f.flow_ns);\n    lines.push('');\n    if (f.media_type) {\n      lines.push('  Tipo: [' + f.media_type + ']');\n    }\n    const condition = f.usage_condition || f.description || '';\n    if (condition) {\n      lines.push('  Cuándo: ' + condition);\n    }\n    if (f.content_description) {\n      lines.push('  Contenido: ' + f.content_description);\n    }\n    return lines.join('\\n');\n  }\n\n  function buildCrmBlock(followupsSent, maxFollowups, history, stageName, stageObjective) {\n    const lines = ['# ESTADO CRM DEL LEAD'];\n    lines.push('Etapa: ' + stageName + (stageObjective ? ' — ' + stageObjective : ''));\n    if (followupsSent === 0) {\n      lines.push('Seguimientos enviados: ninguno. Es el primer contacto o acaba de responder.');\n    } else {\n      lines.push('Seguimientos enviados sin respuesta: ' + followupsSent + ' de ' + maxFollowups + ' máximo.');\n      (history ?? []).forEach(function(h) {\n        const daysAgo = Math.round((Date.now() - new Date(h.sent_at)) / 86400000);\n        const responded = h.responded_at ? ' <- respondió' : ' (sin respuesta)';\n        lines.push('  - #' + h.seq + ' hace ' + daysAgo + ' día(s)' + responded);\n      });\n      if (followupsSent >= maxFollowups) {\n        lines.push('Límite de seguimientos alcanzado. Si no hay interés real en este turno, usa set_stage(\"disqualified\",...).');\n      } else {\n        lines.push('Está respondiendo tras un silencio. Sé cálido; no menciones los seguimientos.');\n      }\n    }\n    return lines.join('\\n');\n  }\n\n  const raw = $('Webhook').first().json;\n  const body = raw.body ?? raw;\n\n  const messages = body.messages\n    .map(function(m) {\n      if (m.reply_type === 'thumbs_up') return '👍 [el contacto reaccionó con pulgar arriba]';\n      if (m.media_urls && m.media_urls.length > 0 && !m.text) return '[contenido multimedia recibido — no se puede leer]';\n      return m.text || '[mensaje sin texto]';\n    })\n    .filter(Boolean)\n    .join('\\n');\n\n  const sub = body.subscriber;\n  const subscriberName = sub.display_name || sub.ig_username || 'la persona';\n  const currentStage = sub.lead_stage || (sub.metadata && sub.metadata.stage) || 'A';\n\n  const stageConfig = $('Get Stage Config').first() ? $('Get Stage Config').first().json : {};\n  const flows = Array.isArray(stageConfig.flows) ? stageConfig.flows : [];\n  const stageDesc = stageConfig.description || '';\n  const maxFollowups = stageConfig.max_followups || 3;\n\n  const selectedFlow = pickFlowWeighted(flows);\n  const flowsSection = selectedFlow\n    ? buildFlowLine(selectedFlow)\n    : '(no hay contenido multimedia para esta etapa — responde solo con texto)';\n\n  const crm = $('Get Subscriber CRM Context').first() ? $('Get Subscriber CRM Context').first().json : {};\n  const followupsSent = crm.followups_sent || 0;\n  const history = Array.isArray(crm.followup_history) ? crm.followup_history : [];\n  const stageName = crm.stage_name || stageConfig.display_name || currentStage;\n  const stageObjective = crm.stage_objective || stageDesc;\n  const crmBlock = buildCrmBlock(followupsSent, maxFollowups, history, stageName, stageObjective);\n\n  const igCtx = body.instagram_context || {};\n  const lastSeen = igCtx.last_seen || null;\n  const lastInteraction = igCtx.last_interaction || null;\n  const signals = (sub.metadata && sub.metadata.signals) || (body.lead_state && body.lead_state.signals) || null;\n  const calendlyUrl = (body.tenant && body.tenant.config && body.tenant.config.calendly_url) || '';\n  //const staticPrompt = (body.tenant && body.tenant.config && body.tenant.config.system_prompt) || '';\n  const staticPrompt = $('System Prompt').first()?.json?.staticPrompt || '';\n\n  const contextLines = [\n    'La persona se llama: ' + subscriberName,\n    'Etapa actual del lead: ' + currentStage + (stageDesc ? ' — ' + stageDesc : ''),\n  ];\n  if (lastSeen)        contextLines.push('Última vez activa en Instagram: ' + lastSeen);\n  if (lastInteraction) contextLines.push('Última interacción contigo: ' + lastInteraction);\n  if (signals)         contextLines.push('Señales detectadas en turnos anteriores: ' + (typeof signals === 'string' ? signals :\n  JSON.stringify(signals)));\n  if (calendlyUrl && currentStage === 'B') {\n       contextLines.push('Link de Calendly para enviar AHORA MISMO: ' + calendlyUrl);\n  }\n  contextLines.push('');\n  contextLines.push('# CONTENIDO DISPONIBLE para esta etapa');\n  contextLines.push('Usa la herramienta trigger_manychat_flow pasando el flow_name EXACTO de abajo.');\n  contextLines.push('');\n  contextLines.push(flowsSection);\n  contextLines.push('');\n  contextLines.push(crmBlock);\n\n  const dynamicContext = contextLines.join('\\n');\n  const systemPrompt = staticPrompt\n    ? staticPrompt + '\\n\\n# CONTEXTO\\n' + dynamicContext\n    : 'Eres Alex, el setter de Quantum Creators. Sé cálido y breve, máximo 2 frases, tutea siempre. Nunca digas que eres un bot ni des precios.\\n\\n# CONTEXTO\\n' + dynamicContext;\n\n  return [{\n    json: {\n      chatInput: messages,\n      systemPrompt: systemPrompt,\n      subscriberId: sub.manychat_subscriber_id,\n      subscriberDbId: sub.id,\n      tenantDbId: (body.tenant && body.tenant.id) || '',\n      mcApiKey: (body.tenant && body.tenant.config && body.tenant.config.manychat_api_key) || '',\n      conversationId: body.conversation.id,\n      turnId: body.turn_id,\n      currentStage: currentStage,\n      callbackUrl: body.callback_url,\n      callbackToken: body.callback_token,\n    }\n  }];\n"
+      },
+      "id": "d9e1f3ea-5db8-4606-8a05-4a9a81bff5e2",
+      "name": "Build Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        864,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.chatInput }}",
+        "options": {
+          "returnIntermediateSteps": false
+        }
+      },
+      "id": "f09e15e5-7e67-4146-b9b1-88b46d39c744",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1024,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "claude-sonnet-4-6",
+          "cachedResultName": "Claude Sonnet 4.6"
+        },
+        "options": {}
+      },
+      "id": "ddf7576e-b735-4731-9969-7c55357858aa",
+      "name": "Anthropic Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.5,
+      "position": [
+        896,
+        336
+      ],
+      "credentials": {
+        "anthropicApi": {
+          "id": "CqaNlJsRteqVJlUs",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "=$json.subscriberId"
+      },
+      "id": "6470b4da-1988-469a-8787-3e21f4e3dfb8",
+      "name": "Postgres Chat Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.3,
+      "position": [
+        1024,
+        336
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "xBbNbntvO0xJs5HM",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.manychat.com/fb/sending/sendContent",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer 4829715:03d75c75de42f22f31ea2d02f68cfce2"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ \n  { \n    \"subscriber_id\": $('Build Context').first().json.subscriberId, \n    \"data\": { \n      \"version\": \"v2\", \n      \"content\": { \n        \"type\": \"instagram\", \n        \"messages\": [\n          { \n            \"type\": \"text\", \n            \"text\": $json.output \n          }\n        ] \n      } \n    } \n  } \n}}",
+        "options": {}
+      },
+      "id": "4abaf5da-b459-490c-b898-6dfe43aa3a50",
+      "name": "enviar texto",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1488,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO api.lead_crons (\n  tenant_id, subscriber_id, conversation_id, current_stage_id,\n  next_followup_at, next_sequence_number, is_active\n)\nSELECT\n  $1::uuid, $2::uuid, $3::uuid,\n  ls.current_stage_id,\n  NOW() + ft.delay_hours * INTERVAL '1 hour',\n  1,\n  TRUE\nFROM api.lead_stages ls\nLEFT JOIN api.followup_templates ft\n  ON ft.stage_id        = ls.current_stage_id\n  AND ft.sequence_number = 1\n  AND ft.is_active       = TRUE\nWHERE ls.subscriber_id = $2::uuid\n  AND ls.tenant_id     = $1::uuid\nLIMIT 1\nON CONFLICT (tenant_id, subscriber_id, conversation_id) DO UPDATE SET\n  current_stage_id     = EXCLUDED.current_stage_id,\n  next_followup_at     = EXCLUDED.next_followup_at,\n  next_sequence_number = 1,\n  is_active            = TRUE,\n  updated_at           = NOW()",
+        "options": {
+          "queryReplacement": "={{ $('Build Context').first().json.tenantDbId }},{{ $('Build Context').first().json.subscriberDbId }},{{ $('Build Context').first().json.conversationId }}"
+        }
+      },
+      "id": "690d2f12-8325-494f-869a-a8de15700deb",
+      "name": "Upsert Lead Cron",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1712,
+        112
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "xBbNbntvO0xJs5HM",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE api.lead_followup_log SET\n  status       = 'responded',\n  responded_at = NOW()\nWHERE subscriber_id   = $1::uuid\n  AND conversation_id = $2::uuid\n  AND status          = 'sent'",
+        "options": {
+          "queryReplacement": "={{ $('Build Context').first().json.subscriberDbId }},{{ $('Build Context').first().json.conversationId }}"
+        }
+      },
+      "id": "e59cce84-2542-40a4-9c6a-85a414e358ec",
+      "name": "Mark Followups Responded",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1936,
+        112
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "xBbNbntvO0xJs5HM",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    turn_id: $('Build Context').first().json.turnId,\n    status: 'completed',\n    response_text: $('AI Agent').first().json.output,\n    callbackUrl: $('Build Context').first().json.callbackUrl,\n    callbackToken: $('Build Context').first().json.callbackToken\n  }\n}];"
+      },
+      "id": "2b4b1736-eeea-4a5f-b307-c51bd548c077",
+      "name": "Code in JavaScript",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2160,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.callbackUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.callbackToken }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "turn_id",
+              "value": "={{ $json.turn_id }}"
+            },
+            {
+              "name": "status",
+              "value": "={{ $json.status }}"
+            },
+            {
+              "name": "response_text",
+              "value": "={{ $json.response_text }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d52ef6e5-2e47-40f6-8911-a0c72eea594d",
+      "name": "Callback",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2384,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "description": "Description:\nAvanza la etapa del lead en el funnel cuando hay evidencia textual clara de que el lead cumple el criterio de la siguiente etapa, o márcalo como\n  disqualified si no es viable. Solo úsala cuando estás seguro: requiere citar el mensaje del lead que justifica el cambio. Una etapa por vez, sin\n  saltos (A→MS→B→C→D). Para disqualified, el reason debe ser uno de: no_money, not_interested, geographic, no_quality, fake_account.",
+        "jsCode": "const { new_stage, reason, evidence } = query;\n\n  const subscriberDbId = $('Build Context').first().json.subscriberDbId;\n  const turnId         = $('Build Context').first().json.turnId;\n  const callbackToken  = $('Build Context').first().json.callbackToken;\n\n  try {\n    const res = await this.helpers.httpRequest({\n      method: 'POST', \n      url: `https://api.revolicord.com/admin/leads/${subscriberDbId}/stage`,\n      headers: {\n        Authorization: `Bearer ${callbackToken}`,\n        'Content-Type': 'application/json',\n      },\n      body: { new_stage, reason, evidence, turn_id: turnId },\n      json: true,\n      returnFullResponse: true,\n    });\n   \n    if (res.statusCode === 200) {\n      const { stage, changed, from } = res.body;\n      return changed\n        ? `ok: stage changed ${from} → ${stage}`\n        : `ok: stage already ${stage} (no change)`;\n    }   \n    return `error: HTTP ${res.statusCode} — ${JSON.stringify(res.body)}`;\n  } catch (err) {\n    return `error: ${err.message ?? 'set_stage request failed'}`;\n  }\n",
+        "specifyInputSchema": true,
+        "schemaType": "manual",
+        "inputSchema": "{\"type\":\"object\",\"required\":[\"new_stage\",\"reason\",\"evidence\"],\"properties\":{\"new_stage\":{\"type\":\"string\",\"enum\":[\"A\",\"MS\",\"B\",\"C\",\"D\",\"disqualified\"]},\"reason\":{\"type\":\"string\"},\"evidence\":{\"type\":\"string\"}},\"additionalProperties\":false}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.3,
+      "position": [
+        1296,
+        368
+      ],
+      "id": "a6940cbb-78b5-48a2-af16-22eef9cca693",
+      "name": "set_stage"
+    },
+    {
+      "parameters": {
+        "description": "Envía un flow de ManyChat al lead (vídeo, audio, imagen). Úsala SOLO con el flow_ns exacto que aparece en la sección \"CONTENIDO DISPONIBLE\" del\n  contexto — no inventes ns, no uses nombres semánticos. Build Context ya seleccionó el flow correcto para esta etapa; tu trabajo es decidir el\n  momento conversacional para dispararlo. Una sola llamada por turno.",
+        "jsCode": "const { flow_name } = query;\n\n  // 1) Validación defensiva del parámetro que pasó el LLM\n  if (!flow_name || typeof flow_name !== 'string') {\n    return `error: parámetro flow_name ausente o no es string. Recibido: ${JSON.stringify(flow_name)}`;\n  }\n  if (!/^content[0-9]{14}_[0-9]+$/.test(flow_name)) {\n    return `error: flow_name \"${flow_name}\" no cumple el formato (content + 14 dígitos + _ + dígitos). Copia el ns EXACTO del bloque CONTENIDO\n  DISPONIBLE del prompt — no inventes ni traduzcas.`;\n  }\n\n  // 2) Datos dinámicos del turno (vienen de Build Context)\n  let subscriberId, mcApiKey;\n  try {\n    const ctx = $('Build Context').first().json;\n    subscriberId = ctx.subscriberId;\n    mcApiKey     = ctx.mcApiKey;\n  } catch (err) {\n    return `error interno: no se pudo leer Build Context (${err.message ?? err})`;\n  }\n  if (!subscriberId) return `error interno: subscriberId ausente en Build Context`;\n  if (!mcApiKey)     return `error interno: mcApiKey ausente en Build Context`;\n\n  // 3) Call a ManyChat (mismo patrón que validamos en el flow de test)\n  const url = 'https://api.manychat.com/fb/sending/sendFlow';\n  try {\n    const res = await this.helpers.httpRequest({\n      method: 'POST',\n      url: url,\n      headers: {\n        Authorization: `Bearer ${mcApiKey}`,\n        'Content-Type': 'application/json',\n      },\n      body: { subscriber_id: subscriberId, flow_ns: flow_name },\n      json: true,\n      returnFullResponse: true,\n    });\n\n    if (res.statusCode === 200 && res.body && res.body.status === 'success') {\n      return `ok: flow ${flow_name} enviado a subscriber ${subscriberId}`;\n    }\n    return `error: ManyChat respondió ${res.statusCode} — ${JSON.stringify(res.body)}`;\n  } catch (err) {\n    const status = err.statusCode || err.httpCode || 'unknown';\n    const body   = err.response?.body || err.body || err.message || String(err);\n    return `error: ManyChat ${status} — ${typeof body === 'string' ? body : JSON.stringify(body)}`;\n  }\n",
+        "specifyInputSchema": true,
+        "schemaType": "manual",
+        "inputSchema": "{\"type\":\"object\",\"required\":[\"flow_name\"],\"properties\":{\"flow_name\":{\"type\":\"string\",\"pattern\":\"^content[0-9]+_[0-9]+$\",\"description\":\"EXACT ns string from CONTENIDO DISPONIBLE. Must be copied character-for-character from the context block. Never paraphrase, never translate, never invent.Format: 'content' followed by digits, underscore, then digits (e.g., content20260511155655_840313).\"}}}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.3,
+      "position": [
+        1152,
+        368
+      ],
+      "id": "aad1d29b-4e74-4017-aa64-786e6a826b74",
+      "name": "trigger_manychat_flow"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "45e8d51d-953a-490e-8bc4-1d00f307888b",
+              "name": "staticPrompt",
+              "value": "# ROL\nEres Alex, de Quantum Creators. Tu tiempo vale oro y tienes cientos de mensajes que responder.\nTe comunicas principalmente enviando contenido (videos o audios pregrabados). No escribes párrafos de texto.\n\n# RESTRICCIONES DURAS — NUNCA LAS ROMPAS\n- CERO EMOJIS. Escribes seco, rápido, como un humano ocupado desde el móvil.\n- PROHIBIDO EXPLICAR. Nunca expliques el producto en texto. El video o audio hace ese trabajo.\n- NUNCA des el precio.\n- NUNCA ruegues ni intentes convencer a alguien que duda. Buscamos un \"SÍ\" o un \"NO\" claro.\n- NUNCA menciones que eres una IA ni hables de tus herramientas.\n\n# TU BRÚJULA (CÓMO ACTUAR)\nAl final de este prompt verás el \"# CONTEXTO\". Ahí tienes el \"CONTENIDO DISPONIBLE\" para enviar.\n\n1. DISPARAR CONTENIDO: Tu principal acción es usar SIEMPRE la herramienta `trigger_manychat_flow` con el flow exacto que te marca el contexto.\n2. TEXTO MÍNIMO BINARIO: Acompaña el flow con UNA sola frase en texto exigiendo confirmación. Ejemplos: \"Mírate esto y dame un pulgar arriba si resuena\", o \"Dime si o no y avanzamos\".\n3. ANTE LA DUDA O EL \"NO\": Si el usuario dice que no le interesa, que es muy caro, o da vueltas ambiguas, USA INMEDIATAMENTE la herramienta `set_stage` con el valor \"disqualified\" y despídete con 1 sola frase (Ej: \"Vale, no es tu momento. Éxitos.\"). NO rebatas la objeción.\n4. CALENDLY: Si el contexto te muestra el link de Calendly, mándalo seco: \"Aquí tienes, elige horario: [link]\".\n5. RESERVA CONFIRMADA: Si el lead confirma verbalmente que ya agendó (ej. \"listo, ya agendé\", \"reservé para el martes\"), llama `set_stage` con new_stage=\"D\" y evidence con la cita textual. No pidas confirmación adicional.",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        640,
+        128
+      ],
+      "id": "9792d4eb-57cd-4e20-bcdc-17e984bac6a2",
+      "name": "System Prompt"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get Stage Config",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Subscriber CRM Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Stage Config": {
+      "main": [
+        [
+          {
+            "node": "Combine Contexts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combine Contexts": {
+      "main": [
+        [
+          {
+            "node": "System Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Subscriber CRM Context": {
+      "main": [
+        [
+          {
+            "node": "Combine Contexts",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Build Context": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "enviar texto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres Chat Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "enviar texto": {
+      "main": [
+        [
+          {
+            "node": "Upsert Lead Cron",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Lead Cron": {
+      "main": [
+        [
+          {
+            "node": "Mark Followups Responded",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Followups Responded": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "set_stage": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "trigger_manychat_flow": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "System Prompt": {
+      "main": [
+        [
+          {
+            "node": "Build Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  },
+  "staticData": null,
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp"
+  },
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "headers": {
+            "host": "paneln8n.revolicord.com",
+            "user-agent": "node",
+            "content-length": "2724",
+            "accept": "*/*",
+            "accept-encoding": "br, gzip, deflate",
+            "accept-language": "*",
+            "content-type": "application/json",
+            "sec-fetch-mode": "cors",
+            "x-forwarded-for": "172.18.0.1",
+            "x-forwarded-host": "paneln8n.revolicord.com",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "72aff728fab3",
+            "x-real-ip": "172.18.0.1",
+            "x-schema-version": "v1"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "schema_version": "v1",
+            "turn_id": "94254234-3896-4e29-a4ec-940357cbeece",
+            "callback_url": "https://api.revolicord.com/admin/turn-completed",
+            "callback_token": "c37a1bb5741c19a484203b7f691fd445e92410e46d934c82c6170b5734acaa80",
+            "tenant": {
+              "id": "9d338f06-59c6-47bd-b3d7-4e3631ff4e75",
+              "slug": "revolicord",
+              "config": {
+                "debounce_ms": 15000,
+                "max_wait_ms": 30000,
+                "rate_per_minute": 20,
+                "buffer_hard_limit": 20,
+                "n8n_workflow_url": "https://paneln8n.revolicord.com/webhook/agent-run",
+                "manychat_api_key": "4829715:03d75c75de42f22f31ea2d02f68cfce2",
+                "model": "gpt-4o-mini",
+                "system_prompt": "# ROL\nEres Alex, de Quantum Creators. Tu tiempo vale oro y tienes cientos de mensajes que responder.\nTe comunicas principalmente enviando contenido (videos o audios pregrabados). No escribes párrafos de texto.\n\n# RESTRICCIONES DURAS — NUNCA LAS ROMPAS\n- CERO EMOJIS. Escribes seco, rápido, como un humano ocupado desde el móvil.\n- PROHIBIDO EXPLICAR. Nunca expliques el producto en texto. El video o audio hace ese trabajo.\n- NUNCA des el precio.\n- NUNCA ruegues ni intentes convencer a alguien que duda. Buscamos un \"SÍ\" o un \"NO\" claro.\n- NUNCA menciones que eres una IA ni hables de tus herramientas.\n\n# TU BRÚJULA (CÓMO ACTUAR)\nAl final de este prompt verás el \"# CONTEXTO\". Ahí tienes el \"CONTENIDO DISPONIBLE\" para enviar.\n\n1. DISPARAR CONTENIDO: Tu principal acción es usar SIEMPRE la herramienta `trigger_manychat_flow` con el flow exacto que te marca el contexto.\n2. TEXTO MÍNIMO BINARIO: Acompaña el flow con UNA sola frase en texto exigiendo confirmación. Ejemplos: \"Mírate esto y dame un pulgar arriba si resuena\", o \"Dime si o no y avanzamos\".\n3. ANTE LA DUDA O EL \"NO\": Si el usuario dice que no le interesa, que es muy caro, o da vueltas ambiguas, USA INMEDIATAMENTE la herramienta `set_stage` con el valor \"disqualified\" y despídete con 1 sola frase (Ej: \"Vale, no es tu momento. Éxitos.\"). NO rebatas la objeción.\n4. CALENDLY: Si el contexto te muestra el link de Calendly, mándalo seco: \"Aquí tienes, elige horario: [link]\".",
+                "calendly_url": "https://quantumcreators.es/llamada-de-discovery"
+              }
+            },
+            "subscriber": {
+              "id": "2d3453f1-bcf9-4a2e-96b4-29c5f2432f7a",
+              "manychat_subscriber_id": "1724803790",
+              "ig_user_id": null,
+              "ig_username": "ingenieroenia",
+              "display_name": "AI Engineer",
+              "locale": null,
+              "metadata": {},
+              "lead_stage": "A"
+            },
+            "conversation": {
+              "id": "9ef31178-e039-4108-811d-ea5e8e40917b",
+              "opened_at": "2026-05-16T20:41:33.964Z"
+            },
+            "messages": [
+              {
+                "id": "593c4e3e-6580-4be3-94d1-cc68d7fdcb9a",
+                "external_message_id": "1724803790_revolicord_1778964112964",
+                "text": "Mandame un video",
+                "reply_type": "{{last_reply_type}}",
+                "ts": 1778964112971,
+                "media_urls": []
+              }
+            ],
+            "trigger": {
+              "source": "instagram_dm",
+              "channel": "instagram_dm"
+            }
+          },
+          "webhookUrl": "https://paneln8n.revolicord.com/webhook/agent-run",
+          "executionMode": "production"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "versionId": "f05d52b6-8260-4636-9fcd-5869c600ddb9",
+  "activeVersionId": null,
+  "triggerCount": 1,
+  "shared": [
+    {
+      "updatedAt": "2026-05-12T18:52:55.382Z",
+      "createdAt": "2026-05-12T18:52:55.382Z",
+      "role": "workflow:owner",
+      "workflowId": "6QJs9dHcR8NX8MZe",
+      "projectId": "QMEqDuS2VokiT4AE"
+    }
+  ],
+  "activeVersion": null,
+  "tags": []
+}
