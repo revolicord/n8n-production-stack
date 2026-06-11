@@ -9,6 +9,7 @@ const TABS: { href: string; label: string }[] = [
   { href: '/settings/fase-c', label: 'Fase C' },
   { href: '/settings/cierres', label: 'Cierres' },
   { href: '/settings/objeciones', label: 'Objeciones' },
+  { href: '/settings/notificaciones', label: 'Notificaciones' },
 ];
 
 export function SettingsTabs() {

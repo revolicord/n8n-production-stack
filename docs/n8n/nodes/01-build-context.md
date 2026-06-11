@@ -2,14 +2,18 @@
 
 **Tipo:** Code (JavaScript)  
 **ID:** `fe31ef8f-cff7-40d7-8543-d60358245b69`  
-**Versión:** v5  
+**Versión:** v6  
 **Posición en cadena:** Después de `Execute a SQL query1`, antes de `AI Agent`  
-**ADR:** ADR-0010, ADR-0013  
-**Propósito:** Leer todos los inputs (Webhook, Get Stage Config, Get Subscriber CRM Context, Get Content History, System Prompt), construir el `chatInput` estructurado con `<context>` y `<lead_message>`, y propagar los metadatos necesarios para el Router. En v4 también computa `stageFlowsBySlug` desde `all_stages_flows` para que el Router resuelva slugs cross-stage. En v5 agrega historial de envío por `variant_group` en vez de por `slug_id` individual.
+**ADR:** ADR-0010, ADR-0013, ADR-0023  
+**Propósito:** Leer todos los inputs (Webhook, Get Stage Config, Get Subscriber CRM Context, Get Content History, Get Handoff State, System Prompt), construir el `chatInput` estructurado con `<context>` y `<lead_message>`, y propagar los metadatos necesarios para el Router. En v4 también computa `stageFlowsBySlug` desde `all_stages_flows` para que el Router resuelva slugs cross-stage. En v5 agrega historial de envío por `variant_group` en vez de por `slug_id` individual. En **v6** agrega la sección `handoff_state` (escalados/intervenciones humanas, leídos de `Get Handoff State`) y rinde **placeholders fieles por `content_class`** en `buildMessagesText` (en vez del genérico "contenido multimedia recibido").
 
 ---
 
-## Diferencias clave v3 → v4 → v5
+## Diferencias clave v3 → v4 → v5 → v6
+
+**v6 (ADR-0023):**
+- Lee un nuevo input `Get Handoff State` (`api.notifications` recientes) y agrega la sección `handoff_state` al `contextJson` → el agente es consciente de escalados abiertos e intervenciones humanas.
+- `buildMessagesText` rinde un **placeholder fiel por `content_class`** (`[audio sin transcribir]`, `[el lead envió una imagen]`, …) leyendo `m.content_class` del payload, en vez del genérico `[contenido multimedia recibido — no se puede leer]`. El espejo en código es `mediaPlaceholder()` de `@dm-api/shared`.
 
 | v3 | v4 | v5 |
 |----|----|----|
@@ -98,18 +102,70 @@ function normalizeReplyType(rt) {
   return rt;
 }
 
+// v6: placeholder fiel por content_class (espejo de mediaPlaceholder() en
+// @dm-api/shared). Si el payload no trae content_class (buffers viejos), cae a
+// un genérico, pero la API ya lo envía en messages[].content_class.
+function mediaPlaceholder(cls) {
+  switch (cls) {
+    case 'audio': return '[audio sin transcribir]';
+    case 'image': return '[el lead envió una imagen]';
+    case 'video': return '[el lead envió un video]';
+    case 'location': return '[el lead compartió una ubicación]';
+    case 'file': return '[el lead envió un archivo]';
+    case 'share': return '[el lead compartió/respondió a una historia]';
+    case 'sticker': return '[el lead reaccionó / envió un sticker]';
+    case 'unknown': return '[contenido no soportado]';
+    default: return '[mensaje sin texto]';
+  }
+}
+
 function buildMessagesText(messages) {
   return (messages || [])
     .map(function (m) {
       const rt = normalizeReplyType(m.reply_type);
       if (rt === 'thumbs_up') return '👍 [el contacto reacciono con pulgar arriba]';
-      if (m.media_urls && m.media_urls.length > 0 && !m.text) {
-        return '[contenido multimedia recibido — no se puede leer]';
-      }
-      return m.text || '[mensaje sin texto]';
+      if (!m.text) return mediaPlaceholder(m.content_class || 'unknown');
+      return m.text;
     })
     .filter(Boolean)
     .join('\n');
+}
+
+// v6: colapsa las filas de Get Handoff State en la sección handoff_state.
+function buildHandoffState(rows) {
+  const items = (rows || []).filter(function (r) { return r && r.kind; });
+  if (items.length === 0) return null;
+
+  const open = items
+    .filter(function (r) { return r.status === 'pending'; })
+    .map(function (r) {
+      return { kind: r.kind, reason: r.reason || null, age: daysAgoText(r.created_at) };
+    });
+
+  const handled = items
+    .filter(function (r) { return r.status === 'resolved'; })
+    .map(function (r) {
+      return {
+        kind: r.kind,
+        resolved_by: r.resolved_by || null,
+        note: r.summary || null,
+        age: daysAgoText(r.resolved_at || r.created_at)
+      };
+    });
+
+  const lastResolvedAt = items
+    .filter(function (r) { return r.resolved_at; })
+    .map(function (r) { return r.resolved_at; })
+    .sort()
+    .pop();
+
+  if (open.length === 0 && handled.length === 0) return null;
+
+  const out = {};
+  if (open.length > 0) out.open_escalations = open;
+  if (handled.length > 0) out.human_handled = handled;
+  if (lastResolvedAt) out.last_human_action = daysAgoText(lastResolvedAt);
+  return out;
 }
 
 // ----- Lectura de inputs ----------------------------------------------------
@@ -145,6 +201,17 @@ const crm = $('Get Subscriber CRM Context').first()
 const historyItems = $('Get Content History').all()
   ? $('Get Content History').all().map(function (x) { return x.json; })
   : [];
+
+// v6: filas de escalado/handoff recientes (api.notifications). Opcional: si el
+// nodo no existe o no retorna filas, handoff_state queda null y se omite.
+let handoffRows = [];
+try {
+  handoffRows = $('Get Handoff State').all()
+    ? $('Get Handoff State').all().map(function (x) { return x.json; })
+    : [];
+} catch (e) {
+  handoffRows = [];
+}
 
 const sentMap = {};
 for (const h of historyItems) {
@@ -262,6 +329,12 @@ const contextJson = {
   }
 };
 
+// v6: conciencia de escalados/intervenciones. Solo se agrega si hay algo.
+const handoffState = buildHandoffState(handoffRows);
+if (handoffState) {
+  contextJson.handoff_state = handoffState;
+}
+
 // ----- System prompt y chatInput --------------------------------------------
 
 const systemPrompt = staticPrompt;
@@ -356,9 +429,25 @@ return [{
   "extras": {
     "calendly_url": "https://quantumcreators.es/llamada-de-discovery",
     "signals": null
+  },
+  "handoff_state": {
+    "open_escalations": [
+      { "kind": "audio", "reason": "El lead envió un mensaje de audio", "age": "hace menos de 1 hora" }
+    ],
+    "human_handled": [
+      { "kind": "keyword", "resolved_by": "dashboard", "note": "Ya lo llamé, tiene la info de precios", "age": "hace 2 hora(s)" }
+    ],
+    "last_human_action": "hace 2 hora(s)"
   }
 }
 ```
+
+> **`handoff_state` solo aparece si hay escalados recientes.** `open_escalations`
+> = filas `pending` (algo que el agente no pudo leer o un `notify_human` sin
+> resolver). `human_handled` = filas `resolved` (un humano intervino; `note` es
+> la nota que dejó al reanudar). La regla 8 del system prompt le dice al agente
+> que reconozca la interrupción y no arranque de cero. Fuente: nodo
+> `Get Handoff State` (ver `00h-get-handoff-state.md`).
 
 ---
 

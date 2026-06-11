@@ -8,6 +8,9 @@ export interface BufferMessage {
   reply_type: string | null;
   ts: number;
   media_urls: string[];
+  // content_class del mensaje (text/audio/image/...) para rendir un placeholder
+  // fiel en memoria en vez del genérico. Opcional para tolerar buffers viejos.
+  content_class?: string;
 }
 
 export interface DebouncePushResult {

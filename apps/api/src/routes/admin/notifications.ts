@@ -21,6 +21,9 @@ const ResolveBodySchema = z.object({
   resolved_by: z.string().min(1).default('dashboard'),
   // Si true, además reanuda al lead (status='active').
   resume: z.boolean().default(false),
+  // Nota opcional de una línea: se guarda como summary del handoff para que el
+  // agente la vea al retomar la conversación.
+  note: z.string().max(500).optional(),
 });
 
 /**
@@ -84,6 +87,7 @@ export default async function notificationsRoutes(app: FastifyInstance): Promise
       const resolved = await resolveNotification(getDb(), {
         id: req.params.id,
         resolvedBy: parsed.data.resolved_by,
+        note: parsed.data.note,
       });
       if (!resolved) {
         // Ya estaba resuelta: idempotente, devolvemos el estado actual.

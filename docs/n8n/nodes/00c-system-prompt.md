@@ -6,6 +6,8 @@
 **ADR:** —
 **Propósito:** Servir el system prompt estático del agente. Vive en el workflow para permitir iteración rápida en la UI de n8n sin tocar Postgres ni re-deploy.
 
+> **v9 (ADR-0023):** el `staticPrompt` debe incluir la **regla 8 (conciencia de `handoff_state`)** — ver `prompts/setter-v1.md`. La sección `handoff_state` la inyecta `Build Context` en el `# CONTEXTO` (no aquí); esta regla le dice al agente cómo reaccionar a ella.
+
 ---
 
 ## Por qué un Set node y no la DB

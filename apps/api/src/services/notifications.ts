@@ -4,7 +4,18 @@ import type { Redis } from 'ioredis';
 import { getNotifyQueue } from '../lib/queue.js';
 import { redisKeys } from '../lib/redis-keys.js';
 
-export type NotificationKind = 'audio' | 'keyword' | 'agent';
+// 'audio'|'image'|'video'|'location'|'file'|'unknown' = escalado determinista
+// por content_class (medios sobre los que el agente no puede actuar todavía).
+// 'keyword' = frase del tenant. 'agent' = el propio agente pidió notify_human.
+export type NotificationKind =
+  | 'audio'
+  | 'image'
+  | 'video'
+  | 'location'
+  | 'file'
+  | 'unknown'
+  | 'keyword'
+  | 'agent';
 export type NotificationSource = 'code' | 'agent';
 
 /** TTL del throttle por (tenant, subscriber, kind): evita spam en ráfagas. */
@@ -75,11 +86,21 @@ export async function getNotificationById(db: DbClient, id: string): Promise<Not
 
 export async function resolveNotification(
   db: DbClient,
-  args: { id: string; resolvedBy: string },
+  args: { id: string; resolvedBy: string; note?: string | undefined },
 ): Promise<Notification | null> {
+  // La nota del humano se guarda como `summary` para que el agente la vea en
+  // handoff_state al retomar (contexto de qué pasó durante la intervención).
+  const set: Record<string, unknown> = {
+    status: 'resolved',
+    resolvedAt: sql`now()`,
+    resolvedBy: args.resolvedBy,
+  };
+  if (args.note && args.note.trim() !== '') {
+    set.summary = args.note.trim();
+  }
   const rows = await db
     .update(notifications)
-    .set({ status: 'resolved', resolvedAt: sql`now()`, resolvedBy: args.resolvedBy })
+    .set(set)
     .where(and(eq(notifications.id, args.id), eq(notifications.status, 'pending')))
     .returning();
   return rows[0] ?? null;

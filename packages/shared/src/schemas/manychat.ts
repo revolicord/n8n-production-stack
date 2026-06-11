@@ -1,7 +1,116 @@
 import { z } from 'zod';
 
+// ───────────────────────────────────────────────────────────────
+// Taxonomía de contenido entrante (content_class)
+// ----------------------------------------------------------------
+// El detector de escalado es una *allowlist por clase*, no "audio OR
+// keyword": la pregunta es "¿el agente literalmente NO puede actuar sobre
+// esto?" → entonces escala y lo anota fielmente en la memoria. Así, manejo
+// de medios y escalado son la misma decisión.
+// ───────────────────────────────────────────────────────────────
+export const CONTENT_CLASSES = [
+  'text',
+  'audio',
+  'image',
+  'video',
+  'location',
+  'file',
+  'share',
+  'sticker',
+  'unknown',
+] as const;
+export type ContentClass = (typeof CONTENT_CLASSES)[number];
+
+/**
+ * Clases sobre las que el agente NO puede actuar hoy → se escalan a humano.
+ * `share`/`sticker` se anotan pero el agente sigue. `audio`/`image`/`video`
+ * escalan por ahora; cuando entren transcripción/visión solo cambia su
+ * política aquí (o vía tenant.config.media_policy), no el andamiaje.
+ */
+export const ESCALATING_CLASSES: readonly ContentClass[] = [
+  'audio',
+  'image',
+  'video',
+  'location',
+  'file',
+  'unknown',
+];
+
+/**
+ * Mapa de `media.type` crudo de ManyChat (Instagram) → content_class.
+ * Lo desconocido cae en `unknown`, que escala (fail-safe): nunca dejamos que
+ * un tipo nuevo se cuele como placeholder genérico mentiroso en la memoria.
+ */
+const RAW_MEDIA_TYPE_TO_CLASS: Record<string, ContentClass> = {
+  image: 'image',
+  video: 'video',
+  audio: 'audio',
+  voice: 'audio',
+  file: 'file',
+  location: 'location',
+  contact: 'file',
+  vcard: 'file',
+  share: 'share',
+  story_mention: 'share',
+  story_reply: 'share',
+  reel: 'share',
+  sticker: 'sticker',
+  gif: 'sticker',
+  animation: 'sticker',
+};
+
+export function classifyMediaType(rawType: string): ContentClass {
+  return RAW_MEDIA_TYPE_TO_CLASS[rawType.toLowerCase().trim()] ?? 'unknown';
+}
+
+/** Motivo legible del escalado por clase — va al `reason` de la notificación. */
+export function escalationReason(contentClass: ContentClass): string {
+  switch (contentClass) {
+    case 'audio':
+      return 'El lead envió un mensaje de audio';
+    case 'image':
+      return 'El lead envió una imagen';
+    case 'video':
+      return 'El lead envió un video';
+    case 'location':
+      return 'El lead compartió una ubicación';
+    case 'file':
+      return 'El lead envió un archivo';
+    case 'unknown':
+      return 'El lead envió contenido no soportado';
+    default:
+      return 'Contenido que requiere atención humana';
+  }
+}
+
+/** Placeholder fiel por clase — lo que el agente verá en su memoria. */
+export function mediaPlaceholder(contentClass: ContentClass): string {
+  switch (contentClass) {
+    case 'audio':
+      return '[audio sin transcribir]';
+    case 'image':
+      return '[el lead envió una imagen]';
+    case 'video':
+      return '[el lead envió un video]';
+    case 'location':
+      return '[el lead compartió una ubicación]';
+    case 'file':
+      return '[el lead envió un archivo]';
+    case 'share':
+      return '[el lead compartió/respondió a una historia]';
+    case 'sticker':
+      return '[el lead reaccionó / envió un sticker]';
+    case 'unknown':
+      return '[contenido no soportado]';
+    default:
+      return '[mensaje sin texto]';
+  }
+}
+
 export const ManyChatMediaSchema = z.object({
-  type: z.enum(['image', 'video', 'audio', 'file']),
+  // Permisivo a propósito: no perdemos tipos nuevos de IG en el Zod parse.
+  // La clasificación a content_class la hace classifyMediaType.
+  type: z.string(),
   url: z.string().url(),
 });
 
@@ -55,3 +164,19 @@ export type ManyChatWebhookEvent = z.infer<typeof ManyChatWebhookSchema>;
 export type ManyChatSubscriberPayload = z.infer<typeof ManyChatSubscriberSchema>;
 export type ManyChatMessagePayload = z.infer<typeof ManyChatMessageSchema>;
 export type ManyChatInstagramContext = z.infer<typeof ManyChatInstagramContextSchema>;
+
+/**
+ * Clasifica un mensaje entrante en una `content_class`. Si trae texto, es
+ * `text` (el agente puede leerlo); si no, la clase del primer media; si no
+ * hay media, `text` (mensaje vacío que se renderiza como tal). Una sola clase
+ * por mensaje basta: el placeholder solo se usa cuando no hay texto.
+ */
+export function classifyMessageContent(message: {
+  text?: string;
+  media?: { type: string }[];
+}): ContentClass {
+  if (message.text && message.text.trim() !== '') return 'text';
+  const first = message.media?.[0];
+  if (!first) return 'text';
+  return classifyMediaType(first.type);
+}

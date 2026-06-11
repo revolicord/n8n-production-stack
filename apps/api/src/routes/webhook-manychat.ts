@@ -1,4 +1,12 @@
-import { type ManyChatWebhookEvent, ManyChatWebhookSchema } from '@dm-api/shared';
+import {
+  ESCALATING_CLASSES,
+  type ManyChatWebhookEvent,
+  ManyChatWebhookSchema,
+  type MediaPolicy,
+  classifyMediaType,
+  classifyMessageContent,
+  escalationReason,
+} from '@dm-api/shared';
 import type { FastifyBaseLogger, FastifyInstance } from 'fastify';
 import { getConfig } from '../config.js';
 import { verifyMcToken } from '../lib/auth.js';
@@ -21,15 +29,34 @@ import { getTenantBySlug, parseTenantConfig } from '../services/tenants.js';
 const IDEMPOTENCY_TTL_MS = 24 * 3600 * 1000;
 
 /**
- * Clasificación pura del trigger de escalado: audio gana sobre keyword.
- * Exportada para tests; el match de keywords es por substring case-insensitive.
+ * Acción efectiva para una content_class: el override del tenant gana; si no,
+ * la allowlist por defecto (ESCALATING_CLASSES → 'escalate', resto → 'annotate').
+ */
+function effectiveAction(
+  cls: string,
+  mediaPolicy: MediaPolicy | undefined,
+): 'escalate' | 'annotate' | 'agent' {
+  const override = mediaPolicy?.[cls];
+  if (override) return override;
+  return (ESCALATING_CLASSES as readonly string[]).includes(cls) ? 'escalate' : 'annotate';
+}
+
+/**
+ * Clasificación pura del trigger de escalado. Allowlist por content_class: si
+ * algún media cae en una clase que el tenant marca 'escalate' (o la allowlist
+ * por defecto), escala; los medios ganan sobre keyword. Si no, evalúa keywords
+ * sobre el texto. Exportada para tests; el match de keywords es por substring.
  */
 export function matchEscalationTrigger(
   message: ManyChatWebhookEvent['message'],
   keywords: string[] | undefined,
+  mediaPolicy?: MediaPolicy | undefined,
 ): { kind: NotificationKind; reason: string } | null {
-  if (message.media.some((m) => m.type === 'audio')) {
-    return { kind: 'audio', reason: 'El lead envió un mensaje de audio' };
+  for (const m of message.media) {
+    const cls = classifyMediaType(m.type);
+    if (effectiveAction(cls, mediaPolicy) === 'escalate') {
+      return { kind: cls as NotificationKind, reason: escalationReason(cls) };
+    }
   }
   if (keywords && keywords.length > 0 && message.text) {
     const text = message.text.toLowerCase();
@@ -52,11 +79,12 @@ async function detectEscalation(args: {
   messageId: string;
   event: ManyChatWebhookEvent;
   keywords: string[] | undefined;
+  mediaPolicy: MediaPolicy | undefined;
   log: FastifyBaseLogger;
 }): Promise<void> {
-  const { tenantId, subscriberId, messageId, event, keywords, log } = args;
+  const { tenantId, subscriberId, messageId, event, keywords, mediaPolicy, log } = args;
 
-  const trigger = matchEscalationTrigger(event.message, keywords);
+  const trigger = matchEscalationTrigger(event.message, keywords, mediaPolicy);
   if (!trigger) return;
   const { kind, reason } = trigger;
 
@@ -137,16 +165,7 @@ export default async function webhookManyChatRoute(app: FastifyInstance): Promis
         instagramContext: event.instagram_context,
       });
 
-      // 5. Skip if paused/blocked
-      if (!isSubscriberActive(subscriber)) {
-        req.log.info(
-          { subscriber_id: subscriber.id, status: subscriber.status },
-          'subscriber inactive, skipping',
-        );
-        return reply.code(200).send();
-      }
-
-      // 6. Idempotency
+      // 5. Idempotency
       // If ManyChat doesn't send a message ID, generate one from subscriber + tenant + arrival ms
       const receivedAt = Date.now();
       const externalMessageId =
@@ -162,7 +181,7 @@ export default async function webhookManyChatRoute(app: FastifyInstance): Promis
         return reply.code(200).send();
       }
 
-      // 7. Persist raw (audit-first, antes del ACK)
+      // 6. Persist raw (audit-first, antes del ACK)
       const mediaUrls = event.message.media.map((m) => m.url);
       const messageRow = await insertMessageRaw(getDb(), {
         tenantId: tenant.id,
@@ -178,13 +197,26 @@ export default async function webhookManyChatRoute(app: FastifyInstance): Promis
         triggerRef: event.trigger?.ref,
       });
 
-      // 7b. Escalado a humano (audio/keywords) — fire-and-forget, no bloquea el ACK
+      // 7. Pausado/bloqueado: persistir-pero-no-despachar. El raw ya quedó en el
+      // audit trail (paso 6); no empujamos al buffer, no encolamos BullMQ y no
+      // escalamos (un humano ya está atendiendo). Al reactivar, el agente ve el
+      // hueco vía handoff_state en vez de arrancar de cero.
+      if (!isSubscriberActive(subscriber)) {
+        req.log.info(
+          { subscriber_id: subscriber.id, status: subscriber.status, message_id: messageRow.id },
+          'subscriber inactive — persisted, not dispatched',
+        );
+        return reply.code(200).send();
+      }
+
+      // 7b. Escalado a humano (medios/keywords) — fire-and-forget, no bloquea el ACK
       void detectEscalation({
         tenantId: tenant.id,
         subscriberId: subscriber.id,
         messageId: messageRow.id,
         event,
         keywords: tenantConfig.notification_keywords,
+        mediaPolicy: tenantConfig.media_policy,
         log: req.log,
       }).catch((err) => {
         req.log.error({ err }, 'escalation detection failed');
@@ -200,6 +232,7 @@ export default async function webhookManyChatRoute(app: FastifyInstance): Promis
         reply_type: event.message.reply_type ?? null,
         ts: now,
         media_urls: mediaUrls,
+        content_class: classifyMessageContent(event.message),
       };
 
       const pushResult = await debouncePush(getRedis(), {
