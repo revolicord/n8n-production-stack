@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@dm-api/db": "workspace:*",
+    "@dm-api/shared": "workspace:*",
     "@tabler/icons-react": "^3.0.0",
     "drizzle-orm": "0.36.4",
     "jose": "^5.9.0",

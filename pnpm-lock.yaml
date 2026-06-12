@@ -108,6 +108,9 @@ importers:
       '@dm-api/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@dm-api/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@tabler/icons-react':
         specifier: ^3.0.0
         version: 3.44.0(react@19.2.6)

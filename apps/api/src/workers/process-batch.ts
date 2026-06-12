@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { N8nDispatchPayload } from '@dm-api/shared';
+import { type ContentClass, type N8nDispatchPayload, mediaPlaceholder } from '@dm-api/shared';
 import type { Job } from 'bullmq';
 import { getConfig } from '../config.js';
 import { getDb } from '../lib/db.js';
@@ -104,8 +104,8 @@ export async function processBatchJob(job: Job<ProcessBatchJobData>): Promise<Pr
     const batchText = messages
       .map((m) => {
         if (m.reply_type === 'thumbs_up') return '👍 [pulgar arriba]';
-        if (m.media_urls.length > 0 && !m.text) return `[${m.reply_type ?? 'media'} recibido]`;
-        return m.text ?? '[mensaje sin texto]';
+        if (!m.text) return mediaPlaceholder((m.content_class ?? 'unknown') as ContentClass);
+        return m.text;
       })
       .join('\n');
     const firstMsg = messages[0];
@@ -163,6 +163,7 @@ export async function processBatchJob(job: Job<ProcessBatchJobData>): Promise<Pr
         reply_type: m.reply_type,
         ts: m.ts,
         media_urls: m.media_urls,
+        content_class: m.content_class ?? 'text',
       })),
       trigger: firstMsg
         ? {

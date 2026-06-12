@@ -16,6 +16,11 @@ export interface NotifyResult {
 
 const KIND_HEADERS: Record<string, string> = {
   audio: '🎙 <b>Audio recibido</b>',
+  image: '🖼 <b>Imagen recibida</b>',
+  video: '🎬 <b>Video recibido</b>',
+  location: '📍 <b>Ubicación compartida</b>',
+  file: '📎 <b>Archivo recibido</b>',
+  unknown: '❓ <b>Contenido no soportado</b>',
   keyword: '🚨 <b>Palabra clave detectada</b>',
   agent: '🤖 <b>El agente pide un humano</b>',
 };

@@ -1,9 +1,20 @@
 import { tenants } from '@dm-api/db';
+import { MediaPolicySchema } from '@dm-api/shared';
 import { eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
 import { verifyAdminAuth } from '../../lib/admin-auth.js';
 import { getDb } from '../../lib/db.js';
-import { adminSecurity, doc } from '../../lib/openapi.js';
+import { adminSecurity, doc, uuidParams, zodDoc } from '../../lib/openapi.js';
+import { updateTenantConfig } from '../../services/tenants.js';
+
+// Subset editable de tenant.config vía dashboard (autoservicio de escalado).
+const TenantConfigPatchSchema = z
+  .object({
+    notification_keywords: z.array(z.string()),
+    media_policy: MediaPolicySchema,
+  })
+  .partial();
 
 export default async function tenantsRoutes(app: FastifyInstance): Promise<void> {
   // GET /admin/tenants
@@ -23,6 +34,41 @@ export default async function tenantsRoutes(app: FastifyInstance): Promise<void>
         .from(tenants)
         .where(eq(tenants.isActive, true));
       return reply.code(200).send({ tenants: rows });
+    },
+  );
+
+  // PATCH /admin/tenants/:id/config — merge del subset editable sobre tenant.config
+  app.patch<{ Params: { id: string } }>(
+    '/admin/tenants/:id/config',
+    doc({
+      tags: ['admin/misc'],
+      summary: 'Actualizar config de escalado del tenant (keywords + matriz de medios)',
+      description:
+        'Merge superficial sobre tenant.config: solo toca las claves enviadas, ' +
+        'preserva el resto. Subset editable: notification_keywords, media_policy.',
+      security: adminSecurity,
+      params: uuidParams('id'),
+      body: zodDoc(TenantConfigPatchSchema),
+    }),
+    async (req, reply) => {
+      if (!(await verifyAdminAuth(req, app))) {
+        return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });
+      }
+      const parsed = TenantConfigPatchSchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        return reply.code(400).send({
+          error: { code: 'INVALID_PAYLOAD', details: parsed.error.issues },
+        });
+      }
+      const updated = await updateTenantConfig(getDb(), {
+        tenantId: req.params.id,
+        patch: parsed.data,
+      });
+      if (!updated) {
+        return reply.code(404).send({ error: { code: 'NOT_FOUND' } });
+      }
+      req.log.info({ tenant_id: updated.id }, 'tenant config updated');
+      return reply.code(200).send({ config: updated.config });
     },
   );
 }

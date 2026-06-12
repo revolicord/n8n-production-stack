@@ -8,6 +8,9 @@ export const N8nDispatchMessageSchema = z.object({
   reply_type: z.string().nullable(),
   ts: z.number(),
   media_urls: z.array(z.string()).default([]),
+  // Clase de contenido (text/audio/image/...) para que Build Context rinda un
+  // placeholder fiel en la memoria del agente en vez del genérico.
+  content_class: z.string().default('text'),
 });
 
 export const N8nDispatchPayloadSchema = z.object({

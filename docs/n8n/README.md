@@ -11,8 +11,10 @@ Todo lo necesario para reconstruirlo está en esta carpeta.
 ```
 Webhook ──┬──► Get Stage Config (Postgres) ─────────────────────────────────┐
           │                                                                   │ input 0
-          └──► Get Subscriber CRM Context (Postgres) ──► Get Content History ─► Combine Contexts (Merge)
-                                                                                        │ input 1
+          ├──► Get Subscriber CRM Context (Postgres) ──► Get Content History ─► Combine Contexts (Merge)
+          │                                                                   │ input 1
+          └──► Get Handoff State (Postgres) ──────────────────────────────────┘ input 2  (v6 / ADR-0023)
+                                                                                        │
                                                                                System Prompt (Set)
                                                                                         │
                                                                            Execute a SQL query1 (Postgres)
@@ -75,6 +77,7 @@ Webhook ──┬──► Get Stage Config (Postgres) ────────�
 | `nodes/00b-get-crm-context.md` | SQL y params del nodo Get Subscriber CRM Context |
 | `nodes/00c-system-prompt.md` | Configuración del Set node System Prompt |
 | `nodes/00d-get-content-history.md` | SQL y params del nodo Get Content History (nuevo v3) |
+| `nodes/00h-get-handoff-state.md` | SQL y params del nodo Get Handoff State (nuevo v6 / ADR-0023) |
 | `nodes/00e-mark-content-responded.md` | SQL del nodo Execute a SQL query1 (nuevo v3) |
 | `nodes/01-build-context.md` | Código JS completo del nodo Build Context v3 |
 | `nodes/02-ai-agent.md` | Configuración del AI Agent + Structured Output Parser |
