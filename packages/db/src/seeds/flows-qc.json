@@ -1,0 +1,99 @@
+[
+  {
+    "flow_id": "qc_cascade_a_ms",
+    "name": "Cascada A→MS: audio + VSL y avance a B",
+    "trigger": { "type": "stage_transition", "from": "A", "to": "MS" },
+    "slots": [],
+    "steps": [
+      {
+        "id": "s1",
+        "type": "action",
+        "action": "send_content",
+        "config": {
+          "slug_id": "QC_MS_AUDIO_se envia antes de la vsl",
+          "lookup_stage": "MS"
+        }
+      },
+      {
+        "id": "s2",
+        "type": "action",
+        "action": "send_content",
+        "config": {
+          "slug_id": "QC_MS_VIDEO_vsl que demuestra resultados",
+          "lookup_stage": "MS"
+        }
+      },
+      {
+        "id": "s3",
+        "type": "action",
+        "action": "change_stage",
+        "config": {
+          "to_stage": "B",
+          "reason": null,
+          "evidence": "auto: contenido core entregado tras señal positiva",
+          "cascade": false
+        }
+      }
+    ]
+  },
+  {
+    "flow_id": "qc_cascade_ms_b",
+    "name": "Cascada MS→B: reenvío de audio + VSL",
+    "trigger": { "type": "stage_transition", "from": "MS", "to": "B" },
+    "slots": [],
+    "steps": [
+      {
+        "id": "s1",
+        "type": "action",
+        "action": "send_content",
+        "config": {
+          "slug_id": "QC_MS_AUDIO_se envia antes de la vsl",
+          "lookup_stage": "MS"
+        }
+      },
+      {
+        "id": "s2",
+        "type": "action",
+        "action": "send_content",
+        "config": {
+          "slug_id": "QC_MS_VIDEO_vsl que demuestra resultados",
+          "lookup_stage": "MS"
+        }
+      }
+    ]
+  },
+  {
+    "flow_id": "qc_cascade_b_c",
+    "name": "Cascada B→C: lead_in + link de Calendly",
+    "trigger": { "type": "stage_transition", "from": "B", "to": "C" },
+    "slots": [],
+    "steps": [
+      {
+        "id": "s1",
+        "type": "action",
+        "action": "reply_text",
+        "config": {
+          "template": "{lead_in} {tenant.calendly_url}",
+          "fallback": "Aquí tienes, elige el horario que te venga: {tenant.calendly_url}"
+        }
+      }
+    ]
+  },
+  {
+    "flow_id": "qc_farewell_disqualified",
+    "name": "Despedida al descalificar",
+    "trigger": { "type": "stage_transition", "from": "*", "to": "disqualified" },
+    "slots": [],
+    "steps": [
+      {
+        "id": "s1",
+        "type": "action",
+        "action": "reply_text",
+        "config": {
+          "template": "{lead_in}",
+          "fallback": "Vale, no es tu momento. Éxitos."
+        }
+      }
+    ]
+  }
+]

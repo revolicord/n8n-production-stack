@@ -1,0 +1,135 @@
+[
+  {
+    "flow_id": "bg_intake",
+    "name": "Intake del caso",
+    "trigger": {
+      "type": "llm",
+      "description": "El lead describe un asunto legal y quiere asesoría"
+    },
+    "slots": [
+      {
+        "name": "materia",
+        "type": "option",
+        "options": ["penal", "laboral", "civil", "familiar"]
+      },
+      {
+        "name": "contraparte",
+        "type": "text",
+        "description": "Persona o empresa contra quien sería el asunto"
+      },
+      {
+        "name": "jurisdiccion",
+        "type": "text"
+      }
+    ],
+    "steps": [
+      {
+        "id": "s1",
+        "type": "collect",
+        "slot": "materia",
+        "prompt_hint": "Pregunte formalmente, de usted, qué tipo de asunto legal desea consultar"
+      },
+      {
+        "id": "s2",
+        "type": "collect",
+        "slot": "jurisdiccion",
+        "prompt_hint": "Pregunte en qué ciudad o jurisdicción ocurre el asunto"
+      },
+      {
+        "id": "s3",
+        "type": "branch",
+        "cases": [
+          {
+            "when": { "slot": "jurisdiccion_valida", "op": "eq", "value": false },
+            "next": "s4"
+          }
+        ],
+        "default": "s5"
+      },
+      {
+        "id": "s4",
+        "type": "action",
+        "action": "change_stage",
+        "config": {
+          "to_stage": "disqualified",
+          "reason": "jurisdicción_equivocada",
+          "evidence": "auto: fuera de jurisdicción"
+        }
+      },
+      {
+        "id": "s5",
+        "type": "collect",
+        "slot": "contraparte",
+        "prompt_hint": "Pregunte contra quién sería el asunto (nombre completo o razón social)"
+      },
+      {
+        "id": "s6",
+        "type": "action",
+        "action": "change_stage",
+        "config": {
+          "to_stage": "conflict_check",
+          "reason": null,
+          "evidence": "auto: intake completo",
+          "cascade": true
+        }
+      }
+    ]
+  },
+  {
+    "flow_id": "bg_cascade_conflict_check",
+    "name": "Cascada intake→conflict_check: verificación de conflictos",
+    "trigger": {
+      "type": "stage_transition",
+      "from": "intake",
+      "to": "conflict_check"
+    },
+    "slots": [],
+    "steps": [
+      {
+        "id": "s1",
+        "type": "action",
+        "action": "http_request",
+        "save_as": "conflict_result",
+        "config": {
+          "connector": "check_conflicts",
+          "method": "POST",
+          "url_ref": "connectors.check_conflicts.url",
+          "body": {
+            "contraparte": "{slots.contraparte}",
+            "materia": "{slots.materia}"
+          }
+        },
+        "on_failure": "handoff"
+      },
+      {
+        "id": "s2",
+        "type": "branch",
+        "cases": [
+          {
+            "when": { "slot": "conflict_result.has_conflict", "op": "eq", "value": true },
+            "next": "s3"
+          }
+        ],
+        "default": "s4"
+      },
+      {
+        "id": "s3",
+        "type": "action",
+        "action": "change_stage",
+        "config": {
+          "to_stage": "disqualified",
+          "reason": "conflicto_de_interés",
+          "evidence": "auto: conflicto detectado"
+        }
+      },
+      {
+        "id": "s4",
+        "type": "action",
+        "action": "reply_text",
+        "config": {
+          "template": "Hemos completado la verificación. Podemos proceder a agendar su consulta inicial."
+        }
+      }
+    ]
+  }
+]

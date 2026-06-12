@@ -583,3 +583,91 @@ export type AgentResource = typeof agentResources.$inferSelect;
 export type NewAgentResource = typeof agentResources.$inferInsert;
 export type Notification = typeof notifications.$inferSelect;
 export type NewNotification = typeof notifications.$inferInsert;
+
+// ───────────────────────────────────────────────────────────────
+// ADR-0024: motor de diálogo declarativo
+// ───────────────────────────────────────────────────────────────
+
+// flow_definitions — flows declarativos versionados por tenant
+export const flowDefinitions = apiSchema.table(
+  'flow_definitions',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
+    flowId: text('flow_id').notNull(),
+    version: integer('version').notNull().default(1),
+    definition: jsonb('definition').notNull(),
+    active: boolean('active').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    tenantFlowVersionUnique: uniqueIndex('flow_definitions_tenant_flow_version_unique').on(
+      t.tenantId,
+      t.flowId,
+      t.version,
+    ),
+    oneActivePerFlow: uniqueIndex('flow_definitions_one_active_unique')
+      .on(t.tenantId, t.flowId)
+      .where(sql`active = true`),
+  }),
+);
+
+// dialogue_states — un estado de diálogo por conversación (fuente de verdad durable)
+export const dialogueStates = apiSchema.table(
+  'dialogue_states',
+  {
+    conversationId: uuid('conversation_id')
+      .primaryKey()
+      .references(() => conversations.id, { onDelete: 'cascade' }),
+    tenantId: uuid('tenant_id').notNull(),
+    stack: jsonb('stack').notNull().default(sql`'[]'::jsonb`),
+    slots: jsonb('slots').notNull().default(sql`'{}'::jsonb`),
+    repairContext: jsonb('repair_context'),
+    lastTurnId: uuid('last_turn_id'),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    tenantIdx: index('dialogue_states_tenant_idx').on(t.tenantId),
+  }),
+);
+
+// domain_events — outbox mínimo para eventos de dominio (CRM, dashboard)
+export const domainEvents = apiSchema.table(
+  'domain_events',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: uuid('tenant_id').notNull(),
+    type: text('type').notNull(),
+    payload: jsonb('payload').notNull(),
+    turnId: uuid('turn_id'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    processedAt: timestamp('processed_at', { withTimezone: true }),
+  },
+  (t) => ({
+    typeIdx: index('domain_events_tenant_type_idx').on(t.tenantId, t.type, t.createdAt),
+  }),
+);
+
+// agent_shadow_runs — resultados dry-run del agente en Fase 3 (se puede dropear tras cutover)
+export const agentShadowRuns = apiSchema.table('agent_shadow_runs', {
+  turnId: uuid('turn_id').primaryKey(),
+  tenantId: uuid('tenant_id').notNull(),
+  commands: jsonb('commands').notNull(),
+  responseTexts: jsonb('response_texts').notNull(),
+  finalStage: text('final_stage'),
+  dialogueState: jsonb('dialogue_state'),
+  error: text('error'),
+  durationMs: integer('duration_ms'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type FlowDefinition = typeof flowDefinitions.$inferSelect;
+export type NewFlowDefinition = typeof flowDefinitions.$inferInsert;
+export type DialogueState = typeof dialogueStates.$inferSelect;
+export type NewDialogueState = typeof dialogueStates.$inferInsert;
+export type DomainEvent = typeof domainEvents.$inferSelect;
+export type NewDomainEvent = typeof domainEvents.$inferInsert;
+export type AgentShadowRun = typeof agentShadowRuns.$inferSelect;
+export type NewAgentShadowRun = typeof agentShadowRuns.$inferInsert;

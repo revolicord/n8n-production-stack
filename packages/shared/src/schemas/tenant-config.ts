@@ -29,6 +29,16 @@ export const TenantConfigSchema = z
     notification_keywords: z.array(z.string()).optional(),
     // Override de la matriz de escalado por content_class (default = allowlist en código)
     media_policy: MediaPolicySchema.optional(),
+    // ADR-0024: motor de diálogo — flag de cutover por tenant
+    engine: z.enum(['n8n', 'agent']).optional(),
+    // ADR-0024: shadow mode — corre el agente en dry-run en paralelo al camino n8n
+    shadow_agent: z.boolean().optional(),
+    // ADR-0024: bloque de persona del tenant (editable en /settings)
+    persona_prompt: z.string().optional(),
+    // ADR-0024: razones de descalificación válidas para ChangeStage (datos del tenant)
+    disqualification_reasons: z.array(z.string()).optional(),
+    // ADR-0024: conectores externos declarativos (url, headers, etc.)
+    connectors: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
   })
   .passthrough();
 
