@@ -257,7 +257,7 @@ export async function processBatchJob(job: Job<ProcessBatchJobData>): Promise<Pr
           dry_run: true,
         };
         void dispatchToAgent({ input: shadowInput, log: logger() })
-          .then((res) => saveShadowRun(getDb(), turn.id, res))
+          .then((res) => saveShadowRun(getDb(), turn.id, tenantId, res))
           .catch((err) => log.error({ err, turn_id: turn.id }, 'shadow agent run failed'));
       }
 
