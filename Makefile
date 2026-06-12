@@ -1,5 +1,6 @@
 .PHONY: help deploy status logs-main logs-webhook logs-worker logs-api logs-api-worker logs-dashboard \
-        scale-workers scale-api backup update down rebuild-api rebuild-dashboard migrate seed-tenant
+        scale-workers scale-api backup update down rebuild-api rebuild-dashboard migrate seed-tenant \
+        cutover-agent
 
 STACK=n8n
 
@@ -65,6 +66,17 @@ seed-tenant: ## Crea tenant inicial: make seed-tenant SLUG=dev N8N_WORKFLOW_URL=
 	  -e SEED_N8N_WORKFLOW_URL="$(N8N_WORKFLOW_URL)" \
 	  dm-api:local \
 	  node /app/packages/db/dist/seed.js
+
+cutover-agent: ## Fase 4 ADR-0024: inicializar dialogue_states para leads vivos. Usar: make cutover-agent SLUG=qc [DRY=--dry-run]
+	@test -n "$(SLUG)" || (echo "Falta SLUG=... (ej: make cutover-agent SLUG=qc)" && exit 1)
+	@set -a; . ./.env; set +a; \
+	docker run --rm \
+	  --network $(STACK)_n8n_internal \
+	  -e DATABASE_URL="postgres://n8n:$$POSTGRES_PASSWORD@postgres:5432/n8n" \
+	  -e REDIS_URL="redis://redis:6379" \
+	  -e ANTHROPIC_API_KEY="$$ANTHROPIC_API_KEY" \
+	  dm-api:local \
+	  node /app/apps/agent/dist/scripts/cutover.js --tenant-slug $(SLUG) $(DRY)
 
 backup: ## Backup de PostgreSQL y MinIO
 	@bash scripts/backup.sh

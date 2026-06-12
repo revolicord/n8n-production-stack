@@ -1,8 +1,16 @@
 # ADR-0017: Turn Timeout Watchdog (Deuda Técnica)
 
-**Status:** Proposed — pendiente de implementación  
+**Status:** Superseded by ADR-0024 — no implementado; problema resuelto por diseño  
 **Date:** 2026-05-22  
-**Deciders:** Equipo Revolicord
+**Deciders:** Equipo Revolicord  
+**Superseded:** 2026-06-12
+
+## Por qué se descartó
+
+Con `engine='agent'` (ADR-0024) el worker BullMQ retiene el hilo durante el turno LLM y libera el lock
+en el bloque `finally` de `processBatchJob`, con un timeout duro de 60 s vía `AbortSignal`. El camino
+`engine='n8n'` queda como fallback frío mientras dura la transición; una vez archivado el workflow n8n
+el problema desaparece por completo. El watchdog no fue necesario implementarlo.
 
 ---
 

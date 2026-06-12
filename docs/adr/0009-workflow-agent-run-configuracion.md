@@ -1,7 +1,8 @@
 # ADR-0008: Configuración del workflow `agent-run` en n8n
 
-**Status:** Accepted  
-**Date:** 2026-05-12
+**Status:** Superseded by ADR-0024  
+**Date:** 2026-05-12  
+**Superseded:** 2026-06-12
 
 ---
 
