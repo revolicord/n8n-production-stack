@@ -1,4 +1,6 @@
+import { stageTransitionsMap } from '@dm-api/db';
 import { sql } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { verifyAdminAuth } from '../../lib/admin-auth.js';
@@ -11,57 +13,14 @@ import {
 } from '../../services/lead-stages.js';
 import { getSubscriberByUuid } from '../../services/subscribers.js';
 
-const STAGE = ['A', 'MS', 'B', 'C', 'D', 'disqualified'] as const;
-type Stage = (typeof STAGE)[number];
+const STAGES_THAT_CANCEL_FOLLOWUPS = new Set(['C', 'D', 'disqualified']);
 
-const DISQUALIFIED_REASONS = [
-  'no_money',
-  'not_interested',
-  'geographic',
-  'no_quality',
-  'fake_account',
-] as const;
-
-const VALID_TRANSITIONS: Record<Stage, readonly Stage[]> = {
-  A: ['MS', 'disqualified'],
-  MS: ['B', 'disqualified'],
-  B: ['C', 'disqualified'],
-  C: ['D', 'disqualified'],
-  D: [],
-  disqualified: [],
-};
-
-/**
- * Etapas donde los follow-ups de la etapa anterior dejan de tener sentido.
- *
- * Cuando un lead cruza a cualquiera de estas, el `lead_cron` activo asociado
- * a su conversación se archiva con motivo 'stage_advanced'. Eso evita que el
- * followup-runner siga mandándole mensajes obsoletos (ej. "¿pudiste agendar?"
- * cuando ya reservó la llamada).
- *
- * NO incluye A→MS ni MS→B: en esas el flujo del agente sigue activo y los
- * follow-ups de la etapa destino sí aplican. El `Upsert Lead Cron` del
- * workflow agent-run se encarga de reprogramar el siguiente follow-up con
- * los delays de la nueva etapa.
- */
-const STAGES_THAT_CANCEL_FOLLOWUPS: readonly Stage[] = ['C', 'D', 'disqualified'] as const;
-
-const SetStageBodySchema = z
-  .object({
-    new_stage: z.enum(STAGE),
-    reason: z.string().min(1),
-    evidence: z.string().min(1),
-    turn_id: z.string().uuid().optional(),
-  })
-  .refine(
-    (data) =>
-      data.new_stage !== 'disqualified' ||
-      (DISQUALIFIED_REASONS as readonly string[]).includes(data.reason),
-    {
-      path: ['reason'],
-      message: `When new_stage is 'disqualified', reason must be one of: ${DISQUALIFIED_REASONS.join(', ')}`,
-    },
-  );
+const SetStageBodySchema = z.object({
+  new_stage: z.string().min(1),
+  reason: z.string().min(1),
+  evidence: z.string().min(1),
+  turn_id: z.string().uuid().optional(),
+});
 
 export default async function setStageRoute(app: FastifyInstance): Promise<void> {
   app.post<{ Params: { subscriberId: string } }>(
@@ -69,7 +28,8 @@ export default async function setStageRoute(app: FastifyInstance): Promise<void>
     doc({
       tags: ['admin/leads'],
       summary: 'Avanzar la etapa del funnel de un lead',
-      description: `Transiciones válidas: A→MS→B→C→D (cualquiera→disqualified salvo D). Si la etapa destino es C, D o disqualified se archivan los follow-ups activos ('stage_advanced'). Si new_stage es 'disqualified', reason debe ser uno de: ${DISQUALIFIED_REASONS.join(', ')}.`,
+      description:
+        'Transiciones válidas según stage_transitions_map del tenant. Si la etapa destino cancela follow-ups (C, D, disqualified) se archivan los lead_crons activos.',
       security: adminSecurity,
       params: uuidParams('subscriberId'),
       body: zodDoc(SetStageBodySchema),
@@ -103,8 +63,22 @@ export default async function setStageRoute(app: FastifyInstance): Promise<void>
         return reply.code(200).send({ stage: new_stage, changed: false });
       }
 
-      const allowed = VALID_TRANSITIONS[fromStage as Stage] ?? [];
-      if (!allowed.includes(new_stage)) {
+      // Data-driven: validate against stage_transitions_map
+      const allowedTransitions = await getDb()
+        .select({ toStageSlug: stageTransitionsMap.toStageSlug })
+        .from(stageTransitionsMap)
+        .where(
+          and(
+            eq(stageTransitionsMap.tenantId, subscriber.tenantId),
+            eq(stageTransitionsMap.fromStageSlug, fromStage),
+            eq(stageTransitionsMap.isActive, true),
+          ),
+        );
+
+      const allowed = allowedTransitions.map((t) => t.toStageSlug);
+
+      // Fallback: if no data-driven transitions configured, allow anything (backwards compat)
+      if (allowed.length > 0 && !allowed.includes(new_stage)) {
         return reply.code(400).send({
           error: {
             code: 'INVALID_TRANSITION',
@@ -130,23 +104,7 @@ export default async function setStageRoute(app: FastifyInstance): Promise<void>
         agentEvidence: evidence,
       });
 
-      // ─────────────────────────────────────────────────────────────────────
-      // Cancelar lead_crons activos cuando el lead avanza a una etapa donde
-      // los follow-ups previos pierden sentido (C, D, disqualified).
-      //
-      // Esto resuelve el caso "el lead reservó en Calendly pero el cron sigue
-      // mandándole '¿pudiste agendar?'" — al pasar a C/D, archivamos los
-      // crons pendientes con motivo 'stage_advanced'.
-      //
-      // El UPDATE filtra por subscriber_id + tenant_id + is_active=TRUE.
-      // No filtramos por conversation_id porque puede haber leads sin turn
-      // activo (set-stage llamado por un webhook externo de Calendly más
-      // adelante), y el modelo es "una conversación activa por subscriber".
-      //
-      // Es idempotente: si ya estaba archivado, no hace nada (filtro
-      // is_active = TRUE).
-      // ─────────────────────────────────────────────────────────────────────
-      if (STAGES_THAT_CANCEL_FOLLOWUPS.includes(new_stage as Stage)) {
+      if (STAGES_THAT_CANCEL_FOLLOWUPS.has(new_stage)) {
         try {
           await getDb().execute(sql`
             UPDATE api.lead_crons

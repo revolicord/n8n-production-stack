@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { type ContentClass, type N8nDispatchPayload, mediaPlaceholder } from '@dm-api/shared';
+import type { TurnInput } from '@dm-api/shared';
 import type { Job } from 'bullmq';
 import { getConfig } from '../config.js';
 import { getDb } from '../lib/db.js';
@@ -13,9 +14,11 @@ import {
   getDebounceToken,
   getFirstMsgTs,
 } from '../services/debounce.js';
+import { dispatchToAgent } from '../services/dispatch-agent.js';
 import { N8nDispatchError, dispatchToN8n } from '../services/dispatch-n8n.js';
 import { getLeadStage } from '../services/lead-stages.js';
 import { releaseTurnLock, tryAcquireTurnLock } from '../services/lock.js';
+import { saveShadowRun } from '../services/shadow-runs.js';
 import { getSubscriberById } from '../services/subscribers.js';
 import { getTenantById, parseTenantConfig } from '../services/tenants.js';
 import { createTurn, markTurnDispatched, markTurnFailed } from '../services/turns.js';
@@ -124,11 +127,51 @@ export async function processBatchJob(job: Job<ProcessBatchJobData>): Promise<Pr
 
     await touchUserMsg(getDb(), conversation.id);
 
-    // 6. Dispatch a n8n
+    // 6. Dispatch
     const leadStage = await getLeadStage(getDb(), { tenantId, subscriberId });
+    const engine = tenantConfig.engine ?? 'n8n';
 
-    // El mapa flows_by_stage ya no viaja al agente — vive hardcodeado en el Build Context de n8n.
-    // Solo se envían los campos de infraestructura que n8n necesita.
+    if (engine === 'agent') {
+      const turnInput: TurnInput = {
+        schema_version: 'v1',
+        turn_id: turn.id,
+        tenant_id: tenantId,
+        subscriber_id: subscriberId,
+        conversation_id: conversation.id,
+        trigger: {
+          source: 'lead_message',
+          channel: subscriber.currentChannel ?? 'instagram',
+        },
+        messages: messages.map((m) => ({
+          id: m.id,
+          external_message_id: m.external_message_id,
+          text: m.text,
+          reply_type: m.reply_type,
+          ts: m.ts,
+          media_urls: m.media_urls,
+          content_class: m.content_class ?? 'text',
+        })),
+        system_commands: [],
+        dry_run: false,
+      };
+
+      try {
+        const res = await dispatchToAgent({ input: turnInput, log: logger() });
+        if (res.status === 'failed') {
+          throw new Error(`agent turn failed: ${res.turn_id}`);
+        }
+        log.info({ turn_id: turn.id, batch_size: messages.length }, 'turn dispatched to agent');
+        return { status: 'dispatched', turn_id: turn.id, batch_size: messages.length };
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        await markTurnFailed(getDb(), { turnId: turn.id, error: errMsg });
+        throw err;
+      } finally {
+        await releaseTurnLock(getRedis(), { tenantId, subscriberId, turnId });
+      }
+    }
+
+    // engine === 'n8n' (camino actual, intacto)
     const { flows_by_stage: _removed, ...configForN8n } = tenantConfig as Record<string, unknown>;
 
     const dispatchPayload: N8nDispatchPayload = {
@@ -191,6 +234,33 @@ export async function processBatchJob(job: Job<ProcessBatchJobData>): Promise<Pr
         },
         'turn dispatched',
       );
+
+      // Shadow mode (Fase 3): el agente corre en dry-run sin bloquear el turno real.
+      if (tenantConfig.shadow_agent === true) {
+        const shadowInput: TurnInput = {
+          schema_version: 'v1',
+          turn_id: turn.id,
+          tenant_id: tenantId,
+          subscriber_id: subscriberId,
+          conversation_id: conversation.id,
+          trigger: { source: 'lead_message', channel: subscriber.currentChannel ?? 'instagram' },
+          messages: messages.map((m) => ({
+            id: m.id,
+            external_message_id: m.external_message_id,
+            text: m.text,
+            reply_type: m.reply_type,
+            ts: m.ts,
+            media_urls: m.media_urls,
+            content_class: m.content_class ?? 'text',
+          })),
+          system_commands: [],
+          dry_run: true,
+        };
+        void dispatchToAgent({ input: shadowInput, log: logger() })
+          .then((res) => saveShadowRun(getDb(), turn.id, res))
+          .catch((err) => log.error({ err, turn_id: turn.id }, 'shadow agent run failed'));
+      }
+
       return { status: 'dispatched', turn_id: turn.id, batch_size: messages.length };
     } catch (err) {
       // Liberar lock para que un nuevo turn pueda arrancar

@@ -38,6 +38,8 @@ const ConfigSchema = z.object({
   DASHBOARD_PUBLIC_URL: z.string().url().optional(),
   // Recordatorio periódico de leads pausados (0 = desactivado).
   PAUSE_REMINDER_HOURS: z.coerce.number().int().nonnegative().default(6),
+  // ADR-0024: motor de diálogo. Opcional: solo requerido si engine='agent' en algún tenant.
+  ANTHROPIC_API_KEY: z.string().default(''),
 });
 
 export type AppConfig = z.infer<typeof ConfigSchema>;
