@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { getConfig } from '../config.js';
 import { verifyMcToken } from '../lib/auth.js';
 import { getDb } from '../lib/db.js';
+import { logger } from '../lib/logger.js';
 import { doc, zodDoc } from '../lib/openapi.js';
 import {
   type TelegramInlineButton,
@@ -10,6 +11,7 @@ import {
   editMessageReplyMarkup,
 } from '../lib/telegram.js';
 import { getNotificationById, resolveNotification } from '../services/notifications.js';
+import { maybeResumeAgentConversation } from '../services/resume-agent.js';
 import { pauseSubscriber, resumeSubscriber } from '../services/subscribers.js';
 import { pendingButtons } from '../workers/notify.js';
 
@@ -102,6 +104,15 @@ export default async function webhookTelegramRoute(app: FastifyInstance): Promis
         ];
       } else if (action === 'resume') {
         await resumeSubscriber(getDb(), { subscriberId: notification.subscriberId });
+        await maybeResumeAgentConversation(getDb(), {
+          tenantId: notification.tenantId,
+          subscriberId: notification.subscriberId,
+          conversationId: notification.conversationId,
+          note: '',
+          resolvedBy: `telegram:${actor}`,
+          notificationId: notification.id,
+          log: logger(),
+        });
         toast = '▶️ Bot reanudado para este lead';
         buttons = pendingButtons(notification.id);
       } else {

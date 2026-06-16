@@ -7,6 +7,12 @@ const AgentConfigSchema = z.object({
   AGENT_MAX_TRANSCRIPT_TURNS: z.coerce.number().int().positive().default(20),
   DATABASE_URL: z.string().min(1),
   REDIS_URL: z.string().min(1),
+  // Observabilidad LangSmith (ADR-0025) — la lee la librería desde process.env;
+  // las declaramos para validarlas/documentarlas. Provisional, opcional.
+  LANGCHAIN_TRACING_V2: z.string().optional(),
+  LANGCHAIN_API_KEY: z.string().optional(),
+  LANGCHAIN_PROJECT: z.string().optional(),
+  LANGCHAIN_ENDPOINT: z.string().optional(),
 });
 
 export type AgentConfig = z.infer<typeof AgentConfigSchema>;

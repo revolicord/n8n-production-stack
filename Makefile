@@ -1,6 +1,6 @@
 .PHONY: help deploy status logs-main logs-webhook logs-worker logs-api logs-api-worker logs-dashboard \
         scale-workers scale-api backup update down rebuild-api rebuild-dashboard migrate seed-tenant \
-        cutover-agent
+        cutover-agent prune-traces
 
 STACK=n8n
 
@@ -77,6 +77,16 @@ cutover-agent: ## Fase 4 ADR-0024: inicializar dialogue_states para leads vivos.
 	  -e ANTHROPIC_API_KEY="$$ANTHROPIC_API_KEY" \
 	  dm-api:local \
 	  node /app/apps/agent/dist/scripts/cutover.js --tenant-slug $(SLUG) $(DRY)
+
+prune-traces: ## ADR-0025: borrar agent_turn_traces con más de N días. Usar: make prune-traces DAYS=30
+	@set -a; . ./.env; set +a; \
+	docker run --rm \
+	  --network $(STACK)_n8n_internal \
+	  -e DATABASE_URL="postgres://n8n:$$POSTGRES_PASSWORD@postgres:5432/n8n" \
+	  -e REDIS_URL="redis://redis:6379" \
+	  -e ANTHROPIC_API_KEY="$$ANTHROPIC_API_KEY" \
+	  dm-api:local \
+	  node /app/apps/agent/dist/scripts/prune-traces.js --days $(or $(DAYS),30)
 
 backup: ## Backup de PostgreSQL y MinIO
 	@bash scripts/backup.sh

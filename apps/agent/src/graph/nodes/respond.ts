@@ -1,26 +1,27 @@
 import { conversations, messagesRaw, turns } from '@dm-api/db';
-import type { ActionResult, AgentResponse, DialogueCommand } from '@dm-api/shared';
+import type { AgentResponse } from '@dm-api/shared';
 import { eq, sql } from 'drizzle-orm';
-import type { FlowEngineResult } from '../../core/flow-engine/engine.js';
 import type { Deps } from '../../deps.js';
 import { saveDialogueState } from '../../services/dialogue-states.js';
-import type { GraphState, LlmCallMetrics } from '../annotation.js';
+import { type TraceLevel, resolveTraceMode, saveTurnTrace } from '../../services/traces.js';
+import type { AgentStateT } from '../annotation.js';
 
-export async function respondNode(
-  state: GraphState,
-  commands: DialogueCommand[],
-  flowResult: FlowEngineResult,
-  actionResults: ActionResult[],
-  responseTexts: string[],
-  finalStage: string,
-  _ctx: unknown,
-  deps: Deps,
-  llmMetrics: LlmCallMetrics | null,
-  status: AgentResponse['status'],
-  interruptInfo?: { reason: string; notification_id: string } | undefined,
-): Promise<AgentResponse> {
+/**
+ * Nodo final: persiste el turno (salvo dry_run), proyecta la memoria a
+ * `dialogue_states` (fuente de verdad legible, ADR-0025) y construye la
+ * `AgentResponse`. La traza legible (`agent_turn_traces`) se persiste aparte
+ * en Fase C.
+ */
+export async function respondNode(state: AgentStateT, deps: Deps): Promise<Partial<AgentStateT>> {
   const { input } = state;
+  const flowResult = state.flowResult;
+  if (!flowResult) throw new Error('respondNode: flowResult missing');
+
   const totalMs = Date.now() - state.startedAt;
+  const llmMetrics = state.llmMetrics;
+  const responseTexts = state.responseTexts;
+  const status: AgentResponse['status'] = state.status ?? (input.dry_run ? 'dry_run' : 'completed');
+  const finalStage = state.finalStage ?? '';
 
   if (!input.dry_run) {
     // Persist turn completion
@@ -57,7 +58,7 @@ export async function respondNode(
         .onConflictDoNothing();
     }
 
-    // Persist dialogue state
+    // Project dialogue memory to dialogue_states (canonical readable source)
     await saveDialogueState(deps.db, {
       conversationId: input.conversation_id,
       tenantId: input.tenant_id,
@@ -78,12 +79,12 @@ export async function respondNode(
   const response: AgentResponse = {
     turn_id: input.turn_id,
     status,
-    commands,
-    action_results: actionResults,
+    commands: state.allCommands,
+    action_results: state.actionResults,
     response_texts: responseTexts,
     final_stage: finalStage,
     dialogue_state: flowResult.state,
-    interrupt: interruptInfo,
+    interrupt: state.interruptInfo ?? undefined,
     metrics: {
       model: llmMetrics?.model ?? null,
       input_tokens: llmMetrics?.inputTokens ?? null,
@@ -93,5 +94,24 @@ export async function respondNode(
     },
   };
 
-  return response;
+  // Traza legible (ADR-0025) — best-effort, también en shadow/dry_run.
+  const traceLevel =
+    (state.assembled?.tenantConfig.trace_level as TraceLevel | undefined) ?? 'full';
+  try {
+    await saveTurnTrace(deps.db, {
+      state,
+      mode: resolveTraceMode(input),
+      status,
+      traceLevel,
+      dialogueStateAfter: flowResult.state,
+    });
+  } catch (err) {
+    deps.logger.error({ err, turn_id: input.turn_id }, 'saveTurnTrace failed');
+  }
+
+  deps.logger
+    .child({ turn_id: input.turn_id, node: 'respond' })
+    .info({ status, final_stage: finalStage, total_ms: totalMs }, 'turn responded');
+
+  return { agentResponse: response, status };
 }

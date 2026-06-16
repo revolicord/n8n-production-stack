@@ -39,6 +39,11 @@ export const TenantConfigSchema = z
     disqualification_reasons: z.array(z.string()).optional(),
     // ADR-0024: conectores externos declarativos (url, headers, etc.)
     connectors: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
+    // ADR-0025: observabilidad — nivel de traza por turno en agent_turn_traces.
+    // 'off' = no traza; 'metrics' = sin prompt/contexto crudos; 'full' = todo.
+    trace_level: z.enum(['off', 'metrics', 'full']).optional(),
+    // ADR-0025: días de retención de traces antes de limpieza (default 30).
+    trace_retention_days: z.number().int().positive().optional(),
   })
   .passthrough();
 

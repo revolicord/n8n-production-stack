@@ -1,28 +1,34 @@
-import type { DialogueCommand } from '@dm-api/shared';
+import type { DialogueCommand, TurnInput } from '@dm-api/shared';
 import { getAgentConfig } from '../../config.js';
 import type { AssembledContext } from '../../core/context/assemble.js';
 import { callLlm } from '../../core/llm/client.js';
 import { composePrompt } from '../../core/llm/prompt.js';
 import type { Deps } from '../../deps.js';
-import type { GraphState, LlmCallMetrics } from '../annotation.js';
+import type { LlmCallMetrics, LlmRequestSnapshot } from '../annotation.js';
 
 export interface UnderstandResult {
   commands: DialogueCommand[];
+  reasoning: string | null;
+  request: LlmRequestSnapshot | null;
   metrics: LlmCallMetrics | null;
 }
 
 export async function understandNode(
-  state: GraphState,
+  input: TurnInput,
   ctx: AssembledContext,
   deps: Deps,
 ): Promise<UnderstandResult> {
-  const { input } = state;
+  const log = deps.logger.child({ turn_id: input.turn_id, node: 'understand' });
 
   // Skip LLM for pure system events with only deterministic commands
   const hasUserMessages = input.messages.length > 0;
   const onlySystemCommands = !hasUserMessages && input.system_commands.length > 0;
   if (onlySystemCommands) {
-    return { commands: input.system_commands, metrics: null };
+    log.info(
+      { skipped: true, n_commands: input.system_commands.length },
+      'understand skipped (system-only)',
+    );
+    return { commands: input.system_commands, reasoning: null, request: null, metrics: null };
   }
 
   const agentConfig = getAgentConfig();
@@ -52,8 +58,22 @@ export async function understandNode(
 
   const commands: DialogueCommand[] = [...input.system_commands, ...result.plan.commands];
 
+  log.info(
+    {
+      model: result.model,
+      in_tok: result.inputTokens,
+      out_tok: result.outputTokens,
+      llm_ms: result.durationMs,
+      n_commands: commands.length,
+    },
+    'understand done',
+  );
+  log.debug({ reasoning: result.plan.reasoning }, 'llm reasoning');
+
   return {
     commands,
+    reasoning: result.plan.reasoning,
+    request: { systemPrompt, messages },
     metrics: {
       model: result.model,
       inputTokens: result.inputTokens,

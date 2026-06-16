@@ -18,8 +18,7 @@ import { dispatchToAgent } from '../services/dispatch-agent.js';
 import { N8nDispatchError, dispatchToN8n } from '../services/dispatch-n8n.js';
 import { getLeadStage } from '../services/lead-stages.js';
 import { releaseTurnLock, tryAcquireTurnLock } from '../services/lock.js';
-import { saveShadowRun } from '../services/shadow-runs.js';
-import { getSubscriberById } from '../services/subscribers.js';
+import { getSubscriberById, isSubscriberActive } from '../services/subscribers.js';
 import { getTenantById, parseTenantConfig } from '../services/tenants.js';
 import { createTurn, markTurnDispatched, markTurnFailed } from '../services/turns.js';
 
@@ -88,6 +87,15 @@ export async function processBatchJob(job: Job<ProcessBatchJobData>): Promise<Pr
     if (!subscriber) {
       await releaseTurnLock(getRedis(), { tenantId, subscriberId, turnId });
       throw new Error(`subscriber ${subscriberId} not found`);
+    }
+
+    // Lead pausado (handoff a humano): no despachar. El thread del agente puede
+    // estar suspendido en interrupt() esperando Command; un invoke fresco lo
+    // corrompería. Se reanuda al resolver la notificación (ADR-0025 Fase B).
+    if (!isSubscriberActive(subscriber)) {
+      await releaseTurnLock(getRedis(), { tenantId, subscriberId, turnId });
+      log.debug('subscriber paused, skipping dispatch');
+      return { status: 'skipped', reason: 'paused' };
     }
 
     const tenantConfig = parseTenantConfig(tenant.config);
@@ -235,7 +243,9 @@ export async function processBatchJob(job: Job<ProcessBatchJobData>): Promise<Pr
         'turn dispatched',
       );
 
-      // Shadow mode (Fase 3): el agente corre en dry-run sin bloquear el turno real.
+      // Shadow mode (Fase 3): el agente corre en dry-run sin bloquear el turno
+      // real. La traza se persiste sola dentro del agente (agent_turn_traces,
+      // mode='shadow') — ya no hace falta saveShadowRun (ADR-0025).
       if (tenantConfig.shadow_agent === true) {
         const shadowInput: TurnInput = {
           schema_version: 'v1',
@@ -255,10 +265,11 @@ export async function processBatchJob(job: Job<ProcessBatchJobData>): Promise<Pr
           })),
           system_commands: [],
           dry_run: true,
+          run_mode: 'shadow',
         };
-        void dispatchToAgent({ input: shadowInput, log: logger() })
-          .then((res) => saveShadowRun(getDb(), turn.id, tenantId, res))
-          .catch((err) => log.error({ err, turn_id: turn.id }, 'shadow agent run failed'));
+        void dispatchToAgent({ input: shadowInput, log: logger() }).catch((err) =>
+          log.error({ err, turn_id: turn.id }, 'shadow agent run failed'),
+        );
       }
 
       return { status: 'dispatched', turn_id: turn.id, batch_size: messages.length };

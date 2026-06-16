@@ -143,6 +143,7 @@ async function main() {
           messages,
           system_commands: [],
           dry_run: true,
+          run_mode: 'replay',
         },
         deps,
       );

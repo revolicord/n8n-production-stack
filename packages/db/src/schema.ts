@@ -650,18 +650,49 @@ export const domainEvents = apiSchema.table(
   }),
 );
 
-// agent_shadow_runs — resultados dry-run del agente en Fase 3 (se puede dropear tras cutover)
-export const agentShadowRuns = apiSchema.table('agent_shadow_runs', {
-  turnId: uuid('turn_id').primaryKey(),
-  tenantId: uuid('tenant_id').notNull(),
-  commands: jsonb('commands').notNull(),
-  responseTexts: jsonb('response_texts').notNull(),
-  finalStage: text('final_stage'),
-  dialogueState: jsonb('dialogue_state'),
-  error: text('error'),
-  durationMs: integer('duration_ms'),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
+// agent_turn_traces — traza legible por turno (ADR-0025). Reemplaza a
+// agent_shadow_runs: una fila por ejecución (mode: live|shadow|replay). Es el
+// equivalente consultable por SQL a una "execution" de n8n. trace_level del
+// tenant controla cuánto se guarda; trace_retention_days la limpieza.
+export const agentTurnTraces = apiSchema.table(
+  'agent_turn_traces',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    turnId: uuid('turn_id').notNull(),
+    tenantId: uuid('tenant_id').notNull(),
+    conversationId: uuid('conversation_id'),
+    subscriberId: uuid('subscriber_id'),
+    mode: text('mode').notNull(), // 'live' | 'shadow' | 'replay'
+    status: text('status').notNull(), // 'completed' | 'interrupted' | 'failed' | 'dry_run'
+    input: jsonb('input'), // TurnInput (mensajes, trigger, system_commands)
+    contextSnapshot: jsonb('context_snapshot'), // AssembledContext (solo trace_level=full)
+    prompt: jsonb('prompt'), // { system_prompt, messages } (solo trace_level=full)
+    reasoning: text('reasoning'), // LlmPlan.reasoning
+    commands: jsonb('commands'),
+    actionResults: jsonb('action_results'),
+    flowPath: jsonb('flow_path'), // pasos del flow engine ejecutados este turno
+    responseTexts: jsonb('response_texts'),
+    finalStage: text('final_stage'),
+    dialogueStateBefore: jsonb('dialogue_state_before'),
+    dialogueStateAfter: jsonb('dialogue_state_after'),
+    error: jsonb('error'), // { node, message, stack }
+    metrics: jsonb('metrics'), // { model, input_tokens, output_tokens, llm_ms, total_ms }
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    turnModeUnique: uniqueIndex('agent_turn_traces_turn_mode_uniq').on(t.turnId, t.mode),
+    tenantCreatedIdx: index('agent_turn_traces_tenant_created_idx').on(t.tenantId, t.createdAt),
+    tenantSubIdx: index('agent_turn_traces_tenant_sub_idx').on(
+      t.tenantId,
+      t.subscriberId,
+      t.createdAt,
+    ),
+    tenantStatusIdx: index('agent_turn_traces_tenant_status_idx').on(t.tenantId, t.status),
+  }),
+);
+
+export type AgentTurnTrace = typeof agentTurnTraces.$inferSelect;
+export type NewAgentTurnTrace = typeof agentTurnTraces.$inferInsert;
 
 export type FlowDefinition = typeof flowDefinitions.$inferSelect;
 export type NewFlowDefinition = typeof flowDefinitions.$inferInsert;
@@ -669,5 +700,3 @@ export type DialogueState = typeof dialogueStates.$inferSelect;
 export type NewDialogueState = typeof dialogueStates.$inferInsert;
 export type DomainEvent = typeof domainEvents.$inferSelect;
 export type NewDomainEvent = typeof domainEvents.$inferInsert;
-export type AgentShadowRun = typeof agentShadowRuns.$inferSelect;
-export type NewAgentShadowRun = typeof agentShadowRuns.$inferInsert;

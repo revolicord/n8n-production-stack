@@ -39,12 +39,21 @@ export interface FlowEngineInput {
   now: string;
 }
 
+/** Paso del flow engine ejecutado en un turno (observabilidad, ADR-0025). */
+export interface FlowPathStep {
+  flow_id: string;
+  step_id: string;
+  type: string;
+}
+
 export interface FlowEngineResult {
   state: DialogueState;
   invocations: ActionInvocation[];
   pendingCollect: { slot: string; prompt_hint: string; flow_id: string } | null;
   interrupt: { reason: string; kind: string; summary?: string | undefined } | null;
   newStage: string | null;
+  /** Pasos recorridos en la Fase 2 (vacío si no se ejecutó ningún flow). */
+  path?: FlowPathStep[];
 }
 
 function setNestedSlot(
@@ -121,6 +130,7 @@ export function advanceDialogue(input: FlowEngineInput): FlowEngineResult {
     slots: { ...input.state.slots },
   };
   const invocations: ActionInvocation[] = [];
+  const path: FlowPathStep[] = [];
   let newStage: string | null = null;
   let currentStage = input.currentStage;
 
@@ -287,6 +297,9 @@ export function advanceDialogue(input: FlowEngineInput): FlowEngineResult {
       continue;
     }
 
+    // Observabilidad (ADR-0025): registra el paso visitado.
+    path.push({ flow_id: top.flow_id, step_id: step.id, type: step.type });
+
     // Merge frame_slots into global slots for condition evaluation
     const mergedSlots = { ...state.slots, ...top.frame_slots };
 
@@ -315,6 +328,7 @@ export function advanceDialogue(input: FlowEngineInput): FlowEngineResult {
         pendingCollect: { slot: step.slot, prompt_hint: step.prompt_hint, flow_id: top.flow_id },
         interrupt: null,
         newStage,
+        path,
       };
     }
 
@@ -402,5 +416,5 @@ export function advanceDialogue(input: FlowEngineInput): FlowEngineResult {
     top = peekFrame(state.stack);
   }
 
-  return { state, invocations, pendingCollect: null, interrupt: null, newStage };
+  return { state, invocations, pendingCollect: null, interrupt: null, newStage, path };
 }

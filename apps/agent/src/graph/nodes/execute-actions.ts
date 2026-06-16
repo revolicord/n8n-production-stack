@@ -1,4 +1,4 @@
-import type { ActionResult } from '@dm-api/shared';
+import type { ActionResult, TurnInput } from '@dm-api/shared';
 import { changeStageHandler } from '../../actions/handlers/change-stage.js';
 import { httpRequestHandler } from '../../actions/handlers/http-request.js';
 import { notifyHumanHandler } from '../../actions/handlers/notify-human.js';
@@ -10,7 +10,6 @@ import { createDryRunAdapter, createManyChatAdapter } from '../../channel/manych
 import type { AssembledContext } from '../../core/context/assemble.js';
 import type { FlowEngineResult } from '../../core/flow-engine/engine.js';
 import type { Deps } from '../../deps.js';
-import type { GraphState } from '../annotation.js';
 
 function buildRegistry(): ActionRegistry {
   const registry = new ActionRegistry();
@@ -26,12 +25,11 @@ function buildRegistry(): ActionRegistry {
 const registry = buildRegistry();
 
 export async function executeActionsNode(
-  state: GraphState,
+  input: TurnInput,
   flowResult: FlowEngineResult,
   ctx: AssembledContext,
   deps: Deps,
 ): Promise<{ results: ActionResult[]; responseTexts: string[]; finalStage: string }> {
-  const { input } = state;
   const dryRun = input.dry_run;
 
   const apiKey = ctx.tenantConfig.manychat_api_key ?? '';
@@ -123,6 +121,13 @@ export async function executeActionsNode(
       // For simplicity, we just continue
     }
   }
+
+  deps.logger
+    .child({ turn_id: input.turn_id, node: 'actions' })
+    .info(
+      { results: results.map((r) => ({ type: r.command_type, status: r.status })), finalStage },
+      'actions executed',
+    );
 
   return { results, responseTexts, finalStage };
 }

@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { verifyAdminAuth } from '../../lib/admin-auth.js';
 import { getDb } from '../../lib/db.js';
+import { logger } from '../../lib/logger.js';
 import { adminSecurity, doc, uuidParams, zodDoc } from '../../lib/openapi.js';
 import { editMessageText, escapeHtml } from '../../lib/telegram.js';
 import {
@@ -9,6 +10,7 @@ import {
   listNotifications,
   resolveNotification,
 } from '../../services/notifications.js';
+import { maybeResumeAgentConversation } from '../../services/resume-agent.js';
 import { getSubscriberByUuid, resumeSubscriber } from '../../services/subscribers.js';
 
 const ListQuerySchema = z.object({
@@ -96,6 +98,15 @@ export default async function notificationsRoutes(app: FastifyInstance): Promise
 
       if (parsed.data.resume) {
         await resumeSubscriber(getDb(), { subscriberId: resolved.subscriberId });
+        await maybeResumeAgentConversation(getDb(), {
+          tenantId: resolved.tenantId,
+          subscriberId: resolved.subscriberId,
+          conversationId: resolved.conversationId,
+          note: parsed.data.note ?? '',
+          resolvedBy: parsed.data.resolved_by,
+          notificationId: resolved.id,
+          log: logger(),
+        });
       }
 
       // Best-effort: reflejar el estado en el mensaje de Telegram original.

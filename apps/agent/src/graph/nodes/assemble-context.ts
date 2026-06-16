@@ -1,4 +1,4 @@
-import type { TenantConfig } from '@dm-api/shared';
+import type { TenantConfig, TurnInput } from '@dm-api/shared';
 import type { AssembledContext } from '../../core/context/assemble.js';
 import { assembleContext } from '../../core/context/assemble.js';
 import { buildTranscript } from '../../core/memory/transcript.js';
@@ -16,15 +16,11 @@ import {
 } from '../../services/context-queries.js';
 import { loadDialogueState } from '../../services/dialogue-states.js';
 import { loadActiveFlows } from '../../services/flow-definitions.js';
-import type { GraphState } from '../annotation.js';
 
-export async function assembleContextNode(
-  state: GraphState,
-  deps: Deps,
-): Promise<AssembledContext> {
-  const { tenant_id, subscriber_id, conversation_id } = state.input;
+export async function assembleContextNode(input: TurnInput, deps: Deps): Promise<AssembledContext> {
+  const { tenant_id, subscriber_id, conversation_id } = input;
   const db = deps.db;
-  const log = deps.logger;
+  const log = deps.logger.child({ turn_id: input.turn_id, node: 'assemble' });
 
   const tenant = await loadTenant(db, tenant_id);
   if (!tenant) throw new Error(`tenant ${tenant_id} not found`);
@@ -64,7 +60,15 @@ export async function assembleContextNode(
     loadActiveFlows(db, tenant_id),
   ]);
 
-  log.debug({ turn_id: state.input.turn_id, stage: currentStage }, 'context loaded');
+  log.info(
+    {
+      stage: currentStage,
+      transcript_len: recentTurns.length,
+      stack_depth: dialogueState?.stack?.length ?? 0,
+      active_flows: activeFlows.size,
+    },
+    'context loaded',
+  );
 
   const transcript = await buildTranscript(db, {
     tenantId: tenant_id,

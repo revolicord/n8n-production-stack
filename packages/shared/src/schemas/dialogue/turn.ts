@@ -19,6 +19,8 @@ export const TurnInputSchema = z.object({
   messages: z.array(N8nDispatchMessageSchema),
   system_commands: z.array(DialogueCommandSchema).default([]),
   dry_run: z.boolean().default(false),
+  // ADR-0025: modo de traza. Si se omite se infiere de dry_run (live|shadow).
+  run_mode: z.enum(['live', 'shadow', 'replay']).optional(),
 });
 export type TurnInput = z.infer<typeof TurnInputSchema>;
 

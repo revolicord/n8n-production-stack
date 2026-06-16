@@ -24,15 +24,16 @@ WITH window_turns AS (
     asr.response_texts,
     asr.final_stage         AS shadow_stage,
     asr.error               AS shadow_error,
-    asr.duration_ms         AS shadow_ms,
+    (asr.metrics->>'total_ms')::int AS shadow_ms,
     t.response_text         AS real_response,
     t.status                AS real_status,
     t.subscriber_id,
     t.conversation_id,
     t.started_at
-  FROM api.agent_shadow_runs asr
+  FROM api.agent_turn_traces asr
   JOIN api.turns t ON t.id = asr.turn_id
-  WHERE asr.created_at >= now() - (:days_back || ' days')::interval
+  WHERE asr.mode = 'shadow'
+    AND asr.created_at >= now() - (:days_back || ' days')::interval
     AND asr.error IS NULL
 ),
 
@@ -134,8 +135,8 @@ SELECT
   sum(CASE WHEN bm.matches THEN 1 ELSE 0 END)                                AS c2_biz_ok,
   round(100.0 * sum(CASE WHEN bm.matches THEN 1 ELSE 0 END)
         / nullif(count(*), 0), 1)                                            AS "c2_pct (req>=90)",
-  (SELECT count(*) FROM api.agent_shadow_runs
-   WHERE error IS NOT NULL
+  (SELECT count(*) FROM api.agent_turn_traces
+   WHERE mode = 'shadow' AND error IS NOT NULL
      AND created_at >= now() - interval '3 days')                            AS "c4_errors_3d (req=0)"
 FROM stage_match sm
 JOIN business_match bm USING (turn_id);
@@ -200,8 +201,9 @@ SELECT
   asr.tenant_id,
   asr.error,
   asr.created_at
-FROM api.agent_shadow_runs asr
-WHERE asr.error IS NOT NULL
+FROM api.agent_turn_traces asr
+WHERE asr.mode = 'shadow'
+  AND asr.error IS NOT NULL
   AND asr.created_at >= now() - interval '3 days'
 ORDER BY asr.created_at DESC;
 
@@ -216,8 +218,8 @@ WITH summary AS (
           / nullif(count(*), 0), 1)                                     AS c1_pct,
     round(100.0 * sum(CASE WHEN bm.matches THEN 1 ELSE 0 END)
           / nullif(count(*), 0), 1)                                     AS c2_pct,
-    (SELECT count(*) FROM api.agent_shadow_runs
-     WHERE error IS NOT NULL
+    (SELECT count(*) FROM api.agent_turn_traces
+     WHERE mode = 'shadow' AND error IS NOT NULL
        AND created_at >= now() - interval '3 days')                     AS errors_3d
   FROM stage_match sm
   JOIN business_match bm USING (turn_id)
