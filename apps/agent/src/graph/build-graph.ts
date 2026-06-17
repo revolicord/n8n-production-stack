@@ -13,7 +13,7 @@ import { assembleContextNode } from './nodes/assemble-context.js';
 import { executeActionsNode } from './nodes/execute-actions.js';
 import { flowEngineNode } from './nodes/flow-engine.js';
 import { respondNode } from './nodes/respond.js';
-import { understandNode } from './nodes/understand.js';
+import { buildLlmRequest, understandNode } from './nodes/understand.js';
 
 /** Payload que el nodo handoff entrega al humano vía `interrupt()`. */
 export interface HandoffInterruptPayload {
@@ -41,14 +41,20 @@ export function compileAgentGraph(deps: Deps) {
       const ctx = await assembleContextNode(state.input, deps);
       return { assembled: ctx, dialogueStateBefore: structuredClone(ctx.dialogueState) };
     })
+    // Builds systemPrompt + message history and checkpoints them BEFORE the API
+    // call — so the snapshot is visible in debug traces even when callLlm fails.
+    .addNode('prepare_prompt', (state: AgentStateT) => {
+      const ctx = state.assembled;
+      if (!ctx) throw new Error('prepare_prompt: assembled context missing');
+      return { llmRequest: buildLlmRequest(state.input, ctx) };
+    })
     .addNode('understand', async (state: AgentStateT) => {
       const ctx = state.assembled;
       if (!ctx) throw new Error('understand: assembled context missing');
-      const r = await understandNode(state.input, ctx, deps);
+      const r = await understandNode(state.input, ctx, deps, state.llmRequest);
       return {
         allCommands: r.commands,
         llmReasoning: r.reasoning,
-        llmRequest: r.request,
         llmMetrics: r.metrics,
       };
     })
@@ -67,7 +73,8 @@ export function compileAgentGraph(deps: Deps) {
     })
     .addNode('respond', async (state: AgentStateT) => respondNode(state, deps))
     .addEdge(START, 'assemble_context')
-    .addEdge('assemble_context', 'understand')
+    .addEdge('assemble_context', 'prepare_prompt')
+    .addEdge('prepare_prompt', 'understand')
     .addEdge('understand', 'flow_engine')
     .addConditionalEdges(
       'flow_engine',

@@ -8,11 +8,15 @@ import { getDb } from '../../lib/db.js';
 import { adminSecurity, doc, uuidParams, zodDoc } from '../../lib/openapi.js';
 import { updateTenantConfig } from '../../services/tenants.js';
 
-// Subset editable de tenant.config vía dashboard (autoservicio de escalado).
+// Subset editable de tenant.config vía dashboard (autoservicio de escalado + negocio).
 const TenantConfigPatchSchema = z
   .object({
     notification_keywords: z.array(z.string()),
     media_policy: MediaPolicySchema,
+    // ADR-0024: configuración de negocio editable en /settings/agente
+    persona_prompt: z.string(),
+    disqualification_reasons: z.array(z.string()),
+    calendly_url: z.string().url().or(z.literal('')),
   })
   .partial();
 
@@ -42,10 +46,11 @@ export default async function tenantsRoutes(app: FastifyInstance): Promise<void>
     '/admin/tenants/:id/config',
     doc({
       tags: ['admin/misc'],
-      summary: 'Actualizar config de escalado del tenant (keywords + matriz de medios)',
+      summary: 'Actualizar config editable del tenant (escalado + negocio)',
       description:
         'Merge superficial sobre tenant.config: solo toca las claves enviadas, ' +
-        'preserva el resto. Subset editable: notification_keywords, media_policy.',
+        'preserva el resto. Subset editable: notification_keywords, media_policy, ' +
+        'persona_prompt, disqualification_reasons, calendly_url.',
       security: adminSecurity,
       params: uuidParams('id'),
       body: zodDoc(TenantConfigPatchSchema),

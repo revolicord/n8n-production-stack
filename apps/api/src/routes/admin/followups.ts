@@ -5,7 +5,9 @@ import { getDb } from '../../lib/db.js';
 import { adminSecurity, doc, uuidParams, zodDoc } from '../../lib/openapi.js';
 import {
   createFollowupTemplate,
+  createFunnelStage,
   deactivateFollowupTemplate,
+  deactivateFunnelStage,
   getFollowupTemplateById,
   getFunnelStageById,
   listFollowupTemplatesByStage,
@@ -61,7 +63,30 @@ const IncludeInactiveQuery = {
   },
 } as const;
 
+const StageSlugSchema = z
+  .string()
+  .min(1)
+  .max(50)
+  .regex(/^[a-z0-9_-]+$/i, 'slug solo admite letras, números, guion y guion bajo');
+
+const CreateFunnelStageBodySchema = z.object({
+  slug: StageSlugSchema,
+  display_name: z.string().min(1).max(200),
+  position: z.number().int().min(0),
+  description: z.string().nullable().optional(),
+  goal: z.string().nullable().optional(),
+  max_followups: z.number().int().min(0).optional(),
+  is_terminal: z.boolean().optional(),
+});
+
 const UpdateFunnelStageBodySchema = z.object({
+  display_name: z.string().min(1).max(200).optional(),
+  description: z.string().nullable().optional(),
+  goal: z.string().nullable().optional(),
+  position: z.number().int().min(0).optional(),
+  max_followups: z.number().int().min(0).optional(),
+  is_terminal: z.boolean().optional(),
+  is_active: z.boolean().optional(),
   nurture_video_url: z.string().nullable().optional(),
   call_link: z.string().nullable().optional(),
 });
@@ -320,12 +345,67 @@ export default async function followupsRoutes(app: FastifyInstance): Promise<voi
     },
   );
 
+  // POST /admin/tenants/:tenantId/funnel-stages
+  app.post<{ Params: { tenantId: string } }>(
+    '/admin/tenants/:tenantId/funnel-stages',
+    doc({
+      tags: ['admin/followups'],
+      summary: 'Crear etapa del funnel',
+      description: '409 DUPLICATE_SLUG si el slug ya existe en el tenant.',
+      security: adminSecurity,
+      params: uuidParams('tenantId'),
+      body: zodDoc(CreateFunnelStageBodySchema),
+    }),
+    async (req, reply) => {
+      if (!(await verifyAdminAuth(req, app))) {
+        return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });
+      }
+
+      const paramParsed = UuidParamSchema.safeParse(req.params.tenantId);
+      if (!paramParsed.success) {
+        return reply
+          .code(400)
+          .send({ error: { code: 'INVALID_PAYLOAD', details: paramParsed.error.issues } });
+      }
+
+      const bodyParsed = CreateFunnelStageBodySchema.safeParse(req.body);
+      if (!bodyParsed.success) {
+        return reply
+          .code(400)
+          .send({ error: { code: 'INVALID_PAYLOAD', details: bodyParsed.error.issues } });
+      }
+
+      const { slug, display_name, position, description, goal, max_followups, is_terminal } =
+        bodyParsed.data;
+
+      try {
+        const stage = await createFunnelStage(getDb(), {
+          tenantId: paramParsed.data,
+          slug,
+          displayName: display_name,
+          position,
+          description,
+          goal,
+          maxFollowups: max_followups,
+          isTerminal: is_terminal,
+        });
+        req.log.info({ stage_id: stage.id, tenant_id: paramParsed.data }, 'funnel stage created');
+        return reply.code(201).send(stage);
+      } catch (err) {
+        if (isDuplicateSequence(err)) {
+          return reply.code(409).send({ error: { code: 'DUPLICATE_SLUG' } });
+        }
+        throw err;
+      }
+    },
+  );
+
   // PUT /admin/funnel-stages/:stageId
   app.put<{ Params: { stageId: string } }>(
     '/admin/funnel-stages/:stageId',
     doc({
       tags: ['admin/followups'],
-      summary: 'Actualizar nurture_video_url / call_link de una etapa',
+      summary: 'Actualizar campos editables de una etapa del funnel',
       security: adminSecurity,
       params: uuidParams('stageId'),
       body: zodDoc(UpdateFunnelStageBodySchema),
@@ -354,10 +434,18 @@ export default async function followupsRoutes(app: FastifyInstance): Promise<voi
           .send({ error: { code: 'INVALID_PAYLOAD', details: bodyParsed.error.issues } });
       }
 
-      const drizzlePatch: Partial<{ nurtureVideoUrl: string | null; callLink: string | null }> = {};
-      if ('nurture_video_url' in bodyParsed.data)
-        drizzlePatch.nurtureVideoUrl = bodyParsed.data.nurture_video_url ?? null;
-      if ('call_link' in bodyParsed.data) drizzlePatch.callLink = bodyParsed.data.call_link ?? null;
+      const patch = bodyParsed.data;
+      const drizzlePatch: Parameters<typeof updateFunnelStage>[2] = {};
+      if (patch.display_name !== undefined) drizzlePatch.displayName = patch.display_name;
+      if ('description' in patch) drizzlePatch.description = patch.description ?? null;
+      if ('goal' in patch) drizzlePatch.goal = patch.goal ?? null;
+      if (patch.position !== undefined) drizzlePatch.position = patch.position;
+      if (patch.max_followups !== undefined) drizzlePatch.maxFollowups = patch.max_followups;
+      if (patch.is_terminal !== undefined) drizzlePatch.isTerminal = patch.is_terminal;
+      if (patch.is_active !== undefined) drizzlePatch.isActive = patch.is_active;
+      if ('nurture_video_url' in patch)
+        drizzlePatch.nurtureVideoUrl = patch.nurture_video_url ?? null;
+      if ('call_link' in patch) drizzlePatch.callLink = patch.call_link ?? null;
 
       const updated = await updateFunnelStage(getDb(), paramParsed.data, drizzlePatch);
       if (!updated) {
@@ -366,6 +454,38 @@ export default async function followupsRoutes(app: FastifyInstance): Promise<voi
 
       req.log.info({ stage_id: updated.id }, 'funnel stage updated');
       return reply.code(200).send(updated);
+    },
+  );
+
+  // DELETE /admin/funnel-stages/:stageId  (soft delete)
+  app.delete<{ Params: { stageId: string } }>(
+    '/admin/funnel-stages/:stageId',
+    doc({
+      tags: ['admin/followups'],
+      summary: 'Desactivar etapa del funnel (soft delete)',
+      security: adminSecurity,
+      params: uuidParams('stageId'),
+    }),
+    async (req, reply) => {
+      if (!(await verifyAdminAuth(req, app))) {
+        return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });
+      }
+
+      const paramParsed = UuidParamSchema.safeParse(req.params.stageId);
+      if (!paramParsed.success) {
+        return reply
+          .code(400)
+          .send({ error: { code: 'INVALID_PAYLOAD', details: paramParsed.error.issues } });
+      }
+
+      const stage = await getFunnelStageById(getDb(), paramParsed.data);
+      if (!stage) {
+        return reply.code(404).send({ error: { code: 'NOT_FOUND' } });
+      }
+
+      await deactivateFunnelStage(getDb(), paramParsed.data);
+      req.log.info({ stage_id: paramParsed.data }, 'funnel stage deactivated');
+      return reply.code(200).send({ id: paramParsed.data, isActive: false });
     },
   );
 

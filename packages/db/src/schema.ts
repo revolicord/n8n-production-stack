@@ -266,6 +266,8 @@ export const funnelStages = apiSchema.table(
     maxFollowups: integer('max_followups').default(3),
     nurtureVideoUrl: text('nurture_video_url'),
     callLink: text('call_link'),
+    // Etapa terminal (disqualified, cerrado): no recibe follow-ups y cancela los lead_crons activos.
+    isTerminal: boolean('is_terminal').notNull().default(false),
     isActive: boolean('is_active').default(true),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),

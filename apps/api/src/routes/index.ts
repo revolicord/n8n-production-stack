@@ -1,12 +1,14 @@
 import type { FastifyInstance } from 'fastify';
 import agentResourcesRoutes from './admin/agent-resources.js';
 import assetsRoutes from './admin/assets.js';
+import flowDefinitionsRoutes from './admin/flow-definitions.js';
 import followupMessagesRoutes from './admin/followup-messages.js';
 import followupsRoutes from './admin/followups.js';
 import notificationsRoutes from './admin/notifications.js';
 import notifyHumanRoute from './admin/notify-human.js';
 import pauseRoutes from './admin/pause.js';
 import setStageRoute from './admin/set-stage.js';
+import stageTransitionsMapRoutes from './admin/stage-transitions-map.js';
 import systemEventRoute from './admin/system-event.js';
 import tenantsRoutes from './admin/tenants.js';
 import turnCompletedRoute from './admin/turn-completed.js';
@@ -30,5 +32,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(followupMessagesRoutes);
   await app.register(assetsRoutes);
   await app.register(agentResourcesRoutes);
+  await app.register(stageTransitionsMapRoutes);
+  await app.register(flowDefinitionsRoutes);
   await app.register(toolsRoutes);
 }

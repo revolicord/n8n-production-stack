@@ -1,4 +1,4 @@
-import { stageTransitionsMap } from '@dm-api/db';
+import { funnelStages, stageTransitionsMap } from '@dm-api/db';
 import { sql } from 'drizzle-orm';
 import { and, eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
@@ -12,8 +12,6 @@ import {
   upsertLeadStage,
 } from '../../services/lead-stages.js';
 import { getSubscriberByUuid } from '../../services/subscribers.js';
-
-const STAGES_THAT_CANCEL_FOLLOWUPS = new Set(['C', 'D', 'disqualified']);
 
 const SetStageBodySchema = z.object({
   new_stage: z.string().min(1),
@@ -104,7 +102,17 @@ export default async function setStageRoute(app: FastifyInstance): Promise<void>
         agentEvidence: evidence,
       });
 
-      if (STAGES_THAT_CANCEL_FOLLOWUPS.has(new_stage)) {
+      // Data-driven: la etapa destino cancela follow-ups si está marcada is_terminal
+      // en funnel_stages (reemplaza el Set hardcodeado ['C','D','disqualified']).
+      const [destinationStage] = await getDb()
+        .select({ isTerminal: funnelStages.isTerminal })
+        .from(funnelStages)
+        .where(
+          and(eq(funnelStages.tenantId, subscriber.tenantId), eq(funnelStages.slug, new_stage)),
+        )
+        .limit(1);
+
+      if (destinationStage?.isTerminal) {
         try {
           await getDb().execute(sql`
             UPDATE api.lead_crons

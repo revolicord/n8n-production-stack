@@ -122,17 +122,67 @@ export async function listFunnelStages(
   return db.select().from(funnelStages).where(condition).orderBy(asc(funnelStages.position));
 }
 
+export async function createFunnelStage(
+  db: DbClient,
+  args: {
+    tenantId: string;
+    slug: string;
+    displayName: string;
+    position: number;
+    description?: string | null;
+    goal?: string | null;
+    maxFollowups?: number | null;
+    isTerminal?: boolean;
+  },
+): Promise<FunnelStage> {
+  const [row] = await db
+    .insert(funnelStages)
+    .values({
+      tenantId: args.tenantId,
+      slug: args.slug,
+      displayName: args.displayName,
+      position: args.position,
+      description: args.description ?? null,
+      goal: args.goal ?? null,
+      maxFollowups: args.maxFollowups ?? 3,
+      isTerminal: args.isTerminal ?? false,
+    })
+    .returning();
+
+  if (!row) throw new Error('funnel_stages insert returned no row');
+  return row;
+}
+
 export async function updateFunnelStage(
   db: DbClient,
   stageId: string,
   patch: Partial<{
+    displayName: string;
+    description: string | null;
+    goal: string | null;
+    position: number;
+    maxFollowups: number;
+    isTerminal: boolean;
+    isActive: boolean;
     nurtureVideoUrl: string | null;
     callLink: string | null;
   }>,
 ): Promise<FunnelStage | null> {
   const rows = await db
     .update(funnelStages)
-    .set(patch)
+    .set({ ...patch, updatedAt: new Date() })
+    .where(eq(funnelStages.id, stageId))
+    .returning();
+  return rows[0] ?? null;
+}
+
+export async function deactivateFunnelStage(
+  db: DbClient,
+  stageId: string,
+): Promise<FunnelStage | null> {
+  const rows = await db
+    .update(funnelStages)
+    .set({ isActive: false, updatedAt: new Date() })
     .where(eq(funnelStages.id, stageId))
     .returning();
   return rows[0] ?? null;

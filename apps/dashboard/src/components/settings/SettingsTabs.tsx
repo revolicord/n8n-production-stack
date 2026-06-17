@@ -4,6 +4,10 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 const TABS: { href: string; label: string }[] = [
+  { href: '/settings/agente', label: 'Agente' },
+  { href: '/settings/funnel', label: 'Etapas' },
+  { href: '/settings/transiciones', label: 'Transiciones' },
+  { href: '/settings/cascadas', label: 'Cascadas' },
   { href: '/settings/general', label: 'General' },
   { href: '/settings/fase-b', label: 'Fase B' },
   { href: '/settings/fase-c', label: 'Fase C' },

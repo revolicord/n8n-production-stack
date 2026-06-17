@@ -13,17 +13,50 @@ export interface UnderstandResult {
   metrics: LlmCallMetrics | null;
 }
 
+/**
+ * Builds the LLM request snapshot (systemPrompt + messages) without calling the
+ * API. Returns null for system-only turns that skip the LLM entirely.
+ *
+ * Called by the `prepare_prompt` graph node so the snapshot is persisted to the
+ * LangGraph checkpoint BEFORE the API call — enabling debug visibility even when
+ * the LLM call fails (e.g. credit exhaustion).
+ */
+export function buildLlmRequest(
+  input: TurnInput,
+  ctx: AssembledContext,
+): LlmRequestSnapshot | null {
+  const hasUserMessages = input.messages.length > 0;
+  const onlySystemCommands = !hasUserMessages && input.system_commands.length > 0;
+  if (onlySystemCommands) return null;
+
+  const personaBlock =
+    ctx.tenantConfig.persona_prompt ?? 'Sé profesional, conciso y orientado a resultados.';
+  const systemPrompt = composePrompt(ctx, personaBlock);
+
+  const transcriptMsgs = ctx.transcript.map((t) => ({
+    role: t.role,
+    content: t.content,
+  }));
+  const currentBatchText = input.messages.map((m) => m.text ?? `[${m.content_class}]`).join('\n');
+  const messages = [...transcriptMsgs, { role: 'user' as const, content: currentBatchText }];
+
+  return { systemPrompt, messages };
+}
+
+/**
+ * Calls the LLM using a pre-built request snapshot from state (written by the
+ * `prepare_prompt` node). If `prebuiltRequest` is null the turn is system-only
+ * and the LLM is skipped entirely.
+ */
 export async function understandNode(
   input: TurnInput,
   ctx: AssembledContext,
   deps: Deps,
+  prebuiltRequest: LlmRequestSnapshot | null,
 ): Promise<UnderstandResult> {
   const log = deps.logger.child({ turn_id: input.turn_id, node: 'understand' });
 
-  // Skip LLM for pure system events with only deterministic commands
-  const hasUserMessages = input.messages.length > 0;
-  const onlySystemCommands = !hasUserMessages && input.system_commands.length > 0;
-  if (onlySystemCommands) {
+  if (prebuiltRequest === null) {
     log.info(
       { skipped: true, n_commands: input.system_commands.length },
       'understand skipped (system-only)',
@@ -33,23 +66,10 @@ export async function understandNode(
 
   const agentConfig = getAgentConfig();
   const model = ctx.tenantConfig.model ?? agentConfig.ANTHROPIC_MODEL;
-  const personaBlock =
-    ctx.tenantConfig.persona_prompt ?? 'Sé profesional, conciso y orientado a resultados.';
-  const systemPrompt = composePrompt(ctx, personaBlock);
-
-  // Build messages: transcript + current batch
-  const transcriptMsgs = ctx.transcript.map((t) => ({
-    role: t.role,
-    content: t.content,
-  }));
-
-  const currentBatchText = input.messages.map((m) => m.text ?? `[${m.content_class}]`).join('\n');
-
-  const messages = [...transcriptMsgs, { role: 'user' as const, content: currentBatchText }];
 
   const result = await callLlm({
-    systemPrompt,
-    messages,
+    systemPrompt: prebuiltRequest.systemPrompt,
+    messages: prebuiltRequest.messages,
     model,
     apiKey: agentConfig.ANTHROPIC_API_KEY,
     timeoutMs: agentConfig.AGENT_TIMEOUT_MS,
@@ -73,7 +93,7 @@ export async function understandNode(
   return {
     commands,
     reasoning: result.plan.reasoning,
-    request: { systemPrompt, messages },
+    request: prebuiltRequest,
     metrics: {
       model: result.model,
       inputTokens: result.inputTokens,
