@@ -98,3 +98,76 @@ export async function listStageFlowsForTenant(
     .where(and(eq(stageFlows.tenantId, tenantId), eq(stageFlows.isActive, true)))
     .orderBy(asc(stageFlows.humanName));
 }
+
+export type CreateStageFlowInput = {
+  tenantId: string;
+  stageId: string;
+  flowNs: string;
+  humanName: string;
+  mediaType?: string | null;
+  slugId?: string | null;
+  contentDescription?: string | null;
+  usageCondition?: string | null;
+};
+
+export async function createStageFlow(
+  db: DbClient,
+  input: CreateStageFlowInput,
+): Promise<StageFlow> {
+  const [row] = await db
+    .insert(stageFlows)
+    .values({
+      tenantId: input.tenantId,
+      stageId: input.stageId,
+      flowNs: input.flowNs,
+      humanName: input.humanName,
+      mediaType: input.mediaType ?? null,
+      slugId: input.slugId ?? null,
+      contentDescription: input.contentDescription ?? null,
+      usageCondition: input.usageCondition ?? null,
+      weight: 1,
+      isActive: true,
+    })
+    .returning();
+  if (!row) throw new Error('stage_flows insert returned no row');
+  return row;
+}
+
+export type StageFlowPatch = {
+  humanName?: string;
+  contentDescription?: string | null;
+  usageCondition?: string | null;
+  mediaType?: string | null;
+  slugId?: string | null;
+  isActive?: boolean;
+};
+
+export async function updateStageFlow(
+  db: DbClient,
+  id: string,
+  patch: StageFlowPatch,
+): Promise<StageFlow | null> {
+  const rows = await db
+    .update(stageFlows)
+    .set({
+      ...(patch.humanName !== undefined && { humanName: patch.humanName }),
+      ...(patch.contentDescription !== undefined && {
+        contentDescription: patch.contentDescription,
+      }),
+      ...(patch.usageCondition !== undefined && { usageCondition: patch.usageCondition }),
+      ...(patch.mediaType !== undefined && { mediaType: patch.mediaType }),
+      ...(patch.slugId !== undefined && { slugId: patch.slugId }),
+      ...(patch.isActive !== undefined && { isActive: patch.isActive }),
+    })
+    .where(eq(stageFlows.id, id))
+    .returning();
+  return rows[0] ?? null;
+}
+
+export async function deleteStageFlow(db: DbClient, id: string): Promise<boolean> {
+  const rows = await db
+    .delete(stageFlows)
+    .where(eq(stageFlows.id, id))
+    .returning({ id: stageFlows.id });
+  return rows.length > 0;
+}

@@ -6,10 +6,13 @@ import { getDb } from '../../lib/db.js';
 import { adminSecurity, doc, uuidParams, zodDoc } from '../../lib/openapi.js';
 import {
   createFlowDefinition,
+  createStageFlow,
   deactivateFlowDefinition,
+  deleteStageFlow,
   getFlowDefinitionById,
   listFlowDefinitions,
   listStageFlowsForTenant,
+  updateStageFlow,
 } from '../../services/flow-definitions.js';
 
 const UuidParamSchema = z.string().uuid();
@@ -191,6 +194,134 @@ export default async function flowDefinitionsRoutes(app: FastifyInstance): Promi
       await deactivateFlowDefinition(getDb(), paramParsed.data);
       req.log.info({ flow_definition_id: paramParsed.data }, 'flow definition deactivated');
       return reply.code(200).send({ id: paramParsed.data, active: false });
+    },
+  );
+
+  // ─── stage-flows CRUD ────────────────────────────────────────────────────────
+
+  const CreateStageFlowBodySchema = z.object({
+    stage_id: z.string().uuid(),
+    flow_ns: z.string().min(1),
+    human_name: z.string().min(1),
+    media_type: z.string().nullable().optional(),
+    slug_id: z.string().nullable().optional(),
+    content_description: z.string().nullable().optional(),
+    usage_condition: z.string().nullable().optional(),
+  });
+
+  const UpdateStageFlowBodySchema = z.object({
+    human_name: z.string().min(1).optional(),
+    content_description: z.string().nullable().optional(),
+    usage_condition: z.string().nullable().optional(),
+    media_type: z.string().nullable().optional(),
+    slug_id: z.string().nullable().optional(),
+    is_active: z.boolean().optional(),
+  });
+
+  // POST /admin/tenants/:tenantId/stage-flows
+  app.post<{ Params: { tenantId: string } }>(
+    '/admin/tenants/:tenantId/stage-flows',
+    doc({
+      tags: ['admin/flow-definitions'],
+      summary: 'Crear un stage_flow (flujo ManyChat disponible para el agente)',
+      security: adminSecurity,
+      params: uuidParams('tenantId'),
+      body: zodDoc(CreateStageFlowBodySchema),
+    }),
+    async (req, reply) => {
+      if (!(await verifyAdminAuth(req, app))) {
+        return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });
+      }
+      const paramParsed = UuidParamSchema.safeParse(req.params.tenantId);
+      if (!paramParsed.success) {
+        return reply
+          .code(400)
+          .send({ error: { code: 'INVALID_PAYLOAD', details: paramParsed.error.issues } });
+      }
+      const bodyParsed = CreateStageFlowBodySchema.safeParse(req.body);
+      if (!bodyParsed.success) {
+        return reply
+          .code(400)
+          .send({ error: { code: 'INVALID_PAYLOAD', details: bodyParsed.error.issues } });
+      }
+      const row = await createStageFlow(getDb(), {
+        tenantId: paramParsed.data,
+        stageId: bodyParsed.data.stage_id,
+        flowNs: bodyParsed.data.flow_ns,
+        humanName: bodyParsed.data.human_name,
+        mediaType: bodyParsed.data.media_type ?? null,
+        slugId: bodyParsed.data.slug_id ?? null,
+        contentDescription: bodyParsed.data.content_description ?? null,
+        usageCondition: bodyParsed.data.usage_condition ?? null,
+      });
+      req.log.info({ stage_flow_id: row.id, flow_ns: row.flowNs }, 'stage flow created');
+      return reply.code(201).send(row);
+    },
+  );
+
+  // PUT /admin/stage-flows/:id
+  app.put<{ Params: { id: string } }>(
+    '/admin/stage-flows/:id',
+    doc({
+      tags: ['admin/flow-definitions'],
+      summary: 'Actualizar un stage_flow',
+      security: adminSecurity,
+      params: uuidParams('id'),
+      body: zodDoc(UpdateStageFlowBodySchema),
+    }),
+    async (req, reply) => {
+      if (!(await verifyAdminAuth(req, app))) {
+        return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });
+      }
+      const paramParsed = UuidParamSchema.safeParse(req.params.id);
+      if (!paramParsed.success) {
+        return reply
+          .code(400)
+          .send({ error: { code: 'INVALID_PAYLOAD', details: paramParsed.error.issues } });
+      }
+      const bodyParsed = UpdateStageFlowBodySchema.safeParse(req.body);
+      if (!bodyParsed.success) {
+        return reply
+          .code(400)
+          .send({ error: { code: 'INVALID_PAYLOAD', details: bodyParsed.error.issues } });
+      }
+      const row = await updateStageFlow(getDb(), paramParsed.data, {
+        humanName: bodyParsed.data.human_name,
+        contentDescription: bodyParsed.data.content_description,
+        usageCondition: bodyParsed.data.usage_condition,
+        mediaType: bodyParsed.data.media_type,
+        slugId: bodyParsed.data.slug_id,
+        isActive: bodyParsed.data.is_active,
+      });
+      if (!row) return reply.code(404).send({ error: { code: 'NOT_FOUND' } });
+      req.log.info({ stage_flow_id: row.id }, 'stage flow updated');
+      return reply.code(200).send(row);
+    },
+  );
+
+  // DELETE /admin/stage-flows/:id
+  app.delete<{ Params: { id: string } }>(
+    '/admin/stage-flows/:id',
+    doc({
+      tags: ['admin/flow-definitions'],
+      summary: 'Eliminar un stage_flow',
+      security: adminSecurity,
+      params: uuidParams('id'),
+    }),
+    async (req, reply) => {
+      if (!(await verifyAdminAuth(req, app))) {
+        return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });
+      }
+      const paramParsed = UuidParamSchema.safeParse(req.params.id);
+      if (!paramParsed.success) {
+        return reply
+          .code(400)
+          .send({ error: { code: 'INVALID_PAYLOAD', details: paramParsed.error.issues } });
+      }
+      const deleted = await deleteStageFlow(getDb(), paramParsed.data);
+      if (!deleted) return reply.code(404).send({ error: { code: 'NOT_FOUND' } });
+      req.log.info({ stage_flow_id: paramParsed.data }, 'stage flow deleted');
+      return reply.code(204).send();
     },
   );
 }
