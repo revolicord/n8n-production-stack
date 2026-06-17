@@ -78,12 +78,28 @@ export const replyTextHandler: ActionHandler = {
 
     const result = await ctx.channel.sendText(text, ctx.subscriber.manychatSubscriberId);
 
+    if (!result.success) {
+      ctx.log.warn(
+        {
+          statusCode: result.statusCode,
+          errorBody: result.errorBody,
+          subscriberId: ctx.subscriber.manychatSubscriberId,
+        },
+        'ReplyText ManyChat error',
+      );
+    }
+
     return {
       command_type: 'ReplyText',
       status: result.success ? 'sent' : 'error',
       detail: result.success
         ? { text, attempts: result.attempts }
-        : { text, attempts: result.attempts, statusCode: result.statusCode },
+        : {
+            text,
+            attempts: result.attempts,
+            statusCode: result.statusCode,
+            errorBody: result.errorBody,
+          },
       attempts: result.attempts,
     };
   },

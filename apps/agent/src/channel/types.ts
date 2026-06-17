@@ -2,12 +2,14 @@ export interface SendFlowResult {
   success: boolean;
   statusCode: number;
   attempts: number;
+  errorBody?: string;
 }
 
 export interface SendTextResult {
   success: boolean;
   statusCode: number;
   attempts: number;
+  errorBody?: string;
 }
 
 export interface ChannelAdapter {

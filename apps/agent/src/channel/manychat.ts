@@ -77,7 +77,8 @@ export function createManyChatAdapter(apiKey: string): ChannelAdapter {
         return { success: true, statusCode: 200, attempts };
       } catch (err) {
         const code = err instanceof ManyChatError ? err.statusCode : 0;
-        return { success: false, statusCode: code, attempts };
+        const errorBody = err instanceof Error ? err.message : String(err);
+        return { success: false, statusCode: code, attempts, errorBody };
       }
     },
 
@@ -101,7 +102,8 @@ export function createManyChatAdapter(apiKey: string): ChannelAdapter {
         return { success: true, statusCode: 200, attempts };
       } catch (err) {
         const code = err instanceof ManyChatError ? err.statusCode : 0;
-        return { success: false, statusCode: code, attempts };
+        const errorBody = err instanceof Error ? err.message : String(err);
+        return { success: false, statusCode: code, attempts, errorBody };
       }
     },
   };
