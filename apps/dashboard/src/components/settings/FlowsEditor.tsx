@@ -340,46 +340,83 @@ function FlowCard({ flow, run, busy }: FlowCardProps) {
         </div>
       </div>
 
-      {/* Expanded — solo los campos que el LLM usa, que ManyChat no puede guardar bien */}
+      {/* Expanded */}
       {expanded && (
-        <div className="border-t border-qc-border px-4 py-4 space-y-3">
-          <p className="text-xs text-qc-textSubtle font-mono">
-            ns: {flow.flowNs}
-            {flow.slugId && <span className="ml-3">slug: {flow.slugId}</span>}
-          </p>
+        <div className="border-t border-qc-border px-4 py-4 space-y-4">
+          {/* Sección readonly — lo que vino de ManyChat */}
+          <div className="bg-qc-bg rounded px-3 py-2 space-y-1">
+            <p className="text-xs font-semibold text-qc-textSubtle uppercase tracking-wide mb-1">
+              Desde ManyChat (solo lectura)
+            </p>
+            <p className="text-xs text-qc-textSubtle font-mono">
+              <span className="text-qc-textMuted">nombre:</span>{' '}
+              <span className="text-qc-textBody">{flow.humanName ?? '—'}</span>
+              {flow.humanName && flow.humanName.length >= 60 && (
+                <span className="ml-2 text-yellow-500" title="ManyChat truncó el nombre">
+                  ⚠ truncado
+                </span>
+              )}
+            </p>
+            <p className="text-xs text-qc-textSubtle font-mono">
+              <span className="text-qc-textMuted">ns:</span>{' '}
+              <span className="text-qc-textBody">{flow.flowNs}</span>
+            </p>
+          </div>
 
-          <Labeled label="Qué contiene este flujo — descripción para el LLM">
-            <textarea
-              rows={3}
-              defaultValue={flow.contentDescription ?? ''}
-              onBlur={(e) => {
-                const v = e.target.value || null;
-                if (v !== (flow.contentDescription ?? null)) {
-                  run(
-                    () => updateFlow(flow.id, { content_description: v }),
-                    'Descripción guardada',
-                  );
-                }
-              }}
-              placeholder="ej: Audio testimonial de cliente que cerró en 3 días + link video YouTube de contenido de valor"
-              className={textareaCls}
-            />
-          </Labeled>
+          {/* Sección editable — lo que hay que completar en el panel */}
+          <div className="space-y-3">
+            <p className="text-xs font-semibold text-qc-textSubtle uppercase tracking-wide">
+              Completar en el panel
+            </p>
 
-          <Labeled label="Cuándo debe enviarlo el LLM (condición de uso)">
-            <textarea
-              rows={4}
-              defaultValue={flow.usageCondition ?? ''}
-              onBlur={(e) => {
-                const v = e.target.value || null;
-                if (v !== (flow.usageCondition ?? null)) {
-                  run(() => updateFlow(flow.id, { usage_condition: v }), 'Condición guardada');
-                }
-              }}
-              placeholder="ej: Enviar después de confirmar el agendamiento, como cierre de la conversación de la etapa D"
-              className={textareaCls}
-            />
-          </Labeled>
+            <Labeled label="Descripción del contenido (para el LLM)">
+              <textarea
+                rows={3}
+                defaultValue={flow.contentDescription ?? ''}
+                onBlur={(e) => {
+                  const v = e.target.value || null;
+                  if (v !== (flow.contentDescription ?? null)) {
+                    run(
+                      () => updateFlow(flow.id, { content_description: v }),
+                      'Descripción guardada',
+                    );
+                  }
+                }}
+                placeholder="ej: Audio testimonial de cliente que cerró en 3 días + link video YouTube de contenido de valor"
+                className={textareaCls}
+              />
+            </Labeled>
+
+            <Labeled label="Cuándo usarlo (condición de uso para el LLM)">
+              <textarea
+                rows={3}
+                defaultValue={flow.usageCondition ?? ''}
+                onBlur={(e) => {
+                  const v = e.target.value || null;
+                  if (v !== (flow.usageCondition ?? null)) {
+                    run(() => updateFlow(flow.id, { usage_condition: v }), 'Condición guardada');
+                  }
+                }}
+                placeholder="ej: Enviar después de confirmar el agendamiento, como cierre de la conversación de la etapa D"
+                className={textareaCls}
+              />
+            </Labeled>
+
+            <Labeled label="Versión / slug (ej: v1, v2, testimonial-pedro)">
+              <input
+                type="text"
+                defaultValue={flow.slugId ?? ''}
+                onBlur={(e) => {
+                  const v = e.target.value.trim() || null;
+                  if (v !== (flow.slugId ?? null)) {
+                    run(() => updateFlow(flow.id, { slug_id: v }), 'Versión guardada');
+                  }
+                }}
+                placeholder="ej: v1"
+                className="w-full bg-qc-bg border border-qc-borderHover rounded px-2 py-1.5 text-sm text-qc-textBody focus:border-qc-teal500 focus:outline-none"
+              />
+            </Labeled>
+          </div>
         </div>
       )}
     </div>
