@@ -43,6 +43,9 @@ COPY --from=build /repo/apps/api/dist ./apps/api/dist
 COPY --from=build /repo/apps/agent/dist ./apps/agent/dist
 COPY --from=build /repo/packages/db/dist ./packages/db/dist
 COPY --from=build /repo/packages/db/drizzle ./packages/db/drizzle
+# Seeds de configuración por tenant (flows declarativos + persona) usados por
+# apps/agent/dist/scripts/seed-agent-config.js (make seed-agent-config).
+COPY --from=build /repo/packages/db/src/seeds ./packages/db/src/seeds
 COPY --from=build /repo/packages/shared/dist ./packages/shared/dist
 
 WORKDIR /app/apps/api

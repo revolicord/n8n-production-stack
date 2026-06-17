@@ -122,6 +122,51 @@ export async function executeActionsNode(
     }
   }
 
+  // ─── Guardrail: nunca dejar al lead sin un mensaje visible ────────────────
+  // Regla de negocio dura (no configurable por tenant si quitar): si el turno no
+  // produjo NINGÚN mensaje que llegue al lead (ni ReplyText/Clarify ni SendContent),
+  // enviamos un texto de último recurso. Evita el bug de "ChangeStage en silencio".
+  const leadGotMessage = results.some(
+    (r) =>
+      (r.command_type === 'ReplyText' ||
+        r.command_type === 'reply_text' ||
+        r.command_type === 'SendContent' ||
+        r.command_type === 'send_content') &&
+      (r.status === 'sent' || r.status === 'dry_run'),
+  );
+
+  if (!leadGotMessage) {
+    const fallbackText =
+      ctx.tenantConfig.no_reply_fallback_text ?? 'Dame un segundo y seguimos. ¿Sigues por ahí?';
+    deps.logger
+      .child({ turn_id: input.turn_id, node: 'actions' })
+      .warn(
+        { fallbackText, n_results: results.length, finalStage },
+        'no outbound message produced — firing no-reply guardrail',
+      );
+
+    const handler = registry.get('reply_text');
+    if (handler) {
+      try {
+        const result = await handler.execute(
+          {
+            action: 'reply_text',
+            config: { text: fallbackText },
+            on_failure: 'continue',
+            origin: 'command',
+          },
+          actionCtx,
+        );
+        result.detail = { ...result.detail, guardrail: 'no_reply' };
+        results.push(result);
+        if (result.status === 'sent' || result.status === 'dry_run')
+          responseTexts.push(fallbackText);
+      } catch (err) {
+        deps.logger.error({ err, turn_id: input.turn_id }, 'no-reply guardrail send failed');
+      }
+    }
+  }
+
   deps.logger
     .child({ turn_id: input.turn_id, node: 'actions' })
     .info(

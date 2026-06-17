@@ -35,6 +35,10 @@ export const TenantConfigSchema = z
     shadow_agent: z.boolean().optional(),
     // ADR-0024: bloque de persona del tenant (editable en /settings)
     persona_prompt: z.string().optional(),
+    // Regla de negocio "nunca dejar al lead sin respuesta": texto de último recurso que
+    // el guardrail envía si un turno no produjo ningún mensaje visible (ni ReplyText ni
+    // SendContent). Editable por tenant; si no se define se usa un default neutro.
+    no_reply_fallback_text: z.string().optional(),
     // ADR-0024: razones de descalificación válidas para ChangeStage (datos del tenant)
     disqualification_reasons: z.array(z.string()).optional(),
     // ADR-0024: conectores externos declarativos (url, headers, etc.)
