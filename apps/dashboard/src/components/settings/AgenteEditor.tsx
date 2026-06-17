@@ -8,6 +8,7 @@ interface Props {
   tenantId: string;
   personaPrompt: string;
   calendlyUrl: string;
+  nurturingVideoUrl: string;
   disqualificationReasons: string[];
 }
 
@@ -15,10 +16,12 @@ export function AgenteEditor({
   tenantId,
   personaPrompt,
   calendlyUrl,
+  nurturingVideoUrl,
   disqualificationReasons,
 }: Props) {
   const [persona, setPersona] = useState(personaPrompt);
   const [calendly, setCalendly] = useState(calendlyUrl);
+  const [nurturingVideo, setNurturingVideo] = useState(nurturingVideoUrl);
   const [reasonsText, setReasonsText] = useState(disqualificationReasons.join('\n'));
   const [isPending, startTransition] = useTransition();
 
@@ -31,6 +34,7 @@ export function AgenteEditor({
       const result = await updateAgenteConfig(tenantId, {
         persona_prompt: persona,
         calendly_url: calendly.trim(),
+        nurturing_video_url: nurturingVideo.trim() || undefined,
         disqualification_reasons: reasons,
       });
       if (result.ok) toast('Configuración guardada');
@@ -58,13 +62,30 @@ export function AgenteEditor({
       <section>
         <h2 className="text-base font-semibold text-white mb-1">URL de Calendly</h2>
         <p className="text-qc-textSubtle text-sm mb-3">
-          Link de agendado que el agente comparte. Déjalo vacío para quitarlo.
+          Link de agendado que el agente comparte. El sistema agrega automáticamente{' '}
+          <code className="text-qc-teal500 text-xs">?utm_content=subscriber_id</code> para
+          identificar quién agendó desde el webhook.
         </p>
         <input
           type="url"
           value={calendly}
           onChange={(e) => setCalendly(e.target.value)}
           placeholder="https://calendly.com/tu-negocio/llamada"
+          className="w-full max-w-lg bg-qc-bg border border-qc-borderHover rounded px-3 py-2 text-sm text-qc-textBody focus:border-qc-teal500 focus:outline-none"
+        />
+      </section>
+
+      <section>
+        <h2 className="text-base font-semibold text-white mb-1">Video de nurturing post-booking</h2>
+        <p className="text-qc-textSubtle text-sm mb-3">
+          Link de YouTube que el agente envía automáticamente después de confirmar la llamada.
+          Déjalo vacío para desactivarlo.
+        </p>
+        <input
+          type="url"
+          value={nurturingVideo}
+          onChange={(e) => setNurturingVideo(e.target.value)}
+          placeholder="https://youtu.be/..."
           className="w-full max-w-lg bg-qc-bg border border-qc-borderHover rounded px-3 py-2 text-sm text-qc-textBody focus:border-qc-teal500 focus:outline-none"
         />
       </section>

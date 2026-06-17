@@ -51,6 +51,8 @@ export const TenantConfigSchema = z
     // ADR-0025: URL de webhook n8n que recibe la traza completa de cada turno
     // para debug visual en n8n Executions. Si no está configurado, no se envía.
     debug_webhook_url: z.string().url().optional(),
+    // Calendly booking feedback: link de video de nurturing post-booking (editable en /settings).
+    nurturing_video_url: z.string().url().optional(),
   })
   .passthrough();
 

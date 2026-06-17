@@ -41,15 +41,40 @@ export const replyTextHandler: ActionHandler = {
     if (config.data.text) {
       text = config.data.text;
     } else if (config.data.template) {
+      // Build calendly_url with utm_content so the Calendly webhook can identify the subscriber.
+      const rawCalendlyUrl = ctx.tenantConfig.calendly_url ?? '';
+      let calendlyUrlWithUtm = '';
+      if (rawCalendlyUrl) {
+        try {
+          const u = new URL(rawCalendlyUrl);
+          u.searchParams.set('utm_content', ctx.subscriber.id);
+          calendlyUrlWithUtm = u.toString();
+        } catch {
+          calendlyUrlWithUtm = rawCalendlyUrl;
+        }
+      }
+
+      const bookingMeta = (ctx.subscriber.metadata as Record<string, unknown> | null)?.booking as
+        | Record<string, unknown>
+        | undefined;
+
       const templateVars: Record<string, unknown> = {
         lead_in: (invocation.config.lead_in as string | undefined) ?? '',
         tenant: {
-          calendly_url: ctx.tenantConfig.calendly_url ?? '',
+          calendly_url: calendlyUrlWithUtm,
+          nurturing_video_url: ctx.tenantConfig.nurturing_video_url ?? '',
           connectors: ctx.tenantConfig.connectors ?? {},
         },
         subscriber: {
           display_name: ctx.subscriber.displayName ?? '',
           ig_username: ctx.subscriber.igUsername ?? '',
+        },
+        booking: {
+          start_time_formatted: bookingMeta?.start_time_formatted ?? '',
+          join_url: bookingMeta?.join_url ?? '',
+          reschedule_url: bookingMeta?.reschedule_url ?? '',
+          cancel_url: bookingMeta?.cancel_url ?? '',
+          invitee_email: bookingMeta?.invitee_email ?? '',
         },
       };
       text = renderTemplate(config.data.template, templateVars);

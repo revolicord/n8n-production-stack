@@ -1,3 +1,4 @@
+import type { DialogueCommand } from '@dm-api/shared';
 import type { Redis } from 'ioredis';
 import { redisKeys } from '../lib/redis-keys.js';
 
@@ -11,6 +12,9 @@ export interface BufferMessage {
   // content_class del mensaje (text/audio/image/...) para rendir un placeholder
   // fiel en memoria en vez del genérico. Opcional para tolerar buffers viejos.
   content_class?: string;
+  // Comandos de sistema inyectados por eventos externos (ej. booking_confirmed).
+  // Si presentes, se pasan directamente al TurnInput.system_commands del agente.
+  system_commands?: DialogueCommand[];
 }
 
 export interface DebouncePushResult {

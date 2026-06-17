@@ -10,7 +10,7 @@
         "type": "action",
         "action": "send_content",
         "config": {
-          "slug_id": "QC_MS_AUDIO_se envia antes de la vsl",
+          "slug_id": "audio_prevsl",
           "lookup_stage": "MS"
         }
       },
@@ -19,7 +19,7 @@
         "type": "action",
         "action": "send_content",
         "config": {
-          "slug_id": "QC_MS_VIDEO_vsl que demuestra resultados",
+          "slug_id": "vsl_resultados",
           "lookup_stage": "MS"
         }
       },
@@ -47,7 +47,7 @@
         "type": "action",
         "action": "send_content",
         "config": {
-          "slug_id": "QC_MS_AUDIO_se envia antes de la vsl",
+          "slug_id": "audio_prevsl",
           "lookup_stage": "MS"
         }
       },
@@ -56,7 +56,7 @@
         "type": "action",
         "action": "send_content",
         "config": {
-          "slug_id": "QC_MS_VIDEO_vsl que demuestra resultados",
+          "slug_id": "vsl_resultados",
           "lookup_stage": "MS"
         }
       }
@@ -75,6 +75,34 @@
         "config": {
           "template": "{lead_in} {tenant.calendly_url}",
           "fallback": "Aquí tienes, elige el horario que te venga: {tenant.calendly_url}"
+        }
+      }
+    ]
+  },
+  {
+    "flow_id": "qc_booking_confirmed",
+    "name": "Booking confirmado: audio + video nurturing",
+    "description": "Disparado por StartFlow tras webhook de Calendly. Envía audio de bienvenida (stage D) y link de video de nurturing configurable por tenant.",
+    "trigger": { "type": "system" },
+    "slots": [],
+    "steps": [
+      {
+        "id": "s1",
+        "type": "action",
+        "action": "send_content",
+        "config": {
+          "slug_id": "booking_audio",
+          "lookup_stage": "D"
+        },
+        "on_failure": "continue"
+      },
+      {
+        "id": "s2",
+        "type": "action",
+        "action": "reply_text",
+        "config": {
+          "template": "🎥 Mientras llega el día, mira este video que preparé para ti: {tenant.nurturing_video_url}",
+          "fallback": "¡Nos vemos en la llamada!"
         }
       }
     ]

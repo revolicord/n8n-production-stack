@@ -14,6 +14,7 @@ import tenantsRoutes from './admin/tenants.js';
 import turnCompletedRoute from './admin/turn-completed.js';
 import healthRoutes from './health.js';
 import toolsRoutes from './tools.js';
+import webhookCalendlyRoute from './webhook-calendly.js';
 import webhookManyChatRoute from './webhook-manychat.js';
 import webhookTelegramRoute from './webhook-telegram.js';
 
@@ -21,6 +22,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(healthRoutes);
   await app.register(webhookManyChatRoute);
   await app.register(webhookTelegramRoute);
+  await app.register(webhookCalendlyRoute);
   await app.register(turnCompletedRoute);
   await app.register(setStageRoute);
   await app.register(systemEventRoute);

@@ -2,23 +2,23 @@ import { describe, expect, it } from 'vitest';
 import flowsQc from '../../../../../../packages/db/src/seeds/flows-qc.json' assert { type: 'json' };
 import { FlowDefinitionSchema } from '../flow.js';
 
-// TRANSITION_MACROS del Router v4.5 (fuente de verdad del comportamiento vivo)
+// Slugs actuales del catálogo QC (renombrados a formato snake_case, ADR-0016)
 const TRANSITION_MACROS: Record<
   string,
   { lookup_stage?: string; after: Array<{ type: string; slug_id?: string; new_stage?: string }> }
 > = {
   'A->MS': {
     after: [
-      { type: 'send_content', slug_id: 'QC_MS_AUDIO_se envia antes de la vsl' },
-      { type: 'send_content', slug_id: 'QC_MS_VIDEO_vsl que demuestra resultados' },
+      { type: 'send_content', slug_id: 'audio_prevsl' },
+      { type: 'send_content', slug_id: 'vsl_resultados' },
       { type: 'change_stage', new_stage: 'B' },
     ],
   },
   'MS->B': {
     lookup_stage: 'MS',
     after: [
-      { type: 'send_content', slug_id: 'QC_MS_AUDIO_se envia antes de la vsl' },
-      { type: 'send_content', slug_id: 'QC_MS_VIDEO_vsl que demuestra resultados' },
+      { type: 'send_content', slug_id: 'audio_prevsl' },
+      { type: 'send_content', slug_id: 'vsl_resultados' },
     ],
   },
   'B->C': {
@@ -101,6 +101,29 @@ describe('flows-qc seeds', () => {
       expect(s1.action).toBe('reply_text');
       expect(s1.config.template).toContain('{tenant.calendly_url}');
       expect(s1.config.fallback).toContain('{tenant.calendly_url}');
+    }
+  });
+
+  it('qc_booking_confirmed usa trigger system y envía audio + video nurturing', () => {
+    const flow = FlowDefinitionSchema.parse(
+      flowsQc.find((f) => f.flow_id === 'qc_booking_confirmed'),
+    );
+
+    expect(flow.trigger).toMatchObject({ type: 'system' });
+    expect(flow.steps).toHaveLength(2);
+
+    const s1 = flow.steps[0];
+    if (s1?.type === 'action') {
+      expect(s1.action).toBe('send_content');
+      expect(s1.config.slug_id).toBe('booking_audio');
+      expect(s1.config.lookup_stage).toBe('D');
+      expect(s1.on_failure).toBe('continue');
+    }
+
+    const s2 = flow.steps[1];
+    if (s2?.type === 'action') {
+      expect(s2.action).toBe('reply_text');
+      expect(s2.config.template).toContain('{tenant.nurturing_video_url}');
     }
   });
 

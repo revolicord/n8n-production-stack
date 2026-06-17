@@ -130,7 +130,7 @@ describe('replyTextHandler — template rendering', () => {
     expect(sentText).toBe('Hola Juan Pérez, ¿cómo estás?');
   });
 
-  it('reemplaza {tenant.calendly_url} con la URL de calendario', async () => {
+  it('reemplaza {tenant.calendly_url} con la URL de calendario + utm_content del subscriber', async () => {
     const ctx = makeCtx();
     await replyTextHandler.execute(
       makeInvocation({ template: 'Agenda aquí: {tenant.calendly_url}' }),
@@ -138,7 +138,7 @@ describe('replyTextHandler — template rendering', () => {
     );
 
     const [sentText] = (ctx.channel.sendText as ReturnType<typeof vi.fn>).mock.calls[0] as [string];
-    expect(sentText).toBe('Agenda aquí: https://calendly.com/test-link');
+    expect(sentText).toBe('Agenda aquí: https://calendly.com/test-link?utm_content=sub-uuid-1');
   });
 
   it('reemplaza {subscriber.ig_username}', async () => {

@@ -22,6 +22,7 @@ export default async function AgentePage() {
       tenantId={tenant.id}
       personaPrompt={config.persona_prompt ?? ''}
       calendlyUrl={config.calendly_url ?? ''}
+      nurturingVideoUrl={config.nurturing_video_url ?? ''}
       disqualificationReasons={config.disqualification_reasons ?? []}
     />
   );

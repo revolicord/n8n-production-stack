@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache';
 export type AgenteConfigPatch = {
   persona_prompt?: string;
   calendly_url?: string;
+  nurturing_video_url?: string;
   disqualification_reasons?: string[];
 };
 

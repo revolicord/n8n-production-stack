@@ -140,6 +140,12 @@ export async function processBatchJob(job: Job<ProcessBatchJobData>): Promise<Pr
     const engine = tenantConfig.engine ?? 'n8n';
 
     if (engine === 'agent') {
+      // Collect system_commands injected by external events (e.g. booking_confirmed).
+      const injectedSystemCommands = messages.flatMap((m) => m.system_commands ?? []);
+
+      const triggerSource =
+        reason === 'system_event' ? ('system_event' as const) : ('lead_message' as const);
+
       const turnInput: TurnInput = {
         schema_version: 'v1',
         turn_id: turn.id,
@@ -147,7 +153,7 @@ export async function processBatchJob(job: Job<ProcessBatchJobData>): Promise<Pr
         subscriber_id: subscriberId,
         conversation_id: conversation.id,
         trigger: {
-          source: 'lead_message',
+          source: triggerSource,
           channel: subscriber.currentChannel ?? 'instagram',
         },
         messages: messages.map((m) => ({
@@ -159,7 +165,7 @@ export async function processBatchJob(job: Job<ProcessBatchJobData>): Promise<Pr
           media_urls: m.media_urls,
           content_class: m.content_class ?? 'text',
         })),
-        system_commands: [],
+        system_commands: injectedSystemCommands,
         dry_run: false,
       };
 
