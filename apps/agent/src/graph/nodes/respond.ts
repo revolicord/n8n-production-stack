@@ -3,7 +3,13 @@ import type { AgentResponse } from '@dm-api/shared';
 import { eq, sql } from 'drizzle-orm';
 import type { Deps } from '../../deps.js';
 import { saveDialogueState } from '../../services/dialogue-states.js';
-import { type TraceLevel, resolveTraceMode, saveTurnTrace } from '../../services/traces.js';
+import {
+  type TraceLevel,
+  buildDebugPayload,
+  postDebugWebhook,
+  resolveTraceMode,
+  saveTurnTrace,
+} from '../../services/traces.js';
 import type { AgentStateT } from '../annotation.js';
 
 /**
@@ -97,16 +103,23 @@ export async function respondNode(state: AgentStateT, deps: Deps): Promise<Parti
   // Traza legible (ADR-0025) — best-effort, también en shadow/dry_run.
   const traceLevel =
     (state.assembled?.tenantConfig.trace_level as TraceLevel | undefined) ?? 'full';
+  const traceMode = resolveTraceMode(input);
   try {
     await saveTurnTrace(deps.db, {
       state,
-      mode: resolveTraceMode(input),
+      mode: traceMode,
       status,
       traceLevel,
       dialogueStateAfter: flowResult.state,
     });
   } catch (err) {
     deps.logger.error({ err, turn_id: input.turn_id }, 'saveTurnTrace failed');
+  }
+
+  // Debug webhook: POST a n8n si está configurado (solo live, fire-and-forget).
+  const debugUrl = state.assembled?.tenantConfig.debug_webhook_url as string | undefined;
+  if (debugUrl && traceMode === 'live') {
+    postDebugWebhook(debugUrl, buildDebugPayload(state, traceMode, status, flowResult.state, null));
   }
 
   deps.logger

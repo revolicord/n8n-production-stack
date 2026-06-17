@@ -2,6 +2,157 @@ import { type DbClient, agentTurnTraces } from '@dm-api/db';
 import type { DialogueState } from '@dm-api/shared';
 import type { AgentStateT } from '../graph/annotation.js';
 
+/**
+ * Payload enviado al debug_webhook_url después de cada turno (ADR-0025).
+ * Estructura plana y legible para inspección en n8n Executions.
+ */
+export interface DebugTracePayload {
+  turn_id: string;
+  tenant_id: string;
+  subscriber_id: string;
+  conversation_id: string;
+  mode: TraceMode;
+  status: string;
+  timestamp: string;
+
+  // Lo que dijo el lead
+  input_messages: Array<{ text?: string | null; content_class?: string }>;
+
+  // Contexto ensamblado (lo que "vio" el sistema)
+  context: {
+    current_stage: string | null;
+    final_stage: string | null;
+    valid_transitions: Array<{ from: string; to: string; when_to_use: string }>;
+    content_options: Array<{ slug_id: string | null; times_sent: number }>;
+    stack: unknown[];
+    slots: Record<string, unknown>;
+    repair_context: unknown;
+    transcript_turns: number;
+    active_flows: string[];
+  };
+
+  // LLM
+  system_prompt: string | null;
+  conversation_history: Array<{ role: string; content: string }> | null;
+  reasoning: string | null;
+
+  // Decisión
+  commands: unknown[];
+  flow_path: unknown[];
+
+  // Ejecución
+  action_results: unknown[];
+  response_texts: string[];
+
+  // Antes/después del estado de diálogo
+  dialogue_state_before: unknown;
+  dialogue_state_after: unknown;
+
+  // Perf
+  metrics: {
+    model: string | null;
+    input_tokens: number | null;
+    output_tokens: number | null;
+    llm_ms: number | null;
+    total_ms: number;
+  };
+
+  error: unknown;
+}
+
+/** Construye el payload de debug a partir del estado final del grafo. */
+export function buildDebugPayload(
+  s: AgentStateT,
+  mode: TraceMode,
+  status: string,
+  dialogueStateAfter: DialogueState | null | undefined,
+  error: TraceError | null | undefined,
+): DebugTracePayload {
+  const m = s.llmMetrics;
+  const ctx = s.assembled;
+  const transitions = (ctx?.transitions ?? []) as Array<{
+    fromStageSlug: string;
+    toStageSlug: string;
+    whenToUse: string;
+  }>;
+
+  const currentStageCatalog = ctx?.stageCatalog?.find(
+    (sc: { stageSlug: string }) => sc.stageSlug === ctx?.currentStage,
+  );
+
+  const activeFlows = ctx?.activeFlows;
+
+  return {
+    turn_id: s.input.turn_id,
+    tenant_id: s.input.tenant_id,
+    subscriber_id: s.input.subscriber_id,
+    conversation_id: s.input.conversation_id,
+    mode,
+    status,
+    timestamp: new Date().toISOString(),
+
+    input_messages: s.input.messages.map((m) => ({ text: m.text, content_class: m.content_class })),
+
+    context: {
+      current_stage: ctx?.currentStage ?? null,
+      final_stage: s.finalStage,
+      valid_transitions: transitions
+        .filter((t) => t.fromStageSlug === ctx?.currentStage)
+        .map((t) => ({ from: t.fromStageSlug, to: t.toStageSlug, when_to_use: t.whenToUse })),
+      content_options: (currentStageCatalog?.variants ?? []).map(
+        (v: { slugId: string | null; timesSent: number }) => ({
+          slug_id: v.slugId,
+          times_sent: v.timesSent,
+        }),
+      ),
+      stack: ctx?.dialogueState?.stack ?? [],
+      slots: (ctx?.dialogueState?.slots as Record<string, unknown>) ?? {},
+      repair_context: ctx?.dialogueState?.repair_context ?? null,
+      transcript_turns: ctx?.transcript?.length ?? 0,
+      active_flows: activeFlows instanceof Map ? Array.from(activeFlows.keys()) : [],
+    },
+
+    system_prompt: s.llmRequest?.systemPrompt ?? null,
+    conversation_history: s.llmRequest?.messages ?? null,
+    reasoning: s.llmReasoning,
+
+    commands: s.allCommands,
+    flow_path: s.flowResult?.path ?? [],
+
+    action_results: s.actionResults,
+    response_texts: s.responseTexts,
+
+    dialogue_state_before: s.dialogueStateBefore,
+    dialogue_state_after: dialogueStateAfter ?? s.flowResult?.state ?? null,
+
+    metrics: {
+      model: m?.model ?? null,
+      input_tokens: m?.inputTokens ?? null,
+      output_tokens: m?.outputTokens ?? null,
+      llm_ms: m?.llmMs ?? null,
+      total_ms: Date.now() - s.startedAt,
+    },
+
+    error: error ?? null,
+  };
+}
+
+/**
+ * Envía la traza de debug al webhook n8n configurado en tenant.debug_webhook_url.
+ * Fire-and-forget: nunca bloquea ni hace throw — un fallo de debug no rompe el turno.
+ * Solo se envía en modo 'live' (no shadow ni replay) para no saturar el webhook.
+ */
+export function postDebugWebhook(webhookUrl: string, payload: DebugTracePayload): void {
+  fetch(webhookUrl, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(10_000),
+  }).catch(() => {
+    // silencioso — debug no debe romper producción
+  });
+}
+
 export type TraceMode = 'live' | 'shadow' | 'replay';
 export type TraceLevel = 'off' | 'metrics' | 'full';
 

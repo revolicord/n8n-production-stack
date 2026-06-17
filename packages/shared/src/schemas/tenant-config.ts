@@ -44,6 +44,9 @@ export const TenantConfigSchema = z
     trace_level: z.enum(['off', 'metrics', 'full']).optional(),
     // ADR-0025: días de retención de traces antes de limpieza (default 30).
     trace_retention_days: z.number().int().positive().optional(),
+    // ADR-0025: URL de webhook n8n que recibe la traza completa de cada turno
+    // para debug visual en n8n Executions. Si no está configurado, no se envía.
+    debug_webhook_url: z.string().url().optional(),
   })
   .passthrough();
 

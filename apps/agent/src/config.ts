@@ -13,6 +13,9 @@ const AgentConfigSchema = z.object({
   LANGCHAIN_API_KEY: z.string().optional(),
   LANGCHAIN_PROJECT: z.string().optional(),
   LANGCHAIN_ENDPOINT: z.string().optional(),
+  // Alertas operativas via Telegram
+  TELEGRAM_BOT_TOKEN: z.string().optional(),
+  TELEGRAM_DEFAULT_CHAT_ID: z.string().optional(),
 });
 
 export type AgentConfig = z.infer<typeof AgentConfigSchema>;
