@@ -177,15 +177,15 @@ async function main() {
   }
 
   // ─── Resumen final ────────────────────────────────────────────────────────
-  console.log(`\n${'─'.repeat(60)}`);
-  console.log('Cutover ADR-0024 — Resumen');
-  console.log('─'.repeat(60));
-  console.log(`Tenants procesados : ${tenantRows.length}`);
-  console.log(`Convs abiertas     : ${totalOpen}`);
-  console.log(`Ya tenían estado   : ${totalAlreadyHad}`);
-  console.log(`Creadas ahora      : ${totalCreated}${opts.dryRun ? ' (dry-run)' : ''}`);
-  if (totalErrors > 0) console.log(`Errores            : ${totalErrors}`);
-  console.log('─'.repeat(60));
+  console.info(`\n${'─'.repeat(60)}`);
+  console.info('Cutover ADR-0024 — Resumen');
+  console.info('─'.repeat(60));
+  console.info(`Tenants procesados : ${tenantRows.length}`);
+  console.info(`Convs abiertas     : ${totalOpen}`);
+  console.info(`Ya tenían estado   : ${totalAlreadyHad}`);
+  console.info(`Creadas ahora      : ${totalCreated}${opts.dryRun ? ' (dry-run)' : ''}`);
+  if (totalErrors > 0) console.info(`Errores            : ${totalErrors}`);
+  console.info('─'.repeat(60));
 
   if (totalErrors > 0) process.exit(1);
   process.exit(0);

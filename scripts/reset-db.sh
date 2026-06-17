@@ -12,7 +12,7 @@ echo "Borrando datos en $CONTAINER..."
 
 docker exec "$CONTAINER" psql -U n8n -d n8n -c "
 BEGIN;
-TRUNCATE api.turns, api.messages_raw, api.lead_followup_log, api.stage_transitions, api.lead_stages, api.lead_crons, api.lead_content_sent, api.dead_letter_queue, api.conversations, api.subscribers RESTART IDENTITY CASCADE;
+TRUNCATE api.agent_turn_traces, api.domain_events, api.turns, api.messages_raw, api.lead_followup_log, api.stage_transitions, api.lead_stages, api.lead_crons, api.lead_content_sent, api.dead_letter_queue, api.conversations, api.subscribers RESTART IDENTITY CASCADE;
 TRUNCATE n8n_chat_histories RESTART IDENTITY CASCADE;
 TRUNCATE chat_hub_messages, chat_hub_sessions, instance_ai_messages, instance_ai_threads, agents_messages, agents_threads RESTART IDENTITY CASCADE;
 COMMIT;

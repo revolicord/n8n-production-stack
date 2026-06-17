@@ -77,11 +77,11 @@ async function main() {
     .limit(opts.limit);
 
   if (targetTurns.length === 0) {
-    console.log('No completed turns found for the given filter.');
+    console.info('No completed turns found for the given filter.');
     process.exit(0);
   }
 
-  console.log(`\nReplay de ${targetTurns.length} turnos\n${'─'.repeat(60)}`);
+  console.info(`\nReplay de ${targetTurns.length} turnos\n${'─'.repeat(60)}`);
 
   let matched = 0;
   let diverged = 0;
@@ -95,7 +95,7 @@ async function main() {
       .orderBy(asc(messagesRaw.receivedAt));
 
     if (rawMsgs.length === 0) {
-      console.log(`[${turn.id}] SKIP — sin mensajes en messages_raw`);
+      console.info(`[${turn.id}] SKIP — sin mensajes en messages_raw`);
       continue;
     }
 
@@ -148,7 +148,7 @@ async function main() {
         deps,
       );
     } catch (err) {
-      console.log(`[${turn.id}] ERROR: ${err instanceof Error ? err.message : String(err)}`);
+      console.info(`[${turn.id}] ERROR: ${err instanceof Error ? err.message : String(err)}`);
       diverged++;
       continue;
     }
@@ -169,21 +169,21 @@ async function main() {
     else diverged++;
 
     const ts = turn.startedAt.toISOString().slice(0, 16);
-    console.log(`[${ts}] ${status} — turn ${turn.id.slice(0, 8)}`);
+    console.info(`[${ts}] ${status} — turn ${turn.id.slice(0, 8)}`);
 
     if (!stageMatch) {
-      console.log(`  stage  real=${realStage ?? '-'} shadow=${shadowStage ?? '-'}`);
+      console.info(`  stage  real=${realStage ?? '-'} shadow=${shadowStage ?? '-'}`);
     }
     if (res.response_texts.length > 0 && realText !== shadowTexts) {
-      console.log(`  n8n:    ${realText.slice(0, 120)}`);
-      console.log(`  shadow: ${shadowTexts.slice(0, 120)}`);
+      console.info(`  n8n:    ${realText.slice(0, 120)}`);
+      console.info(`  shadow: ${shadowTexts.slice(0, 120)}`);
     }
   }
 
-  console.log(`\n${'─'.repeat(60)}`);
-  console.log(`Total: ${targetTurns.length} | Match: ${matched} | Diverge: ${diverged}`);
+  console.info(`\n${'─'.repeat(60)}`);
+  console.info(`Total: ${targetTurns.length} | Match: ${matched} | Diverge: ${diverged}`);
   const pct = targetTurns.length > 0 ? ((matched / targetTurns.length) * 100).toFixed(1) : '0';
-  console.log(`Paridad de etapas: ${pct}%`);
+  console.info(`Paridad de etapas: ${pct}%`);
 
   process.exit(0);
 }
