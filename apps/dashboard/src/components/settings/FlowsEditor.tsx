@@ -402,17 +402,17 @@ function FlowCard({ flow, run, busy }: FlowCardProps) {
               />
             </Labeled>
 
-            <Labeled label="Versión / slug (ej: v1, v2, testimonial-pedro)">
+            <Labeled label="Identificador (Slug ID) (ej: booking_audio, v1, testimonial-pedro)">
               <input
                 type="text"
                 defaultValue={flow.slugId ?? ''}
                 onBlur={(e) => {
                   const v = e.target.value.trim() || null;
                   if (v !== (flow.slugId ?? null)) {
-                    run(() => updateFlow(flow.id, { slug_id: v }), 'Versión guardada');
+                    run(() => updateFlow(flow.id, { slug_id: v }), 'Slug ID guardado');
                   }
                 }}
-                placeholder="ej: v1"
+                placeholder="ej: booking_audio"
                 className="w-full bg-qc-bg border border-qc-borderHover rounded px-2 py-1.5 text-sm text-qc-textBody focus:border-qc-teal500 focus:outline-none"
               />
             </Labeled>
