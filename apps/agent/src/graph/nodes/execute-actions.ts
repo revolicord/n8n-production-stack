@@ -54,7 +54,39 @@ export async function executeActionsNode(
   const responseTexts: string[] = [];
   let finalStage = flowResult.newStage ?? ctx.currentStage;
 
-  for (const invocation of flowResult.invocations) {
+  // ─── Política "camino feliz sin texto del LLM" (regla de negocio) ─────────
+  // En etapas `flow_only`, si el turno ya entrega algo al lead vía flow (un
+  // send_content, o un reply_text *scripted* con origin:'flow' como el link de
+  // Calendly), descartamos el texto improvisado del LLM (ReplyText/Clarify con
+  // origin:'command') para que NO salga pegado al flujo. Ante un desvío (el turno
+  // no produjo salida de flow) el texto del LLM se conserva → nunca en visto.
+  const stagePolicy =
+    ctx.tenantConfig.text_policy_by_stage?.[ctx.currentStage] ??
+    ctx.tenantConfig.text_policy_default ??
+    'text_ok';
+
+  const hasFlowOutbound = flowResult.invocations.some(
+    (inv) =>
+      inv.action === 'send_content' || (inv.action === 'reply_text' && inv.origin === 'flow'),
+  );
+  const suppressLlmText = stagePolicy === 'flow_only' && hasFlowOutbound;
+
+  const invocations = suppressLlmText
+    ? flowResult.invocations.filter(
+        (inv) => !(inv.action === 'reply_text' && inv.origin === 'command'),
+      )
+    : flowResult.invocations;
+
+  if (suppressLlmText && invocations.length < flowResult.invocations.length) {
+    deps.logger
+      .child({ turn_id: input.turn_id, node: 'actions' })
+      .info(
+        { stage: ctx.currentStage, suppressed: flowResult.invocations.length - invocations.length },
+        'flow_only: texto improvisado del LLM suprimido (camino feliz)',
+      );
+  }
+
+  for (const invocation of invocations) {
     const handler = registry.get(invocation.action);
     if (!handler) {
       deps.logger.warn({ action: invocation.action }, 'no handler for action');
@@ -123,19 +155,50 @@ export async function executeActionsNode(
   }
 
   // ─── Guardrail: nunca dejar al lead sin un mensaje visible ────────────────
-  // Regla de negocio dura (no configurable por tenant si quitar): si el turno no
-  // produjo NINGÚN mensaje que llegue al lead (ni ReplyText/Clarify ni SendContent),
-  // enviamos un texto de último recurso. Evita el bug de "ChangeStage en silencio".
-  const leadGotMessage = results.some(
-    (r) =>
-      (r.command_type === 'ReplyText' ||
-        r.command_type === 'reply_text' ||
-        r.command_type === 'SendContent' ||
-        r.command_type === 'send_content') &&
-      (r.status === 'sent' || r.status === 'dry_run'),
-  );
+  // Regla de negocio dura: si el turno no produjo NINGÚN mensaje que llegue al
+  // lead (ni ReplyText/Clarify ni SendContent), enviamos algo de último recurso.
+  // Evita el bug de "ChangeStage en silencio".
+  const gotLeadMessage = () =>
+    results.some(
+      (r) =>
+        (r.command_type === 'ReplyText' ||
+          r.command_type === 'reply_text' ||
+          r.command_type === 'SendContent' ||
+          r.command_type === 'send_content') &&
+        (r.status === 'sent' || r.status === 'dry_run'),
+    );
 
-  if (!leadGotMessage) {
+  // Content-first: si el turno avanzó de etapa pero el cascade no entregó contenido,
+  // intenta enviar el contenido de la etapa NUEVA antes de caer al texto genérico.
+  // (No reenvía contenido de la etapa actual → evita bucles de re-envío.)
+  if (!gotLeadMessage() && finalStage !== ctx.currentStage) {
+    const stageCat = ctx.stageCatalog.find((s) => s.stageSlug === finalStage);
+    const variant = stageCat?.variants.find((v) => v.slugId != null);
+    const handler = registry.get('send_content');
+    if (variant?.slugId && handler) {
+      try {
+        const result = await handler.execute(
+          {
+            action: 'send_content',
+            config: {
+              slug_id: variant.slugId,
+              lookup_stage: finalStage,
+              evidence: 'no-reply guardrail: contenido de la etapa',
+            },
+            on_failure: 'continue',
+            origin: 'command',
+          },
+          { ...actionCtx, currentStage: finalStage },
+        );
+        result.detail = { ...result.detail, guardrail: 'no_reply_content' };
+        results.push(result);
+      } catch (err) {
+        deps.logger.error({ err, turn_id: input.turn_id }, 'no-reply content guardrail failed');
+      }
+    }
+  }
+
+  if (!gotLeadMessage()) {
     const fallbackText =
       ctx.tenantConfig.no_reply_fallback_text ?? 'Dame un segundo y seguimos. ¿Sigues por ahí?';
     deps.logger

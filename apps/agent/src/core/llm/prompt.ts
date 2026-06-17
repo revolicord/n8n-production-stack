@@ -20,9 +20,44 @@ export function composePrompt(ctx: AssembledContext, personaBlock: string): stri
   const skeletonTemplate = ctx.tenantConfig.skeleton_prompt ?? DEFAULT_PLATFORM_SKELETON;
   const skeleton = skeletonTemplate
     .replace('{VALID_TRANSITIONS}', validTransitions)
-    .replace('{CONTENT_OPTIONS}', contentOptions);
+    .replace('{CONTENT_OPTIONS}', contentOptions)
+    .replace('{REPLY_POLICY}', buildReplyPolicyBlock(ctx));
 
   return [skeleton, '', '## Persona del agente', '', personaBlock, '', dialogueInfo].join('\n');
+}
+
+/**
+ * Bloque de política de texto para la etapa actual (regla "camino feliz sin texto
+ * del LLM"). En etapas `flow_only` el agente NO debe improvisar texto en el camino
+ * feliz: solo avanza con ChangeStage (cascade) y deja que el flow envíe el contenido.
+ * El texto improvisado solo se permite ante un desvío del lead.
+ */
+function buildReplyPolicyBlock(ctx: AssembledContext): string {
+  const policy =
+    ctx.tenantConfig.text_policy_by_stage?.[ctx.currentStage] ??
+    ctx.tenantConfig.text_policy_default ??
+    'text_ok';
+
+  if (policy !== 'flow_only') {
+    return [
+      `### Política de respuesta (etapa ${ctx.currentStage}: texto libre permitido)`,
+      'Puedes acompañar las acciones con un `ReplyText` breve si aporta. Sigue la persona del tenant.',
+    ].join('\n');
+  }
+
+  return [
+    `### Política de respuesta (etapa ${ctx.currentStage}: SOLO FLUJO, sin texto del agente)`,
+    'Esta etapa va por el "camino feliz" guionizado. El contenido (audios, vídeos, link de',
+    'Calendly) lo envía automáticamente el flow al avanzar de etapa. Por tanto:',
+    '',
+    '- Si el lead da la señal esperada (👍, "ya lo vi", confirmación, etc.): emite SOLO',
+    '  `ChangeStage` (con `cascade: true`). NO emitas `ReplyText` ni `Clarify`: el texto',
+    '  improvisado se DESCARTA en esta etapa y solo ensuciaría el flujo.',
+    '- Emite `ReplyText`/`Clarify` ÚNICAMENTE si el lead se DESVÍA del guion: pregunta algo,',
+    '  pone una objeción, no da una señal clara, o se va por las ramas. Ahí sí responde para',
+    '  no dejarlo en visto (este texto SÍ sobrevive porque el turno no avanzó por flujo).',
+    '- Nunca avances de etapa "porque sí": solo con evidencia real de la señal del lead.',
+  ].join('\n');
 }
 
 function buildDialogueContextBlock(ctx: AssembledContext): string {

@@ -1,8 +1,10 @@
 /**
  * seed-agent-config.ts — importa la configuración del MOTOR (ADR-0024/0025) de un
  * tenant desde archivos versionados en el repo: los flows declarativos
- * (`packages/db/src/seeds/flows-<slug>.json`) y la persona del agente
- * (`packages/db/src/seeds/persona-<slug>.md`).
+ * (`packages/db/src/seeds/flows-<slug>.json`), la persona del agente
+ * (`packages/db/src/seeds/persona-<slug>.md`) y claves de `tenants.config`
+ * version-controladas (`packages/db/src/seeds/config-<slug>.json`, opcional;
+ * p. ej. `text_policy_by_stage` para la regla "camino feliz sin texto del LLM").
  *
  * Uso:
  *   tsx apps/agent/scripts/seed-agent-config.ts --tenant-slug qc
@@ -15,6 +17,9 @@
  *     Si difiere (o no existe), crea una versión nueva activa y desactiva la anterior,
  *     respetando el unique constraint `flow_definitions_one_active_unique`.
  *   - Persona: hace merge de `persona_prompt` en `tenants.config` sin tocar otras claves.
+ *   - Config: hace merge superficial de `config-<slug>.json` en `tenants.config`
+ *     (validado contra TenantConfigSchema). El archivo es opcional. Flags: --config
+ *     <ruta>, --no-config.
  */
 
 import { readFileSync } from 'node:fs';
@@ -22,7 +27,7 @@ import { dirname, resolve } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { createDb, flowDefinitions, tenants } from '@dm-api/db';
-import { type FlowDefinition, FlowDefinitionSchema } from '@dm-api/shared';
+import { type FlowDefinition, FlowDefinitionSchema, TenantConfigSchema } from '@dm-api/shared';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { pino } from 'pino';
 
@@ -38,8 +43,10 @@ interface Args {
   tenantSlug: string;
   flowsPath: string | null;
   personaPath: string | null;
+  configPath: string | null;
   importFlows: boolean;
   importPersona: boolean;
+  importConfig: boolean;
   dryRun: boolean;
 }
 
@@ -48,8 +55,10 @@ function parseArgs(): Args {
   let tenantSlug: string | undefined;
   let flowsPath: string | null = null;
   let personaPath: string | null = null;
+  let configPath: string | null = null;
   let importFlows = true;
   let importPersona = true;
+  let importConfig = true;
   let dryRun = false;
 
   for (let i = 0; i < argv.length; i++) {
@@ -57,8 +66,10 @@ function parseArgs(): Args {
     if (arg === '--tenant-slug' && argv[i + 1]) tenantSlug = argv[++i];
     else if (arg === '--flows' && argv[i + 1]) flowsPath = argv[++i] ?? null;
     else if (arg === '--persona' && argv[i + 1]) personaPath = argv[++i] ?? null;
+    else if (arg === '--config' && argv[i + 1]) configPath = argv[++i] ?? null;
     else if (arg === '--no-flows') importFlows = false;
     else if (arg === '--no-persona') importPersona = false;
+    else if (arg === '--no-config') importConfig = false;
     else if (arg === '--dry-run') dryRun = true;
   }
 
@@ -67,7 +78,16 @@ function parseArgs(): Args {
     process.exit(1);
   }
 
-  return { tenantSlug, flowsPath, personaPath, importFlows, importPersona, dryRun };
+  return {
+    tenantSlug,
+    flowsPath,
+    personaPath,
+    configPath,
+    importFlows,
+    importPersona,
+    importConfig,
+    dryRun,
+  };
 }
 
 /** Stringify estable (claves ordenadas) para comparar definiciones sin sesgo de orden. */
@@ -105,6 +125,10 @@ async function main() {
     process.exit(1);
   }
   log.info({ tenant: tenant.slug, id: tenant.id }, 'tenant resuelto');
+
+  // Config acumulada del tenant — los pasos de config/persona mergean sobre esta
+  // misma referencia para no pisarse entre ellos en una sola corrida.
+  let workingConfig = (tenant.config ?? {}) as Record<string, unknown>;
 
   // 2. Flows declarativos
   if (opts.importFlows) {
@@ -196,7 +220,48 @@ async function main() {
     log.info({ created, skipped, total: rawFlows.length }, 'flows importados');
   }
 
-  // 3. Persona
+  // 3. Config del tenant (claves de tenants.config version-controladas, p. ej.
+  //    text_policy_by_stage para la regla "camino feliz sin texto del LLM").
+  //    El archivo es OPCIONAL: si no existe, se omite sin error.
+  if (opts.importConfig) {
+    const configPath = opts.configPath ?? resolve(SEEDS_DIR, `config-${opts.tenantSlug}.json`);
+    let rawConfig: unknown;
+    try {
+      rawConfig = JSON.parse(readFileSync(configPath, 'utf8'));
+    } catch {
+      rawConfig = null; // archivo ausente o ilegible → opcional, se omite
+    }
+
+    if (rawConfig != null) {
+      if (typeof rawConfig !== 'object' || Array.isArray(rawConfig)) {
+        log.error({ configPath }, 'config-<slug>.json debe ser un objeto');
+        process.exit(1);
+      }
+      const partial = rawConfig as Record<string, unknown>;
+      const merged = { ...workingConfig, ...partial };
+      // Validar el resultado completo contra el esquema del tenant.
+      const parsed = TenantConfigSchema.safeParse(merged);
+      if (!parsed.success) {
+        log.error({ issues: parsed.error.issues, configPath }, 'config inválida — abortando');
+        process.exit(1);
+      }
+      if (stableStringify(workingConfig) === stableStringify(merged)) {
+        log.info('config sin cambios — omitida');
+      } else if (opts.dryRun) {
+        log.info({ keys: Object.keys(partial) }, 'DRY: config se mergearía');
+        workingConfig = merged;
+      } else {
+        await db
+          .update(tenants)
+          .set({ config: sql`${JSON.stringify(merged)}::jsonb`, updatedAt: sql`now()` })
+          .where(eq(tenants.id, tenant.id));
+        workingConfig = merged;
+        log.info({ keys: Object.keys(partial) }, 'config mergeada');
+      }
+    }
+  }
+
+  // 4. Persona
   if (opts.importPersona) {
     const personaPath = opts.personaPath ?? resolve(SEEDS_DIR, `persona-${opts.tenantSlug}.md`);
     let persona: string;
@@ -207,17 +272,17 @@ async function main() {
       process.exit(1);
     }
 
-    const currentConfig = (tenant.config ?? {}) as Record<string, unknown>;
-    if (currentConfig.persona_prompt === persona) {
+    if (workingConfig.persona_prompt === persona) {
       log.info('persona sin cambios — omitida');
     } else if (opts.dryRun) {
       log.info({ chars: persona.length }, 'DRY: persona se actualizaría');
     } else {
-      const nextConfig = { ...currentConfig, persona_prompt: persona };
+      const nextConfig = { ...workingConfig, persona_prompt: persona };
       await db
         .update(tenants)
         .set({ config: sql`${JSON.stringify(nextConfig)}::jsonb`, updatedAt: sql`now()` })
         .where(eq(tenants.id, tenant.id));
+      workingConfig = nextConfig;
       log.info({ chars: persona.length }, 'persona actualizada');
     }
   }

@@ -30,12 +30,13 @@ Emite SIEMPRE un plan JSON con el tool \`emit_plan\`. Nunca respondas en texto l
 
 ### Reglas críticas:
 
-1. NUNCA dejes al lead sin un mensaje visible. Cada turno DEBE incluir al menos un
-   \`ReplyText\`, un \`SendContent\` o un \`Clarify\`. \`ChangeStage\` y \`SetSlot\` son
-   cambios internos invisibles para el lead: por sí solos NO cuentan como respuesta.
-2. Cuando avances de etapa (\`ChangeStage\`), acompáñalo SIEMPRE en el mismo plan con el
-   contenido o el texto que corresponde a la nueva etapa (p. ej. el \`SendContent\` del
-   siguiente paso). Avanzar de etapa en silencio es un error.
+1. NUNCA dejes al lead en visto. Cada turno DEBE producir algo que LLEGUE al lead: un
+   \`SendContent\`, un \`ReplyText\`/\`Clarify\`, o un \`ChangeStage\` cuyo flujo de etapa
+   entregue el contenido. \`ChangeStage\` y \`SetSlot\` por sí solos son cambios internos
+   invisibles. OJO: la "Política de respuesta" de abajo manda sobre cuándo usar texto.
+2. Al avanzar de etapa (\`ChangeStage\`), deja que el flujo de la nueva etapa entregue su
+   contenido (cascade). En etapas de texto libre, puedes acompañarlo con un \`ReplyText\`;
+   en etapas "solo flujo", NO añadas texto (ver Política de respuesta).
 3. SOLO usa slug_ids de content_options y etapas de valid_transitions — NO inventes slugs ni etapas.
 4. NO repitas un contenido que ya enviaste varias veces (mira "enviado N veces"): si el lead
    ya lo vio, avanza o pregunta, no lo reenvíes en bucle.
@@ -49,4 +50,6 @@ Emite SIEMPRE un plan JSON con el tool \`emit_plan\`. Nunca respondas en texto l
 
 ### Opciones de contenido (válidas para este turno):
 {CONTENT_OPTIONS}
+
+{REPLY_POLICY}
 `.trim();

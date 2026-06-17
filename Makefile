@@ -78,7 +78,7 @@ cutover-agent: ## Fase 4 ADR-0024: inicializar dialogue_states para leads vivos.
 	  dm-api:local \
 	  node /app/apps/agent/dist/scripts/cutover.js --tenant-slug $(SLUG) $(DRY)
 
-seed-agent-config: ## Importar flows declarativos + persona de un tenant. Usar: make seed-agent-config SLUG=qc [DRY=--dry-run]
+seed-agent-config: ## Importar flows + persona + config de un tenant. Usar: make seed-agent-config SLUG=qc [DRY=--dry-run]
 	@test -n "$(SLUG)" || (echo "Falta SLUG=... (ej: make seed-agent-config SLUG=qc)" && exit 1)
 	@set -a; . ./.env; set +a; \
 	docker run --rm \

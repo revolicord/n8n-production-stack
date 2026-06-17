@@ -11,6 +11,18 @@ export type MediaPolicyAction = z.infer<typeof MediaPolicyActionSchema>;
 export const MediaPolicySchema = z.record(z.string(), MediaPolicyActionSchema);
 export type MediaPolicy = z.infer<typeof MediaPolicySchema>;
 
+/**
+ * Política de respuesta por etapa (regla de negocio "camino feliz sin texto del LLM").
+ * - 'flow_only': en el camino feliz el agente NO emite texto improvisado (ReplyText/Clarify
+ *   con origin:'command'). Solo salen contenidos (send_content) y textos *scripted* de flow
+ *   (reply_text con origin:'flow', p. ej. el link de Calendly o el video de nurturing). El
+ *   texto improvisado del LLM solo sobrevive ante un desvío (cuando el turno NO avanzó por
+ *   flow/contenido), para nunca dejar al lead en visto.
+ * - 'text_ok': comportamiento clásico, el LLM puede acompañar con texto libre.
+ */
+export const StageTextPolicySchema = z.enum(['flow_only', 'text_ok']);
+export type StageTextPolicy = z.infer<typeof StageTextPolicySchema>;
+
 export const TenantConfigSchema = z
   .object({
     debounce_ms: z.number().int().positive().optional(),
@@ -57,6 +69,12 @@ export const TenantConfigSchema = z
     debug_webhook_url: z.string().url().optional(),
     // Calendly booking feedback: link de video de nurturing post-booking (editable en /settings).
     nurturing_video_url: z.string().url().optional(),
+    // Regla "camino feliz sin texto del LLM": política de texto por etapa (slug → policy).
+    // Etapas sin entrada usan el default `text_policy_default`. Ver StageTextPolicySchema.
+    text_policy_by_stage: z.record(z.string(), StageTextPolicySchema).optional(),
+    // Política por defecto para etapas no listadas en text_policy_by_stage. Default 'text_ok'
+    // para no alterar el comportamiento de tenants existentes.
+    text_policy_default: StageTextPolicySchema.optional(),
   })
   .passthrough();
 
