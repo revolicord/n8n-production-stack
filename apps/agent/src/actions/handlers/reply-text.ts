@@ -81,7 +81,9 @@ export const replyTextHandler: ActionHandler = {
     return {
       command_type: 'ReplyText',
       status: result.success ? 'sent' : 'error',
-      detail: { text, attempts: result.attempts },
+      detail: result.success
+        ? { text, attempts: result.attempts }
+        : { text, attempts: result.attempts, statusCode: result.statusCode },
       attempts: result.attempts,
     };
   },

@@ -47,7 +47,13 @@ async function post(path: string, body: unknown, apiKey: string): Promise<{ stat
 
   if (!res.ok) {
     const retriable = RETRIABLE_CODES.has(res.status);
-    throw new ManyChatError(`ManyChat ${res.status}`, res.status, retriable);
+    let detail = '';
+    try {
+      detail = await res.text();
+    } catch {
+      // ignore
+    }
+    throw new ManyChatError(`ManyChat ${res.status}: ${detail}`, res.status, retriable);
   }
   return { statusCode: res.status };
 }
@@ -62,7 +68,7 @@ export function createManyChatAdapter(apiKey: string): ChannelAdapter {
             attempts++;
             await post(
               '/fb/sending/sendFlow',
-              { subscriber_id: manychatSubscriberId, flow_ns: flowNs },
+              { subscriber_id: Number(manychatSubscriberId), flow_ns: flowNs },
               apiKey,
             );
           },
@@ -84,7 +90,7 @@ export function createManyChatAdapter(apiKey: string): ChannelAdapter {
             await post(
               '/fb/sending/sendContent',
               {
-                subscriber_id: manychatSubscriberId,
+                subscriber_id: Number(manychatSubscriberId),
                 messages: [{ type: 'text', text }],
               },
               apiKey,
