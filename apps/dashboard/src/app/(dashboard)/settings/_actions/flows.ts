@@ -48,3 +48,26 @@ export async function deleteFlow(id: string): Promise<ActionResult> {
   revalidatePath('/settings/flows');
   return { ok: true };
 }
+
+export type SyncResult = {
+  synced: string[];
+  skipped: string[];
+  pending_approval: boolean;
+};
+
+export async function syncFlows(
+  tenantId: string,
+): Promise<{ ok: true; data: SyncResult } | { ok: false; error: string }> {
+  const res = await adminFetch(`/tenants/${tenantId}/stage-flows/sync`, { method: 'POST' });
+  if (!res.ok) return { ok: false, error: await readError(res) };
+  const data = (await res.json()) as SyncResult;
+  revalidatePath('/settings/flows');
+  return { ok: true, data };
+}
+
+export async function approveFlow(id: string): Promise<ActionResult> {
+  const res = await adminFetch(`/stage-flows/${id}/approve`, { method: 'POST' });
+  if (!res.ok) return { ok: false, error: await readError(res) };
+  revalidatePath('/settings/flows');
+  return { ok: true };
+}

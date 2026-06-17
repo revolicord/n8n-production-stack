@@ -31,13 +31,14 @@ export default async function FlowsPage() {
         slugId: stageFlows.slugId,
         isActive: stageFlows.isActive,
         stageId: stageFlows.stageId,
+        pendingNs: stageFlows.pendingNs,
+        syncedAt: stageFlows.syncedAt,
       })
       .from(stageFlows)
       .where(eq(stageFlows.tenantId, tenant.id))
       .orderBy(asc(stageFlows.humanName)),
   ]);
 
-  // Attach stage display info to each flow
   const stageMap = new Map(stagesRows.map((s) => [s.id, s]));
 
   const flows: FlowRow[] = flowsRows.map((f) => {
@@ -50,7 +51,6 @@ export default async function FlowsPage() {
     };
   });
 
-  // Sort flows by stage position then name
   flows.sort((a, b) => {
     const pa = a.stagePosition ?? 999;
     const pb = b.stagePosition ?? 999;

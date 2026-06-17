@@ -5,6 +5,7 @@ import { verifyAdminAuth } from '../../lib/admin-auth.js';
 import { getDb } from '../../lib/db.js';
 import { adminSecurity, doc, uuidParams, zodDoc } from '../../lib/openapi.js';
 import {
+  approveStageFlow,
   createFlowDefinition,
   createStageFlow,
   deactivateFlowDefinition,
@@ -14,6 +15,8 @@ import {
   listStageFlowsForTenant,
   updateStageFlow,
 } from '../../services/flow-definitions.js';
+import { fetchManyChatFlows, syncFlowsToDb } from '../../services/manychat-sync.js';
+import { getTenantById, parseTenantConfig } from '../../services/tenants.js';
 
 const UuidParamSchema = z.string().uuid();
 
@@ -295,6 +298,93 @@ export default async function flowDefinitionsRoutes(app: FastifyInstance): Promi
       });
       if (!row) return reply.code(404).send({ error: { code: 'NOT_FOUND' } });
       req.log.info({ stage_flow_id: row.id }, 'stage flow updated');
+      return reply.code(200).send(row);
+    },
+  );
+
+  // POST /admin/tenants/:tenantId/stage-flows/sync — sync desde ManyChat API
+  app.post<{ Params: { tenantId: string } }>(
+    '/admin/tenants/:tenantId/stage-flows/sync',
+    doc({
+      tags: ['admin/flow-definitions'],
+      summary: 'Sincronizar flows desde ManyChat → stage_flows (siempre en pending en prod)',
+      security: adminSecurity,
+      params: uuidParams('tenantId'),
+    }),
+    async (req, reply) => {
+      if (!(await verifyAdminAuth(req, app))) {
+        return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });
+      }
+      const paramParsed = UuidParamSchema.safeParse(req.params.tenantId);
+      if (!paramParsed.success) {
+        return reply
+          .code(400)
+          .send({ error: { code: 'INVALID_PAYLOAD', details: paramParsed.error.issues } });
+      }
+      const tenant = await getTenantById(getDb(), paramParsed.data);
+      if (!tenant) return reply.code(404).send({ error: { code: 'NOT_FOUND' } });
+
+      const tenantConfig = parseTenantConfig(tenant.config);
+      const mcApiKey = tenantConfig.manychat_api_key;
+      if (!mcApiKey) {
+        return reply.code(400).send({
+          error: {
+            code: 'NO_MANYCHAT_API_KEY',
+            message: 'No hay manychat_api_key configurado para este tenant',
+          },
+        });
+      }
+
+      const mcFlows = await fetchManyChatFlows(mcApiKey, req.log);
+      if (!mcFlows) {
+        return reply.code(502).send({ error: { code: 'MANYCHAT_UNAVAILABLE' } });
+      }
+
+      const cfg = tenantConfig as Record<string, unknown>;
+      const flowPrefix = typeof cfg.flow_prefix === 'string' ? cfg.flow_prefix : 'QC_';
+
+      const result = await syncFlowsToDb(
+        getDb(),
+        paramParsed.data,
+        mcFlows,
+        flowPrefix,
+        false,
+        req.log,
+      );
+      req.log.info(
+        {
+          tenant_id: paramParsed.data,
+          synced: result.synced.length,
+          skipped: result.skipped.length,
+        },
+        'stage flows synced from ManyChat',
+      );
+      return reply.code(200).send(result);
+    },
+  );
+
+  // POST /admin/stage-flows/:id/approve — activa un flow pendiente
+  app.post<{ Params: { id: string } }>(
+    '/admin/stage-flows/:id/approve',
+    doc({
+      tags: ['admin/flow-definitions'],
+      summary: 'Aprobar un stage_flow pendiente (mueve pending_ns → flow_ns)',
+      security: adminSecurity,
+      params: uuidParams('id'),
+    }),
+    async (req, reply) => {
+      if (!(await verifyAdminAuth(req, app))) {
+        return reply.code(401).send({ error: { code: 'UNAUTHORIZED' } });
+      }
+      const paramParsed = UuidParamSchema.safeParse(req.params.id);
+      if (!paramParsed.success) {
+        return reply
+          .code(400)
+          .send({ error: { code: 'INVALID_PAYLOAD', details: paramParsed.error.issues } });
+      }
+      const row = await approveStageFlow(getDb(), paramParsed.data);
+      if (!row) return reply.code(404).send({ error: { code: 'NOT_FOUND' } });
+      req.log.info({ stage_flow_id: row.id, flow_ns: row.flowNs }, 'stage flow approved');
       return reply.code(200).send(row);
     },
   );

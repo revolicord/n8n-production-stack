@@ -6,7 +6,7 @@ import {
   stageFlows,
 } from '@dm-api/db';
 import type { FlowDefinition } from '@dm-api/shared';
-import { and, asc, desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, sql } from 'drizzle-orm';
 
 export async function listFlowDefinitions(
   db: DbClient,
@@ -159,6 +159,15 @@ export async function updateStageFlow(
       ...(patch.slugId !== undefined && { slugId: patch.slugId }),
       ...(patch.isActive !== undefined && { isActive: patch.isActive }),
     })
+    .where(eq(stageFlows.id, id))
+    .returning();
+  return rows[0] ?? null;
+}
+
+export async function approveStageFlow(db: DbClient, id: string): Promise<StageFlow | null> {
+  const rows = await db
+    .update(stageFlows)
+    .set({ flowNs: sql`pending_ns`, pendingNs: null, isActive: true })
     .where(eq(stageFlows.id, id))
     .returning();
   return rows[0] ?? null;

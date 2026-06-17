@@ -1,6 +1,12 @@
 'use client';
 
-import { createFlow, deleteFlow, updateFlow } from '@/app/(dashboard)/settings/_actions/flows';
+import {
+  type SyncResult,
+  approveFlow,
+  deleteFlow,
+  syncFlows,
+  updateFlow,
+} from '@/app/(dashboard)/settings/_actions/flows';
 import { toast } from '@/components/settings/ToastHost';
 import { useState, useTransition } from 'react';
 
@@ -19,6 +25,8 @@ export type FlowRow = {
   stageDisplayName: string | null;
   stageSlug: string | null;
   stagePosition: number | null;
+  pendingNs: string | null;
+  syncedAt: Date | null;
 };
 
 type Run = (
@@ -32,19 +40,10 @@ interface Props {
   stages: StageOption[];
 }
 
-const MEDIA_TYPES = [
-  { value: '', label: 'Sin tipo' },
-  { value: 'audio', label: 'Audio' },
-  { value: 'video', label: 'Video' },
-  { value: 'image', label: 'Imagen' },
-  { value: 'text', label: 'Texto' },
-  { value: 'card', label: 'Card' },
-  { value: 'sequence', label: 'Secuencia' },
-];
-
 const MEDIA_COLORS: Record<string, string> = {
   audio: 'bg-amber-900/40 text-amber-300 border-amber-700',
   video: 'bg-blue-900/40 text-blue-300 border-blue-700',
+  img: 'bg-purple-900/40 text-purple-300 border-purple-700',
   image: 'bg-purple-900/40 text-purple-300 border-purple-700',
   text: 'bg-qc-bg text-qc-textBody border-qc-border',
   card: 'bg-green-900/40 text-green-300 border-green-700',
@@ -53,6 +52,7 @@ const MEDIA_COLORS: Record<string, string> = {
 
 export function FlowsEditor({ tenantId, flows, stages }: Props) {
   const [isPending, startTransition] = useTransition();
+  const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
 
   const run: Run = (action, okMsg) => {
     startTransition(async () => {
@@ -65,21 +65,87 @@ export function FlowsEditor({ tenantId, flows, stages }: Props) {
     });
   };
 
-  // Group flows by stage
-  const grouped = groupByStage(flows, stages);
+  function handleSync() {
+    startTransition(async () => {
+      const result = await syncFlows(tenantId);
+      if (result.ok) {
+        setSyncResult(result.data);
+        const newCount = result.data.synced.length;
+        toast(
+          newCount > 0
+            ? `${newCount} flujo${newCount !== 1 ? 's' : ''} sincronizado${newCount !== 1 ? 's' : ''} — revisa los pendientes`
+            : 'Sin cambios (ManyChat y DB ya están sincronizados)',
+        );
+      } else {
+        toast(result.error, false);
+      }
+    });
+  }
+
+  const pending = flows.filter((f) => f.pendingNs !== null);
+  const active = flows.filter((f) => f.pendingNs === null);
+  const grouped = groupByStage(active, stages);
 
   return (
     <div className="p-6 space-y-8">
-      <div>
-        <h2 className="text-base font-semibold text-white mb-1">Flujos ManyChat del agente</h2>
-        <p className="text-qc-textSubtle text-sm">
-          Cada flujo es un nombre de namespace de ManyChat que el agente puede enviar. El{' '}
-          <code className="text-qc-textBody">flow_ns</code> debe coincidir exactamente con el nombre
-          en ManyChat. El LLM usa <b>Descripción</b> para saber qué contiene y <b>Condición</b> para
-          decidir cuándo enviarlo.
-        </p>
+      {/* Header + sync */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-base font-semibold text-white mb-1">Flujos ManyChat del agente</h2>
+          <p className="text-qc-textSubtle text-sm max-w-2xl">
+            Los flows se crean en ManyChat con la convención{' '}
+            <code className="text-qc-textBody">
+              QC_{'{ETAPA}'}_{'{MEDIA}'}_{'{DESC}'}
+            </code>
+            . Tras sincronizar, completa aquí la <b className="text-qc-textBody">Descripción</b> y
+            la <b className="text-qc-textBody">Condición de uso</b> — ManyChat trunca los nombres
+            largos, así que estos campos se editan en el panel.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={handleSync}
+          disabled={isPending}
+          className="shrink-0 px-4 py-2 bg-qc-teal700 hover:bg-qc-teal500 text-white text-sm font-medium rounded transition-colors disabled:opacity-50 whitespace-nowrap"
+        >
+          {isPending ? 'Sincronizando…' : '↻ Sync desde ManyChat'}
+        </button>
       </div>
 
+      {/* Sync result banner */}
+      {syncResult && (
+        <div className="bg-qc-surface border border-qc-border rounded-lg p-4 text-sm space-y-1">
+          <p className="text-white font-medium">Resultado del último sync</p>
+          <p className="text-qc-textSubtle">
+            {syncResult.synced.length} procesado{syncResult.synced.length !== 1 ? 's' : ''} ·{' '}
+            {syncResult.skipped.length} omitido{syncResult.skipped.length !== 1 ? 's' : ''} (nombre
+            no cumple convención)
+            {syncResult.pending_approval && ' · Pendientes de aprobación abajo'}
+          </p>
+          {syncResult.skipped.length > 0 && (
+            <p className="text-qc-textSubtle text-xs font-mono mt-1">
+              Omitidos: {syncResult.skipped.join(', ')}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Pending approvals */}
+      {pending.length > 0 && (
+        <div>
+          <h3 className="text-sm font-semibold text-amber-300 mb-3 flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />
+            Pendientes de aprobación ({pending.length})
+          </h3>
+          <div className="space-y-2">
+            {pending.map((f) => (
+              <PendingCard key={f.id} flow={f} run={run} busy={isPending} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Active flows grouped by stage */}
       {grouped.map(({ stage, flows: stageFlows }) => (
         <StageSection
           key={stage?.id ?? 'unassigned'}
@@ -90,10 +156,12 @@ export function FlowsEditor({ tenantId, flows, stages }: Props) {
         />
       ))}
 
-      <div className="border-t border-qc-border pt-6">
-        <h3 className="text-sm font-semibold text-white mb-4">Agregar nuevo flujo</h3>
-        <AddFlowForm tenantId={tenantId} stages={stages} run={run} busy={isPending} />
-      </div>
+      {active.length === 0 && pending.length === 0 && (
+        <p className="text-qc-textSubtle text-sm text-center py-8">
+          No hay flows registrados. Crea flows en ManyChat con el prefijo{' '}
+          <code className="text-qc-textBody">QC_</code> y luego sincroniza.
+        </p>
+      )}
     </div>
   );
 }
@@ -107,29 +175,54 @@ function groupByStage(flows: FlowRow[], stages: StageOption[]) {
   }
 
   const result: { stage: StageOption | null; flows: FlowRow[] }[] = [];
-
-  // Add stages in order (only those with flows)
   for (const s of stages) {
-    const stageFlows = map.get(s.id);
-    if (stageFlows) {
-      result.push({ stage: s, flows: stageFlows });
+    const sf = map.get(s.id);
+    if (sf) {
+      result.push({ stage: s, flows: sf });
       map.delete(s.id);
     }
   }
-
-  // Unassigned flows at the end
   const unassigned = map.get(null);
-  if (unassigned && unassigned.length > 0) {
-    result.push({ stage: null, flows: unassigned });
-  }
-
-  // Any remaining (stage deleted but flows still exist)
-  for (const [, orphaned] of map) {
-    if (orphaned.length > 0) result.push({ stage: null, flows: orphaned });
-  }
-
+  if (unassigned && unassigned.length > 0) result.push({ stage: null, flows: unassigned });
   return result;
 }
+
+// ── Pending card ───────────────────────────────────────────────────────────────
+
+interface PendingCardProps {
+  flow: FlowRow;
+  run: Run;
+  busy: boolean;
+}
+
+function PendingCard({ flow, run, busy }: PendingCardProps) {
+  return (
+    <div className="bg-amber-950/30 border border-amber-800/50 rounded-lg px-4 py-3 flex items-center justify-between gap-4">
+      <div className="min-w-0">
+        <p className="text-sm text-white font-medium truncate">
+          {flow.humanName ?? flow.pendingNs}
+        </p>
+        <p className="text-xs text-qc-textSubtle mt-0.5">
+          ns pendiente: <code className="text-amber-300">{flow.pendingNs}</code>
+          {flow.stageSlug && (
+            <span className="ml-2 text-qc-textSubtle">etapa: {flow.stageSlug}</span>
+          )}
+          {flow.mediaType && <span className="ml-2 text-qc-textSubtle">{flow.mediaType}</span>}
+        </p>
+      </div>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => run(() => approveFlow(flow.id), 'Flow aprobado y activado')}
+        className="shrink-0 px-3 py-1.5 bg-amber-700 hover:bg-amber-600 text-white text-xs font-medium rounded transition-colors disabled:opacity-50"
+      >
+        Aprobar
+      </button>
+    </div>
+  );
+}
+
+// ── Stage section ──────────────────────────────────────────────────────────────
 
 interface StageSectionProps {
   stage: StageOption | null;
@@ -156,7 +249,7 @@ function StageSection({ stage, flows, run, busy }: StageSectionProps) {
           ({flows.length} flujo{flows.length !== 1 ? 's' : ''})
         </span>
       </div>
-      <div className="space-y-3">
+      <div className="space-y-2">
         {flows.map((f) => (
           <FlowCard key={f.id} flow={f} run={run} busy={busy} />
         ))}
@@ -164,6 +257,8 @@ function StageSection({ stage, flows, run, busy }: StageSectionProps) {
     </div>
   );
 }
+
+// ── Flow card ──────────────────────────────────────────────────────────────────
 
 interface FlowCardProps {
   flow: FlowRow;
@@ -177,9 +272,13 @@ function FlowCard({ flow, run, busy }: FlowCardProps) {
     ? (MEDIA_COLORS[flow.mediaType] ?? 'bg-qc-bg text-qc-textBody border-qc-border')
     : null;
 
+  const needsDescription = !flow.contentDescription || !flow.usageCondition;
+
   return (
     <div
-      className={`bg-qc-surface border border-qc-border rounded-lg ${flow.isActive === false ? 'opacity-50' : ''}`}
+      className={`bg-qc-surface border rounded-lg ${
+        needsDescription ? 'border-yellow-700/60' : 'border-qc-border'
+      } ${flow.isActive === false ? 'opacity-50' : ''}`}
     >
       {/* Header */}
       <div className="flex items-center justify-between gap-2 px-4 py-3">
@@ -194,17 +293,17 @@ function FlowCard({ flow, run, busy }: FlowCardProps) {
           <span className="text-sm text-qc-textBody font-medium truncate">
             {flow.humanName ?? flow.flowNs}
           </span>
-          <code className="shrink-0 text-xs px-1.5 py-0.5 rounded bg-qc-bg border border-qc-border text-qc-textSubtle hidden sm:inline">
-            {flow.flowNs}
-          </code>
           {flow.mediaType && mediaColor && (
             <span className={`shrink-0 text-xs px-1.5 py-0.5 rounded border ${mediaColor}`}>
               {flow.mediaType}
             </span>
           )}
-          {flow.slugId && (
-            <span className="shrink-0 text-xs text-qc-textSubtle hidden md:inline">
-              #{flow.slugId}
+          {needsDescription && (
+            <span
+              className="shrink-0 text-xs text-yellow-500"
+              title="Falta descripción o condición"
+            >
+              ✎ completar
             </span>
           )}
         </div>
@@ -228,7 +327,7 @@ function FlowCard({ flow, run, busy }: FlowCardProps) {
             onClick={() => {
               if (
                 confirm(
-                  `¿Eliminar el flujo "${flow.humanName ?? flow.flowNs}"? Esta acción no se puede deshacer.`,
+                  `¿Eliminar "${flow.humanName ?? flow.flowNs}"? Esta acción no se puede deshacer.`,
                 )
               ) {
                 run(() => deleteFlow(flow.id), 'Flujo eliminado');
@@ -241,57 +340,15 @@ function FlowCard({ flow, run, busy }: FlowCardProps) {
         </div>
       </div>
 
-      {/* Expanded edit form */}
+      {/* Expanded — solo los campos que el LLM usa, que ManyChat no puede guardar bien */}
       {expanded && (
         <div className="border-t border-qc-border px-4 py-4 space-y-3">
-          <Labeled label="Nombre visible">
-            <input
-              type="text"
-              defaultValue={flow.humanName ?? ''}
-              onBlur={(e) => {
-                const v = e.target.value.trim();
-                if (v && v !== (flow.humanName ?? '')) {
-                  run(() => updateFlow(flow.id, { human_name: v }), 'Nombre actualizado');
-                }
-              }}
-              className={inputCls}
-            />
-          </Labeled>
+          <p className="text-xs text-qc-textSubtle font-mono">
+            ns: {flow.flowNs}
+            {flow.slugId && <span className="ml-3">slug: {flow.slugId}</span>}
+          </p>
 
-          <div className="grid grid-cols-2 gap-3">
-            <Labeled label="Tipo de media">
-              <select
-                defaultValue={flow.mediaType ?? ''}
-                onChange={(e) => {
-                  const v = e.target.value || null;
-                  run(() => updateFlow(flow.id, { media_type: v }), 'Tipo actualizado');
-                }}
-                className={inputCls}
-              >
-                {MEDIA_TYPES.map((mt) => (
-                  <option key={mt.value} value={mt.value}>
-                    {mt.label}
-                  </option>
-                ))}
-              </select>
-            </Labeled>
-            <Labeled label="Slug ID">
-              <input
-                type="text"
-                defaultValue={flow.slugId ?? ''}
-                onBlur={(e) => {
-                  const v = e.target.value.trim() || null;
-                  if (v !== (flow.slugId ?? null)) {
-                    run(() => updateFlow(flow.id, { slug_id: v }), 'Slug actualizado');
-                  }
-                }}
-                placeholder="ej: content_audio_d"
-                className={inputCls}
-              />
-            </Labeled>
-          </div>
-
-          <Labeled label="Qué contiene este flujo (descripción del contenido)">
+          <Labeled label="Qué contiene este flujo — descripción para el LLM">
             <textarea
               rows={3}
               defaultValue={flow.contentDescription ?? ''}
@@ -304,11 +361,12 @@ function FlowCard({ flow, run, busy }: FlowCardProps) {
                   );
                 }
               }}
+              placeholder="ej: Audio testimonial de cliente que cerró en 3 días + link video YouTube de contenido de valor"
               className={textareaCls}
             />
           </Labeled>
 
-          <Labeled label="Instrucciones para el LLM (cuándo y cómo usarlo)">
+          <Labeled label="Cuándo debe enviarlo el LLM (condición de uso)">
             <textarea
               rows={4}
               defaultValue={flow.usageCondition ?? ''}
@@ -318,6 +376,7 @@ function FlowCard({ flow, run, busy }: FlowCardProps) {
                   run(() => updateFlow(flow.id, { usage_condition: v }), 'Condición guardada');
                 }
               }}
+              placeholder="ej: Enviar después de confirmar el agendamiento, como cierre de la conversación de la etapa D"
               className={textareaCls}
             />
           </Labeled>
@@ -327,167 +386,7 @@ function FlowCard({ flow, run, busy }: FlowCardProps) {
   );
 }
 
-interface AddFlowFormProps {
-  tenantId: string;
-  stages: StageOption[];
-  run: Run;
-  busy: boolean;
-}
-
-function AddFlowForm({ tenantId, stages, run, busy }: AddFlowFormProps) {
-  const [stageId, setStageId] = useState('');
-  const [flowNs, setFlowNs] = useState('');
-  const [humanName, setHumanName] = useState('');
-  const [mediaType, setMediaType] = useState('');
-  const [slugId, setSlugId] = useState('');
-  const [contentDescription, setContentDescription] = useState('');
-  const [usageCondition, setUsageCondition] = useState('');
-  const [open, setOpen] = useState(false);
-
-  function handleAdd() {
-    const ns = flowNs.trim();
-    const name = humanName.trim();
-    if (!ns || !name || !stageId) {
-      toast('Etapa, namespace y nombre son obligatorios', false);
-      return;
-    }
-    run(
-      () =>
-        createFlow(tenantId, {
-          stage_id: stageId,
-          flow_ns: ns,
-          human_name: name,
-          media_type: mediaType || null,
-          slug_id: slugId.trim() || null,
-          content_description: contentDescription.trim() || null,
-          usage_condition: usageCondition.trim() || null,
-        }),
-      'Flujo creado',
-    );
-    setFlowNs('');
-    setHumanName('');
-    setMediaType('');
-    setSlugId('');
-    setContentDescription('');
-    setUsageCondition('');
-    setOpen(false);
-  }
-
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="px-3 py-1.5 bg-qc-teal700 hover:bg-qc-teal500 text-white text-sm rounded transition-colors"
-      >
-        + Agregar flujo
-      </button>
-    );
-  }
-
-  return (
-    <div className="bg-qc-surface border border-qc-border rounded-lg p-4 space-y-3 max-w-2xl">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Labeled label="Etapa *">
-          <select value={stageId} onChange={(e) => setStageId(e.target.value)} className={inputCls}>
-            <option value="">-- Selecciona --</option>
-            {stages.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.displayName} ({s.slug})
-              </option>
-            ))}
-          </select>
-        </Labeled>
-        <Labeled label="Namespace ManyChat (flow_ns) *">
-          <input
-            type="text"
-            value={flowNs}
-            onChange={(e) => setFlowNs(e.target.value)}
-            placeholder="qc_nombre_del_flujo"
-            className={inputCls}
-          />
-        </Labeled>
-        <Labeled label="Nombre visible *">
-          <input
-            type="text"
-            value={humanName}
-            onChange={(e) => setHumanName(e.target.value)}
-            placeholder="ej: Audio testimonial + video YouTube"
-            className={inputCls}
-          />
-        </Labeled>
-        <Labeled label="Tipo de media">
-          <select
-            value={mediaType}
-            onChange={(e) => setMediaType(e.target.value)}
-            className={inputCls}
-          >
-            {MEDIA_TYPES.map((mt) => (
-              <option key={mt.value} value={mt.value}>
-                {mt.label}
-              </option>
-            ))}
-          </select>
-        </Labeled>
-        <Labeled label="Slug ID">
-          <input
-            type="text"
-            value={slugId}
-            onChange={(e) => setSlugId(e.target.value)}
-            placeholder="ej: content_audio_d"
-            className={inputCls}
-          />
-        </Labeled>
-      </div>
-
-      <Labeled label="Descripción del contenido">
-        <textarea
-          rows={3}
-          value={contentDescription}
-          onChange={(e) => setContentDescription(e.target.value)}
-          placeholder="Qué contiene este flujo de ManyChat..."
-          className={textareaCls}
-        />
-      </Labeled>
-
-      <Labeled label="Instrucciones para el LLM (cuándo usarlo)">
-        <textarea
-          rows={4}
-          value={usageCondition}
-          onChange={(e) => setUsageCondition(e.target.value)}
-          placeholder="El agente debe enviar este flujo cuando..."
-          className={textareaCls}
-        />
-      </Labeled>
-
-      <div className="flex items-center gap-2 pt-1">
-        <button
-          type="button"
-          onClick={handleAdd}
-          disabled={busy || !flowNs.trim() || !humanName.trim() || !stageId}
-          className="px-3 py-1.5 bg-qc-teal700 hover:bg-qc-teal500 text-white text-sm rounded transition-colors disabled:opacity-50"
-        >
-          Crear flujo
-        </button>
-        <button
-          type="button"
-          onClick={() => setOpen(false)}
-          className="text-sm text-qc-textMuted hover:text-qc-textBody transition-colors"
-        >
-          Cancelar
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function Labeled({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
+function Labeled({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
       <span className="block text-xs text-qc-textSubtle mb-1">{label}</span>
@@ -495,9 +394,6 @@ function Labeled({
     </div>
   );
 }
-
-const inputCls =
-  'w-full bg-qc-bg border border-qc-borderHover rounded px-2 py-1.5 text-sm text-qc-textBody focus:border-qc-teal500 focus:outline-none';
 
 const textareaCls =
   'w-full bg-qc-bg border border-qc-borderHover rounded px-2 py-1.5 text-sm text-qc-textBody focus:border-qc-teal500 focus:outline-none resize-y';
