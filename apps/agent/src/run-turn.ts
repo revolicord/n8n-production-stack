@@ -38,7 +38,29 @@ export async function runTurn(input: TurnInput): Promise<AgentResponse> {
       recursionLimit: 50,
     });
     const response = finalState.agentResponse;
-    if (!response) throw new Error('agent graph produced no response');
+    if (!response) {
+      // Handoff suspension: handoffNode called interrupt() before respond ran.
+      // The turn + dialogue state were already persisted in DB by handoffNode.
+      if (finalState.flowResult?.interrupt) {
+        return {
+          turn_id: input.turn_id,
+          status: 'interrupted' as const,
+          commands: finalState.allCommands ?? [],
+          action_results: [],
+          response_texts: [],
+          final_stage: finalState.flowResult.newStage ?? finalState.assembled?.currentStage ?? '',
+          dialogue_state: finalState.flowResult.state,
+          metrics: {
+            model: finalState.llmMetrics?.model ?? null,
+            input_tokens: finalState.llmMetrics?.inputTokens ?? null,
+            output_tokens: finalState.llmMetrics?.outputTokens ?? null,
+            llm_ms: finalState.llmMetrics?.llmMs ?? null,
+            total_ms: Date.now() - startedAt,
+          },
+        };
+      }
+      throw new Error('agent graph produced no response');
+    }
     return response;
   } catch (err) {
     log.error({ err }, 'agent turn failed');
