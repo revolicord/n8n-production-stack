@@ -92,7 +92,15 @@ export function createManyChatAdapter(apiKey: string): ChannelAdapter {
               '/fb/sending/sendContent',
               {
                 subscriber_id: Number(manychatSubscriberId),
-                messages: [{ type: 'text', text }],
+                data: {
+                  version: 'v2',
+                  content: {
+                    type: 'instagram',
+                    messages: [{ type: 'text', text }],
+                    actions: [],
+                    quick_replies: [],
+                  },
+                },
               },
               apiKey,
             );

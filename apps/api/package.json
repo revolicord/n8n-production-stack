@@ -11,7 +11,8 @@
     "start:worker": "node dist/worker.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "smoke:manychat": "tsx src/scripts/smoke-manychat.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1052.0",

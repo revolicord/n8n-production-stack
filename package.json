@@ -17,6 +17,7 @@
     "format": "biome format --write .",
     "dev:api": "pnpm --filter @dm-api/api dev:api",
     "dev:worker": "pnpm --filter @dm-api/api dev:worker",
+    "smoke:manychat": "pnpm --filter @dm-api/api smoke:manychat",
     "db:generate": "pnpm --filter @dm-api/db db:generate",
     "db:migrate": "pnpm --filter @dm-api/db db:migrate",
     "db:studio": "pnpm --filter @dm-api/db db:studio",
