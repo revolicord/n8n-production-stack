@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-CONTAINER=$(docker ps --format "{{.Names}}" | grep postgres | grep -v "dev-" | head -n 1)
+CONTAINER=$(docker ps --format "{{.Names}}" | grep "n8n_postgres" | head -n 1)
 
 if [ -z "$CONTAINER" ]; then
   echo "ERROR: No se encontró el contenedor de postgres."
