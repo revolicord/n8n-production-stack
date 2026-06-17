@@ -1,7 +1,7 @@
 import { AgenteEditor } from '@/components/settings/AgenteEditor';
 import { db, tenants } from '@/lib/db';
 import { getActiveTenant } from '@/lib/tenant';
-import { TenantConfigSchema } from '@dm-api/shared';
+import { DEFAULT_PLATFORM_SKELETON, TenantConfigSchema } from '@dm-api/shared';
 import { eq } from 'drizzle-orm';
 
 export const dynamic = 'force-dynamic';
@@ -20,6 +20,8 @@ export default async function AgentePage() {
   return (
     <AgenteEditor
       tenantId={tenant.id}
+      skeletonPrompt={config.skeleton_prompt ?? ''}
+      defaultSkeletonPrompt={DEFAULT_PLATFORM_SKELETON}
       personaPrompt={config.persona_prompt ?? ''}
       calendlyUrl={config.calendly_url ?? ''}
       nurturingVideoUrl={config.nurturing_video_url ?? ''}

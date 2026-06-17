@@ -15,6 +15,7 @@ const TenantConfigPatchSchema = z
     media_policy: MediaPolicySchema,
     // ADR-0024: configuración de negocio editable en /settings/agente
     persona_prompt: z.string(),
+    skeleton_prompt: z.string(),
     disqualification_reasons: z.array(z.string()),
     calendly_url: z.string().url().or(z.literal('')),
   })
@@ -50,7 +51,7 @@ export default async function tenantsRoutes(app: FastifyInstance): Promise<void>
       description:
         'Merge superficial sobre tenant.config: solo toca las claves enviadas, ' +
         'preserva el resto. Subset editable: notification_keywords, media_policy, ' +
-        'persona_prompt, disqualification_reasons, calendly_url.',
+        'persona_prompt, skeleton_prompt, disqualification_reasons, calendly_url.',
       security: adminSecurity,
       params: uuidParams('id'),
       body: zodDoc(TenantConfigPatchSchema),

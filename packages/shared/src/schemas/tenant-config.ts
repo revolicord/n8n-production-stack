@@ -35,6 +35,10 @@ export const TenantConfigSchema = z
     shadow_agent: z.boolean().optional(),
     // ADR-0024: bloque de persona del tenant (editable en /settings)
     persona_prompt: z.string().optional(),
+    // Esqueleto de plataforma editable por tenant. Si no está definido se usa el
+    // PLATFORM_SKELETON hardcodeado en apps/agent/src/core/llm/prompt.ts.
+    // Debe incluir los placeholders {VALID_TRANSITIONS} y {CONTENT_OPTIONS}.
+    skeleton_prompt: z.string().optional(),
     // Regla de negocio "nunca dejar al lead sin respuesta": texto de último recurso que
     // el guardrail envía si un turno no produjo ningún mensaje visible (ni ReplyText ni
     // SendContent). Editable por tenant; si no se define se usa un default neutro.
