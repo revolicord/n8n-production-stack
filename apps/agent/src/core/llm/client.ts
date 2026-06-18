@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { LlmPlan } from '@dm-api/shared';
 import { LlmPlanSchema } from '@dm-api/shared';
+import { wrapAnthropic } from 'langsmith/wrappers/anthropic';
 import type { Logger } from 'pino';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 
@@ -24,11 +25,13 @@ export interface LlmCallInput {
 }
 
 export async function callLlm(input: LlmCallInput): Promise<LlmCallResult> {
-  const client = new Anthropic({
-    apiKey: input.apiKey,
-    timeout: input.timeoutMs ?? 55_000,
-    maxRetries: 1,
-  });
+  const client = wrapAnthropic(
+    new Anthropic({
+      apiKey: input.apiKey,
+      timeout: input.timeoutMs ?? 55_000,
+      maxRetries: 1,
+    }),
+  );
 
   const toolSchema = zodToJsonSchema(LlmPlanSchema, { name: EMIT_PLAN_TOOL, $refStrategy: 'none' });
   const inputSchema =
@@ -54,7 +57,9 @@ export async function callLlm(input: LlmCallInput): Promise<LlmCallResult> {
   });
 
   const durationMs = Date.now() - startedAt;
-  const toolUse = response.content.find((c): c is Anthropic.ToolUseBlock => c.type === 'tool_use');
+  const toolUse = response.content.find(
+    (c: Anthropic.ContentBlock): c is Anthropic.ToolUseBlock => c.type === 'tool_use',
+  );
   if (!toolUse) {
     throw new Error('LLM did not call emit_plan tool');
   }

@@ -47,6 +47,9 @@ importers:
       ioredis:
         specifier: 5.4.1
         version: 5.4.1
+      langsmith:
+        specifier: ^0.7.10
+        version: 0.7.10
       pino:
         specifier: 9.5.0
         version: 9.5.0
@@ -2333,8 +2336,8 @@ packages:
   json-schema-traverse@1.0.0:
     resolution: {integrity: sha512-NM8/P9n3XjXhIZn1lLhkFaACTOURQXjWhV4BA/RnOv8xvgqtqpAX9IO4mRQxSx1Rlo4tqzeqb0sOlruaOy3dug==}
 
-  langsmith@0.7.7:
-    resolution: {integrity: sha512-ccXRX1kRDSIf+jtH+XerEhz8TmZN4SEu0QzMs9Zqd/hl5SGvMK4hPTv7+Pwpooprzenib+41RyZYDqgb9KWjcA==}
+  langsmith@0.7.10:
+    resolution: {integrity: sha512-3EjJx9zGMzqF60eT9JADHF+Hn/T5ayTgEVp4d3M5yvJIJi3q6seX0p5jT8ecBCWBi1kIvvssWrcDxfwgSier7Q==}
     peerDependencies:
       '@opentelemetry/api': '*'
       '@opentelemetry/exporter-trace-otlp-proto': '*'
@@ -4081,7 +4084,7 @@ snapshots:
       '@cfworker/json-schema': 4.1.1
       '@standard-schema/spec': 1.1.0
       js-tiktoken: 1.0.21
-      langsmith: 0.7.7
+      langsmith: 0.7.10
       mustache: 4.2.0
       p-queue: 6.6.2
       zod: 3.25.76
@@ -5147,7 +5150,7 @@ snapshots:
 
   json-schema-traverse@1.0.0: {}
 
-  langsmith@0.7.7:
+  langsmith@0.7.10:
     dependencies:
       p-queue: 6.6.2
 
