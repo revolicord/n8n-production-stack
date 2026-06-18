@@ -1,5 +1,5 @@
 import { tenants } from '@dm-api/db';
-import { MediaPolicySchema } from '@dm-api/shared';
+import { FollowupWindowSchema, MediaPolicySchema } from '@dm-api/shared';
 import { eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -19,6 +19,10 @@ const TenantConfigPatchSchema = z
     disqualification_reasons: z.array(z.string()),
     calendly_url: z.string().url().or(z.literal('')),
     nurturing_video_url: z.string().url().or(z.literal('')),
+    // Follow-ups automáticos (editable en /settings/follow-ups)
+    followups_enabled: z.boolean(),
+    followup_reset_on_reply: z.boolean(),
+    followup_window: FollowupWindowSchema.nullable(),
   })
   .partial();
 

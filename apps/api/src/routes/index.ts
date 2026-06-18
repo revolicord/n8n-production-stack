@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import agentResourcesRoutes from './admin/agent-resources.js';
 import assetsRoutes from './admin/assets.js';
+import bookingRemindersRoutes from './admin/booking-reminders.js';
 import flowDefinitionsRoutes from './admin/flow-definitions.js';
 import followupMessagesRoutes from './admin/followup-messages.js';
 import followupsRoutes from './admin/followups.js';
@@ -32,6 +33,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   await app.register(tenantsRoutes);
   await app.register(followupsRoutes);
   await app.register(followupMessagesRoutes);
+  await app.register(bookingRemindersRoutes);
   await app.register(assetsRoutes);
   await app.register(agentResourcesRoutes);
   await app.register(stageTransitionsMapRoutes);

@@ -51,6 +51,9 @@ export function getNotifyQueue(): Queue<NotifyJobData> {
 // Job repetible que recuerda por Telegram los leads aún pausados.
 export const PAUSE_REMINDER_QUEUE = 'pause-reminder';
 
+// Job repetible que envía los follow-ups vencidos (migración del runner n8n).
+export const FOLLOWUP_QUEUE = 'followup-runner';
+
 export async function closeQueue(): Promise<void> {
   if (cachedQueue) {
     await cachedQueue.close();

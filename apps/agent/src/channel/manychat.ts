@@ -1,4 +1,10 @@
-import type { ChannelAdapter, SendFlowResult, SendTextResult } from './types.js';
+import type {
+  ChannelAdapter,
+  ContentMessage,
+  SendContentResult,
+  SendFlowResult,
+  SendTextResult,
+} from './types.js';
 
 const MANYCHAT_BASE = 'https://api.manychat.com';
 const RETRIABLE_CODES = new Set([429, 500, 502, 503, 504]);
@@ -114,7 +120,49 @@ export function createManyChatAdapter(apiKey: string): ChannelAdapter {
         return { success: false, statusCode: code, attempts, errorBody };
       }
     },
+
+    async sendContent(messages, manychatSubscriberId): Promise<SendContentResult> {
+      let attempts = 0;
+      try {
+        await withRetry(
+          async () => {
+            attempts++;
+            await post(
+              '/fb/sending/sendContent',
+              {
+                subscriber_id: Number(manychatSubscriberId),
+                data: {
+                  version: 'v2',
+                  content: {
+                    type: 'instagram',
+                    messages: toManyChatMessages(messages),
+                    actions: [],
+                    quick_replies: [],
+                  },
+                },
+              },
+              apiKey,
+            );
+          },
+          (e) => e instanceof ManyChatError && e.retriable,
+        );
+        return { success: true, statusCode: 200, attempts };
+      } catch (err) {
+        const code = err instanceof ManyChatError ? err.statusCode : 0;
+        const errorBody = err instanceof Error ? err.message : String(err);
+        return { success: false, statusCode: code, attempts, errorBody };
+      }
+    },
   };
+}
+
+/** Traduce los `ContentMessage` internos al shape v2 de ManyChat. */
+function toManyChatMessages(
+  messages: ContentMessage[],
+): Array<{ type: 'text'; text: string } | { type: 'image'; url: string }> {
+  return messages.map((m) =>
+    m.type === 'image' ? { type: 'image', url: m.url } : { type: 'text', text: m.text },
+  );
 }
 
 export function createDryRunAdapter(): ChannelAdapter {
@@ -123,6 +171,9 @@ export function createDryRunAdapter(): ChannelAdapter {
       return { success: true, statusCode: 0, attempts: 0 };
     },
     async sendText(_text, _subscriberId): Promise<SendTextResult> {
+      return { success: true, statusCode: 0, attempts: 0 };
+    },
+    async sendContent(_messages, _subscriberId): Promise<SendContentResult> {
       return { success: true, statusCode: 0, attempts: 0 };
     },
   };

@@ -47,6 +47,7 @@ function makeCtx(overrides: Partial<ActionContext> = {}): ActionContext {
         attempts: 1,
       } satisfies SendTextResult),
       sendFlow: vi.fn(),
+      sendContent: vi.fn(),
     },
     db: {} as unknown as ActionContext['db'],
     redis: {} as unknown as ActionContext['redis'],
@@ -86,6 +87,7 @@ describe('replyTextHandler — texto literal', () => {
           errorBody: 'ManyChat 500: Internal Server Error',
         } satisfies SendTextResult),
         sendFlow: vi.fn(),
+        sendContent: vi.fn(),
       },
     });
 
@@ -109,6 +111,7 @@ describe('replyTextHandler — texto literal', () => {
           errorBody: 'ManyChat 401: Unauthorized',
         } satisfies SendTextResult),
         sendFlow: vi.fn(),
+        sendContent: vi.fn(),
       },
     });
 

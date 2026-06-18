@@ -8,6 +8,8 @@ import { getDb } from '../lib/db.js';
 import { doc } from '../lib/openapi.js';
 import { getProcessBatchQueue } from '../lib/queue.js';
 import { getRedis } from '../lib/redis.js';
+import { cancelBooking, upsertBooking } from '../services/bookings.js';
+import { getOrCreateOpenConversation } from '../services/conversations.js';
 import { debouncePush } from '../services/debounce.js';
 import { createStageTransition, getLeadStage, upsertLeadStage } from '../services/lead-stages.js';
 import { getSubscriberByUuid } from '../services/subscribers.js';
@@ -68,8 +70,8 @@ export default async function webhookCalendlyRoute(app: FastifyInstance): Promis
 
       const { event, payload } = parsed.data;
 
-      // Only handle invitee.created
-      if (event !== 'invitee.created') {
+      // Solo nos interesan creación y cancelación de citas.
+      if (event !== 'invitee.created' && event !== 'invitee.canceled') {
         return reply.code(200).send({ ok: true, reason: 'ignored_event' });
       }
 
@@ -79,12 +81,12 @@ export default async function webhookCalendlyRoute(app: FastifyInstance): Promis
         return reply.code(200).send({ ok: false, reason: 'no_utm_content' });
       }
 
-      // Idempotency: one processing per invitee URI
-      const idempotencyKey = `calendly:idempotent:${payload.uri}`;
+      // Idempotency: una vez por evento + invitee URI (created y canceled no colisionan).
+      const idempotencyKey = `calendly:idempotent:${event}:${payload.uri}`;
       const redis = getRedis();
       const already = await redis.set(idempotencyKey, '1', 'EX', IDEMPOTENCY_TTL_S, 'NX');
       if (already === null) {
-        log.info({ invitee_uri: payload.uri }, 'calendly webhook: duplicate, skipping');
+        log.info({ event, invitee_uri: payload.uri }, 'calendly webhook: duplicate, skipping');
         return reply.code(200).send({ ok: true, reason: 'duplicate' });
       }
 
@@ -93,6 +95,13 @@ export default async function webhookCalendlyRoute(app: FastifyInstance): Promis
       if (!subscriber) {
         log.warn({ subscriber_id: subscriberId }, 'calendly webhook: subscriber not found');
         return reply.code(200).send({ ok: false, reason: 'subscriber_not_found' });
+      }
+
+      // Cancelación: marcar la cita como cancelada (sus recordatorios dejan de salir).
+      if (event === 'invitee.canceled') {
+        await cancelBooking(db, { tenantId: subscriber.tenantId, inviteeUri: payload.uri });
+        log.info({ subscriber_id: subscriberId, invitee_uri: payload.uri }, 'calendly canceled');
+        return reply.code(200).send({ ok: true, reason: 'canceled' });
       }
 
       // Format start_time in the invitee's timezone for the confirmation message
@@ -131,6 +140,28 @@ export default async function webhookCalendlyRoute(app: FastifyInstance): Promis
             SET metadata = COALESCE(metadata, '{}'::jsonb) || ${bookingJson}::jsonb
             WHERE id = ${subscriber.id}::uuid`,
       );
+
+      // Persistir la cita en la tabla `bookings` (fuente para recordatorios y no-show).
+      const conversation = await getOrCreateOpenConversation(db, {
+        tenantId: subscriber.tenantId,
+        subscriberId: subscriber.id,
+      });
+      await upsertBooking(db, {
+        tenantId: subscriber.tenantId,
+        subscriberId: subscriber.id,
+        conversationId: conversation.id,
+        eventUri: payload.scheduled_event?.uri ?? null,
+        inviteeUri: payload.uri,
+        startTime: startTimeRaw ? new Date(startTimeRaw) : null,
+        endTime: payload.scheduled_event?.end_time
+          ? new Date(payload.scheduled_event.end_time)
+          : null,
+        joinUrl: payload.scheduled_event?.location?.join_url ?? null,
+        rescheduleUrl: payload.reschedule_url ?? null,
+        cancelUrl: payload.cancel_url ?? null,
+        inviteeEmail: payload.email ?? null,
+        timezone: tz,
+      });
 
       // Advance to stage D — bypass transition validation (external trigger)
       const fromStage = await getLeadStage(db, {

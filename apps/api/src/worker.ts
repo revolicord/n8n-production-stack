@@ -2,6 +2,7 @@ import { Queue, Worker } from 'bullmq';
 import { getConfig } from './config.js';
 import { logger } from './lib/logger.js';
 import {
+  FOLLOWUP_QUEUE,
   NOTIFY_QUEUE,
   type NotifyJobData,
   PAUSE_REMINDER_QUEUE,
@@ -9,6 +10,7 @@ import {
   type ProcessBatchJobData,
 } from './lib/queue.js';
 import { closeRedis, createRedisConnection } from './lib/redis.js';
+import { followupRunnerJob } from './workers/followup-runner.js';
 import { notifyJob } from './workers/notify.js';
 import { pauseReminderJob } from './workers/pause-reminder.js';
 import { processBatchJob } from './workers/process-batch.js';
@@ -48,10 +50,30 @@ async function main() {
     autorun: true,
   });
 
+  // Runner de follow-ups (migración del workflow n8n). El scheduler se (re)declara en
+  // cada arranque; con FOLLOWUP_INTERVAL_MINUTES=0 se elimina. El job scheduler de BullMQ
+  // dispara una sola vez por tick a nivel de cluster aunque escalen réplicas del worker.
+  const followupQueue = new Queue(FOLLOWUP_QUEUE, {
+    connection: createRedisConnection(),
+  });
+  if (config.FOLLOWUP_INTERVAL_MINUTES > 0) {
+    await followupQueue.upsertJobScheduler('followup-runner', {
+      every: config.FOLLOWUP_INTERVAL_MINUTES * 60_000,
+    });
+  } else {
+    await followupQueue.removeJobScheduler('followup-runner');
+  }
+  const followupWorker = new Worker(FOLLOWUP_QUEUE, followupRunnerJob, {
+    connection: createRedisConnection(),
+    concurrency: 1,
+    autorun: true,
+  });
+
   for (const [name, w] of [
     [PROCESS_BATCH_QUEUE, worker],
     [NOTIFY_QUEUE, notifyWorker],
     [PAUSE_REMINDER_QUEUE, pauseReminderWorker],
+    [FOLLOWUP_QUEUE, followupWorker],
   ] as const) {
     w.on('completed', (job, result) => {
       log.info({ queue: name, job_id: job.id, result }, 'job completed');
@@ -66,9 +88,10 @@ async function main() {
 
   log.info(
     {
-      queues: [PROCESS_BATCH_QUEUE, NOTIFY_QUEUE, PAUSE_REMINDER_QUEUE],
+      queues: [PROCESS_BATCH_QUEUE, NOTIFY_QUEUE, PAUSE_REMINDER_QUEUE, FOLLOWUP_QUEUE],
       concurrency: config.WORKER_CONCURRENCY,
       pause_reminder_hours: config.PAUSE_REMINDER_HOURS,
+      followup_interval_minutes: config.FOLLOWUP_INTERVAL_MINUTES,
     },
     'worker started',
   );
@@ -80,6 +103,8 @@ async function main() {
       await notifyWorker.close();
       await pauseReminderWorker.close();
       await pauseReminderQueue.close();
+      await followupWorker.close();
+      await followupQueue.close();
       await closeRedis();
       process.exit(0);
     } catch (err) {

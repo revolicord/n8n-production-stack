@@ -1,0 +1,387 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "path": "panel-flows",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-272, -256],
+      "id": "eb7119a1-0aa5-4ed9-b996-ea76dcf6c09d",
+      "name": "Webhook",
+      "webhookId": "cebb4334-857d-452c-ae1f-a37ed89138e2"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "guardar-flow",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-288, -64],
+      "id": "30159f4c-da8d-4326-abf7-9f6151e05b78",
+      "name": "Webhook1",
+      "webhookId": "cebb4334-857d-452c-ae1f-a37ed89138e2"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "eliminar-flow",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-320, 128],
+      "id": "d16dbd18-ebb3-4892-b7ba-850c84ccedb7",
+      "name": "Webhook2",
+      "webhookId": "cebb4334-857d-452c-ae1f-a37ed89138e2"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "nuevo-flow",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-320, 320],
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "name": "Webhook3",
+      "webhookId": "cebb4334-857d-452c-ae1f-a37ed89138e2"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT sf.id, sf.human_name, sf.flow_ns,\n       COALESCE(sf.content_description, '') as content_description,\n       COALESCE(sf.usage_condition, '') as usage_condition,\n       sf.tenant_id, sf.stage_id,\n       COALESCE(sf.media_type, '') as media_type,\n       COALESCE(sf.slug_id, '') as slug_id,\n       fs.display_name as stage_name, fs.slug as stage_slug\nFROM api.stage_flows sf\nLEFT JOIN api.funnel_stages fs ON sf.stage_id = fs.id\nORDER BY fs.position, sf.human_name;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [-96, -240],
+      "id": "158a9514-e693-4a01-9f3d-29eec44d079e",
+      "name": "Postgres",
+      "credentials": {
+        "postgres": {
+          "id": "xBbNbntvO0xJs5HM",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, display_name, slug, position FROM api.funnel_stages ORDER BY position;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [48, -380],
+      "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+      "name": "Postgres Stages",
+      "credentials": {
+        "postgres": {
+          "id": "xBbNbntvO0xJs5HM",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $('Postgres').all().map(item => item.json);\nconst stages = $('Postgres Stages').all().map(item => item.json);\nconst query = $('Webhook').first().json.query || {};\nconst selectedId = query.id || null;\nconst isNew = selectedId === 'new';\n\nconst selectedFlow = !isNew ? (rows.find(r => r.id === selectedId) || null) : null;\n\n// tenant_id from first row for new flow creation\nconst defaultTenantId = rows.length > 0 ? rows[0].tenant_id : '';\n\nconst linksHtml = [\n  `<li style=\"margin-bottom:8px;\"><a href=\"?id=new\" ${isNew ? 'style=\"font-weight:bold;color:#10B981;\"' : 'style=\"color:#10B981;\"'}>+ Nuevo flujo</a></li>`,\n  `<li><hr style=\"border:none;border-top:1px solid #E5E7EB;margin:8px 0;\"></li>`\n].concat(rows.map(r => {\n  const activeClass = r.id === selectedId ? 'style=\"font-weight:bold;color:#4F46E5;\"' : '';\n  const stageBadge = r.stage_name ? `<span style=\"font-size:10px;color:#9CA3AF;\"> [${r.stage_slug}]</span>` : '';\n  return `<li><a href=\"?id=${r.id}\" ${activeClass}>${r.human_name}${stageBadge}</a></li>`;\n})).join('\\n');\n\nconst stageOptions = stages.map(s =>\n  `<option value=\"${s.id}\">${s.display_name} (${s.slug})</option>`\n).join('\\n');\n\nconst inputStyle = 'width:100%;padding:8px;margin-bottom:15px;box-sizing:border-box;border:1px solid #D1D5DB;border-radius:4px;font-size:14px;';\nconst textareaStyle = 'width:100%;font-family:sans-serif;margin-bottom:15px;border:1px solid #D1D5DB;border-radius:4px;padding:8px;font-size:14px;';\n\nlet formHtml = '';\nif (isNew) {\n  formHtml = `\n    <h2 style=\"color:#10B981;margin-top:0;\">Agregar nuevo flujo</h2>\n    <form action=\"nuevo-flow\" method=\"POST\">\n      <input type=\"hidden\" name=\"tenant_id\" value=\"${defaultTenantId}\">\n\n      <label><b>Etapa del funnel:</b></label><br>\n      <select name=\"stage_id\" style=\"${inputStyle}\" required>\n        <option value=\"\">-- Selecciona una etapa --</option>\n        ${stageOptions}\n      </select>\n\n      <label><b>Nombre visible (para el panel):</b></label><br>\n      <input type=\"text\" name=\"human_name\" style=\"${inputStyle}\" placeholder=\"ej: Audio testimonial + video YouTube etapa D\" required><br>\n\n      <label><b>Namespace de ManyChat (flow_ns):</b></label><br>\n      <input type=\"text\" name=\"flow_ns\" style=\"${inputStyle}\" placeholder=\"qc_nombre_del_flujo\" required><br>\n\n      <label><b>Tipo de media:</b></label><br>\n      <select name=\"media_type\" style=\"${inputStyle}\">\n        <option value=\"\">-- Ninguno / Sin media --</option>\n        <option value=\"audio\">Audio</option>\n        <option value=\"video\">Video</option>\n        <option value=\"image\">Imagen</option>\n        <option value=\"text\">Texto</option>\n        <option value=\"card\">Card</option>\n        <option value=\"sequence\">Secuencia (varios pasos)</option>\n      </select>\n\n      <label><b>Slug ID — identificador corto para el sistema (opcional):</b></label><br>\n      <input type=\"text\" name=\"slug_id\" style=\"${inputStyle}\" placeholder=\"ej: content_audio_d\"><br>\n\n      <label><b>Qué contiene este flujo (Descripción del contenido):</b></label><br>\n      <textarea name=\"content_description\" rows=\"4\" style=\"${textareaStyle}\"></textarea>\n\n      <label><b>Instrucciones para el LLM (Cuándo y cómo usarlo):</b></label><br>\n      <textarea name=\"usage_condition\" rows=\"6\" style=\"${textareaStyle}\"></textarea>\n\n      <button type=\"submit\" style=\"background:#10B981;color:white;border:none;padding:10px 20px;cursor:pointer;font-weight:bold;border-radius:4px;\">Crear Flujo</button>\n      <a href=\"panel-flows\" style=\"margin-left:12px;color:#6B7280;font-size:14px;\">Cancelar</a>\n    </form>\n  `;\n} else if (selectedFlow) {\n  const mediaBadge = selectedFlow.media_type ? `<span style=\"background:#EDE9FE;color:#7C3AED;font-size:11px;padding:2px 8px;border-radius:4px;margin-left:8px;\">${selectedFlow.media_type}</span>` : '';\n  formHtml = `\n    <h2 style=\"margin-top:0;\">Editar: ${selectedFlow.human_name}${mediaBadge}</h2>\n    <p style=\"font-size:12px;color:#6B7280;\">ManyChat NS: <code>${selectedFlow.flow_ns}</code>${selectedFlow.stage_name ? ` &nbsp;·&nbsp; Etapa: <b>${selectedFlow.stage_name}</b> (${selectedFlow.stage_slug})` : ''}${selectedFlow.slug_id ? ` &nbsp;·&nbsp; slug: <code>${selectedFlow.slug_id}</code>` : ''}</p>\n\n    <form action=\"guardar-flow\" method=\"POST\" style=\"display:inline-block;width:100%;\">\n      <input type=\"hidden\" name=\"id\" value=\"${selectedFlow.id}\">\n      <input type=\"hidden\" name=\"tenant_id\" value=\"${selectedFlow.tenant_id}\">\n\n      <label><b>Qué contiene este flujo (Descripción del contenido):</b></label><br>\n      <textarea name=\"content_description\" rows=\"4\" style=\"${textareaStyle}\">${selectedFlow.content_description}</textarea>\n\n      <label><b>Instrucciones para el LLM (Cuándo y cómo usarlo):</b></label><br>\n      <textarea name=\"usage_condition\" rows=\"6\" style=\"${textareaStyle}\">${selectedFlow.usage_condition}</textarea>\n\n      <button type=\"submit\" style=\"background:#4F46E5;color:white;border:none;padding:10px 20px;cursor:pointer;font-weight:bold;border-radius:4px;\">Guardar Cambios</button>\n    </form>\n\n    <form action=\"eliminar-flow\" method=\"POST\" style=\"display:inline-block;margin-left:10px;\" onsubmit=\"return confirm('\\u26a0\\ufe0f ¿Estás seguro de que quieres borrar este flujo de la base de datos? El LLM ya no podrá usarlo.');\">\n      <input type=\"hidden\" name=\"id\" value=\"${selectedFlow.id}\">\n      <button type=\"submit\" style=\"background:#EF4444;color:white;border:none;padding:10px 20px;cursor:pointer;font-weight:bold;border-radius:4px;\">Borrar Registro</button>\n    </form>\n  `;\n} else {\n  formHtml = `<p style=\"color:#6B7280;text-align:center;margin-top:50px;\">Selecciona un flujo del menú izquierdo para editar sus instrucciones.</p>`;\n}\n\nconst html = `\n<!DOCTYPE html>\n<html>\n<head><title>Panel Setter</title><meta charset=\"utf-8\"></head>\n<body style=\"font-family:sans-serif;margin:0;background:#F3F4F6;color:#1F2937;\">\n  <div style=\"background:#111827;color:white;padding:15px 20px;font-weight:bold;\">Quantum Creators · Cerebro del Setter</div>\n  <div style=\"display:flex;min-height:calc(100vh - 54px);\">\n    <div style=\"width:320px;background:white;border-right:1px solid #E5E7EB;padding:20px;overflow-y:auto;\">\n      <h3 style=\"margin-top:0;\">Tus Flujos</h3>\n      <ul style=\"list-style:none;padding:0;margin:0;line-height:2;\">${linksHtml}</ul>\n    </div>\n    <div style=\"flex:1;padding:30px;\">\n      <div style=\"background:white;padding:25px;border-radius:8px;max-width:800px;margin:0 auto;box-shadow:0 1px 3px rgba(0,0,0,0.1);\">\n        ${formHtml}\n      </div>\n    </div>\n  </div>\n</body>\n</html>\n`;\nreturn [{ json: { response: html } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, -256],
+      "id": "61d6ef52-482c-4855-ad7a-5e9f20e91bab",
+      "name": "Generar html"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE api.stage_flows\nSET content_description = '{{ $json.body.content_description }}',\nusage_condition = '{{ $json.body.usage_condition }}'\nWHERE id = '{{ $json.body.id }}'::uuid;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [-96, -64],
+      "id": "c4686ef4-d26d-45d5-b003-e49ff36ef2e4",
+      "name": "Execute a SQL query1",
+      "credentials": {
+        "postgres": {
+          "id": "xBbNbntvO0xJs5HM",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DELETE FROM api.stage_flows WHERE id = '{{ $json.body.id }}'::uuid;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [-112, 128],
+      "id": "1d0d714b-0e52-4e76-bf14-4ef1a60ddd4f",
+      "name": "Execute a SQL query",
+      "credentials": {
+        "postgres": {
+          "id": "xBbNbntvO0xJs5HM",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO api.stage_flows\n  (tenant_id, stage_id, flow_ns, human_name, media_type, content_description, usage_condition, slug_id, weight, is_active)\nVALUES (\n  '{{ $json.body.tenant_id }}'::uuid,\n  '{{ $json.body.stage_id }}'::uuid,\n  '{{ $json.body.flow_ns }}',\n  '{{ $json.body.human_name }}',\n  NULLIF('{{ $json.body.media_type }}', ''),\n  NULLIF('{{ $json.body.content_description }}', ''),\n  NULLIF('{{ $json.body.usage_condition }}', ''),\n  NULLIF('{{ $json.body.slug_id }}', ''),\n  1,\n  true\n);",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [-112, 320],
+      "id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+      "name": "SQL INSERT flow",
+      "credentials": {
+        "postgres": {
+          "id": "xBbNbntvO0xJs5HM",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const html = `\n<!DOCTYPE html>\n<html>\n<head><meta charset=\"utf-8\"></head>\n<body style=\"font-family:sans-serif;text-align:center;padding-top:50px;background:#F3F4F6;\">\n  <div style=\"background:white;padding:30px;display:inline-block;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.1);\">\n    <h2 style=\"color:#10B981;margin-top:0;\">\\u2705 ¡Flujo creado con éxito!</h2>\n    <p style=\"color:#6B7280;\">Ya está disponible para el LLM.</p>\n    <br>\n    <a href=\"panel-flows\" style=\"background:#4F46E5;color:white;text-decoration:none;padding:10px 20px;font-weight:bold;border-radius:4px;\">Volver al Panel</a>\n  </div>\n</body>\n</html>\n`;\nreturn [{ json: { response: html } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [96, 320],
+      "id": "d4e5f6a7-b8c9-0123-defa-234567890123",
+      "name": "Code nuevo-flow success"
+    },
+    {
+      "parameters": {
+        "jsCode": "const html = `\n<!DOCTYPE html>\n<html>\n<head><meta charset=\"utf-8\"></head>\n<body style=\"font-family:sans-serif;text-align:center;padding-top:50px;background:#F3F4F6;\">\n  <div style=\"background:white;padding:30px;display:inline-block;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.1);\">\n    <h2 style=\"color:#10B981;margin-top:0;\">¡Cambios guardados con éxito!</h2>\n    <br>\n    <a href=\"panel-flows\" style=\"background:#4F46E5;color:white;text-decoration:none;padding:10px 20px;font-weight:bold;border-radius:4px;\">Volver al Panel</a>\n  </div>\n</body>\n</html>\n`;\nreturn [{ json: { response: html } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [112, -64],
+      "id": "ebb14772-6f8b-4995-8de6-4bc4b8b3426b",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "jsCode": "const html = `\n<!DOCTYPE html>\n<html><head><meta charset=\"utf-8\"></head>\n<body style=\"font-family:sans-serif;text-align:center;padding-top:50px;background:#F3F4F6;\">\n  <div style=\"background:white;padding:30px;display:inline-block;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.1);\">\n    <h2 style=\"color:#EF4444;margin-top:0;\">\\ud83d\\uddd1\\ufe0f Flujo eliminado de la base de datos</h2>\n    <br>\n    <a href=\"panel-flows\" style=\"background:#4F46E5;color:white;text-decoration:none;padding:10px 20px;font-weight:bold;border-radius:4px;\">Volver al Panel</a>\n  </div>\n</body></html>\n`;\nreturn [{ json: { response: html } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [96, 128],
+      "id": "41162dd0-679b-4167-baf7-011742c22529",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.response }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [432, -256],
+      "id": "3ba2eddd-182d-4ff6-818d-aaa99ded50df",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.response }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [320, -64],
+      "id": "3ba7220e-789b-48f5-b6b5-f434fe5a1bd6",
+      "name": "Respond to Webhook1"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.response }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [304, 128],
+      "id": "e51249f2-89a9-4ea7-abb0-4a8957b999e5",
+      "name": "Respond to Webhook2"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.response }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [304, 320],
+      "id": "e5f6a7b8-c9d0-1234-efab-345678901234",
+      "name": "Respond to Webhook3"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Postgres",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook1": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook2": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook3": {
+      "main": [
+        [
+          {
+            "node": "SQL INSERT flow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres": {
+      "main": [
+        [
+          {
+            "node": "Postgres Stages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres Stages": {
+      "main": [
+        [
+          {
+            "node": "Generar html",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generar html": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SQL INSERT flow": {
+      "main": [
+        [
+          {
+            "node": "Code nuevo-flow success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code nuevo-flow success": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "21306735202e285844d411adfa35bfd1d0be76295bd6e5f059c09c42be5eaef8"
+  }
+}

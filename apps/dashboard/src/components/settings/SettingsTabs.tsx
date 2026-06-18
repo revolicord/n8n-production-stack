@@ -12,6 +12,8 @@ const TABS: { href: string; label: string }[] = [
   { href: '/settings/general', label: 'General' },
   { href: '/settings/fase-b', label: 'Fase B' },
   { href: '/settings/fase-c', label: 'Fase C' },
+  { href: '/settings/follow-ups', label: 'Follow-ups' },
+  { href: '/settings/booking-reminders', label: 'Recordatorios cita' },
   { href: '/settings/cierres', label: 'Cierres' },
   { href: '/settings/objeciones', label: 'Objeciones' },
   { href: '/settings/notificaciones', label: 'Notificaciones' },

@@ -150,6 +150,7 @@ async function handoffNode(state: AgentStateT, deps: Deps): Promise<Partial<Agen
         channel: {
           sendFlow: async () => ({ success: true, statusCode: 0, attempts: 0 }),
           sendText: async () => ({ success: true, statusCode: 0, attempts: 0 }),
+          sendContent: async () => ({ success: true, statusCode: 0, attempts: 0 }),
         },
         db: deps.db,
         redis: deps.redis,

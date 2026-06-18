@@ -1,4 +1,4 @@
-import { leadCrons, leadStages, stageTransitions } from '@dm-api/db';
+import { funnelStages, leadCrons, leadStages, stageTransitions } from '@dm-api/db';
 import type { ActionResult } from '@dm-api/shared';
 import { and, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
@@ -13,8 +13,6 @@ const ConfigSchema = z.object({
   lead_in: z.string().optional(),
   cascade: z.boolean().optional(),
 });
-
-const STAGES_THAT_CANCEL_FOLLOWUPS = new Set(['C', 'D', 'disqualified']);
 
 export async function applyStageTransition(
   ctx: ActionContext,
@@ -63,7 +61,15 @@ export async function applyStageTransition(
     agentEvidence: args.evidence,
   });
 
-  if (STAGES_THAT_CANCEL_FOLLOWUPS.has(args.toStage)) {
+  // Etapa terminal → cancelar follow-ups activos. Data-driven (funnel_stages.is_terminal,
+  // editable por tenant en /settings), no una lista hardcodeada.
+  const [destStage] = await db
+    .select({ isTerminal: funnelStages.isTerminal })
+    .from(funnelStages)
+    .where(and(eq(funnelStages.tenantId, ctx.tenant.id), eq(funnelStages.slug, args.toStage)))
+    .limit(1);
+
+  if (destStage?.isTerminal) {
     await db
       .update(leadCrons)
       .set({

@@ -61,7 +61,11 @@ export const scheduleFollowupHandler: ActionHandler = {
         target: [leadCrons.tenantId, leadCrons.subscriberId, leadCrons.conversationId],
         set: {
           nextFollowupAt,
+          // Re-programar reinicia la secuencia (re-engagement), igual que el upsert n8n.
+          nextSequenceNumber: 1,
           isActive: true,
+          archivedAt: null,
+          archiveReason: null,
           updatedAt: sql`now()`,
         },
       });

@@ -38,6 +38,9 @@ const ConfigSchema = z.object({
   DASHBOARD_PUBLIC_URL: z.string().url().optional(),
   // Recordatorio periódico de leads pausados (0 = desactivado).
   PAUSE_REMINDER_HOURS: z.coerce.number().int().nonnegative().default(6),
+  // Intervalo del runner de follow-ups en minutos (0 = desactivado). Migración del
+  // workflow n8n "Every 5 Minutes".
+  FOLLOWUP_INTERVAL_MINUTES: z.coerce.number().int().nonnegative().default(5),
   // ADR-0024: motor de diálogo. Opcional: solo requerido si engine='agent' en algún tenant.
   ANTHROPIC_API_KEY: z.string().default(''),
 });

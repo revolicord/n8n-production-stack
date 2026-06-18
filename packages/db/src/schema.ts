@@ -382,6 +382,8 @@ export const leadFollowupLog = apiSchema.table(
     textSent: text('text_sent'),
     sentAt: timestamp('sent_at', { withTimezone: true }).defaultNow(),
     status: text('status').default('sent'),
+    // Detalle del error de ManyChat cuando status='failed' (para diagnóstico).
+    error: text('error'),
     respondedAt: timestamp('responded_at', { withTimezone: true }),
   },
   (t) => ({
@@ -702,3 +704,97 @@ export type DialogueState = typeof dialogueStates.$inferSelect;
 export type NewDialogueState = typeof dialogueStates.$inferInsert;
 export type DomainEvent = typeof domainEvents.$inferSelect;
 export type NewDomainEvent = typeof domainEvents.$inferInsert;
+
+// ───────────────────────────────────────────────────────────────
+// bookings — citas agendadas (Calendly). Fuente para recordatorios y no-show.
+// ───────────────────────────────────────────────────────────────
+export const bookings = apiSchema.table(
+  'bookings',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: uuid('tenant_id').notNull(),
+    subscriberId: uuid('subscriber_id').notNull(),
+    conversationId: uuid('conversation_id'),
+    provider: text('provider').notNull().default('calendly'),
+    eventUri: text('event_uri'),
+    inviteeUri: text('invitee_uri').notNull(),
+    startTime: timestamp('start_time', { withTimezone: true }),
+    endTime: timestamp('end_time', { withTimezone: true }),
+    joinUrl: text('join_url'),
+    rescheduleUrl: text('reschedule_url'),
+    cancelUrl: text('cancel_url'),
+    inviteeEmail: text('invitee_email'),
+    timezone: text('timezone'),
+    // 'scheduled' | 'canceled' | 'completed' | 'no_show'
+    status: text('status').notNull().default('scheduled'),
+    bookedAt: timestamp('booked_at', { withTimezone: true }).defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    tenantInviteeUnique: uniqueIndex('bookings_tenant_invitee_unique').on(t.tenantId, t.inviteeUri),
+    dueIdx: index('bookings_tenant_status_start_idx').on(t.tenantId, t.status, t.startTime),
+  }),
+);
+
+// ───────────────────────────────────────────────────────────────
+// booking_reminder_templates — recordatorios de cita configurables por tenant.
+// offset_minutes con signo: negativo = antes de la cita, positivo = después.
+// ───────────────────────────────────────────────────────────────
+export const bookingReminderTemplates = apiSchema.table(
+  'booking_reminder_templates',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: uuid('tenant_id').notNull(),
+    offsetMinutes: integer('offset_minutes').notNull(),
+    // 'reminder' (siempre) | 'no_show' (solo si la cita sigue 'scheduled' tras la hora)
+    kind: text('kind').notNull().default('reminder'),
+    type: text('type').notNull(), // 'text' | 'flow' | 'content'
+    textTemplate: text('text_template'),
+    flowNs: text('flow_ns'),
+    description: text('description'),
+    isActive: boolean('is_active').notNull().default(true),
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    tenantActiveIdx: index('booking_reminder_templates_tenant_active_idx').on(
+      t.tenantId,
+      t.isActive,
+    ),
+  }),
+);
+
+// ───────────────────────────────────────────────────────────────
+// booking_reminder_log — dedup de recordatorios enviados (uno por booking+template).
+// ───────────────────────────────────────────────────────────────
+export const bookingReminderLog = apiSchema.table(
+  'booking_reminder_log',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: uuid('tenant_id').notNull(),
+    bookingId: uuid('booking_id')
+      .notNull()
+      .references(() => bookings.id, { onDelete: 'cascade' }),
+    templateId: uuid('template_id')
+      .notNull()
+      .references(() => bookingReminderTemplates.id, { onDelete: 'cascade' }),
+    sentAt: timestamp('sent_at', { withTimezone: true }).notNull().defaultNow(),
+    status: text('status').notNull().default('sent'), // 'sent' | 'failed'
+    error: text('error'),
+  },
+  (t) => ({
+    bookingTemplateUnique: uniqueIndex('booking_reminder_log_booking_template_unique').on(
+      t.bookingId,
+      t.templateId,
+    ),
+  }),
+);
+
+export type Booking = typeof bookings.$inferSelect;
+export type NewBooking = typeof bookings.$inferInsert;
+export type BookingReminderTemplate = typeof bookingReminderTemplates.$inferSelect;
+export type NewBookingReminderTemplate = typeof bookingReminderTemplates.$inferInsert;
+export type BookingReminderLog = typeof bookingReminderLog.$inferSelect;
+export type NewBookingReminderLog = typeof bookingReminderLog.$inferInsert;

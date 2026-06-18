@@ -23,6 +23,20 @@ export type MediaPolicy = z.infer<typeof MediaPolicySchema>;
 export const StageTextPolicySchema = z.enum(['flow_only', 'text_ok']);
 export type StageTextPolicy = z.infer<typeof StageTextPolicySchema>;
 
+/**
+ * Ventana horaria permitida para enviar follow-ups (quiet hours). El runner
+ * pospone los envíos que vencen fuera de [start_hour, end_hour) en la zona
+ * horaria del tenant, en vez de molestar al lead de madrugada. Si `end_hour`
+ * es menor o igual a `start_hour` la ventana se interpreta como vacía (sin envío).
+ * No aplica a los recordatorios de cita (anclados a una hora elegida por el lead).
+ */
+export const FollowupWindowSchema = z.object({
+  timezone: z.string().min(1),
+  start_hour: z.number().int().min(0).max(23),
+  end_hour: z.number().int().min(1).max(24),
+});
+export type FollowupWindow = z.infer<typeof FollowupWindowSchema>;
+
 export const TenantConfigSchema = z
   .object({
     debounce_ms: z.number().int().positive().optional(),
@@ -75,6 +89,13 @@ export const TenantConfigSchema = z
     // Política por defecto para etapas no listadas en text_policy_by_stage. Default 'text_ok'
     // para no alterar el comportamiento de tenants existentes.
     text_policy_default: StageTextPolicySchema.optional(),
+    // Follow-ups automáticos: interruptor global por tenant (default true si no se define).
+    followups_enabled: z.boolean().optional(),
+    // Si el lead responde, cancelar sus follow-ups activos (default true). El agente los
+    // re-programa vía schedule_followup si la conversación vuelve a enfriarse.
+    followup_reset_on_reply: z.boolean().optional(),
+    // Quiet hours: ventana permitida de envío de follow-ups. Sin definir o null = 24/7.
+    followup_window: FollowupWindowSchema.nullable().optional(),
   })
   .passthrough();
 

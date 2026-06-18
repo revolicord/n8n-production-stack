@@ -16,6 +16,7 @@ import {
 } from '../services/debounce.js';
 import { dispatchToAgent } from '../services/dispatch-agent.js';
 import { N8nDispatchError, dispatchToN8n } from '../services/dispatch-n8n.js';
+import { resetActiveCronsOnReply } from '../services/lead-crons.js';
 import { getLeadStage } from '../services/lead-stages.js';
 import { releaseTurnLock, tryAcquireTurnLock } from '../services/lock.js';
 import { getSubscriberById, isSubscriberActive } from '../services/subscribers.js';
@@ -134,6 +135,13 @@ export async function processBatchJob(job: Job<ProcessBatchJobData>): Promise<Pr
     });
 
     await touchUserMsg(getDb(), conversation.id);
+
+    // El lead respondió (mensaje real, no evento de sistema): cancelar sus follow-ups
+    // activos. No seguimos a alguien que está conversando; el agente los re-programa
+    // vía schedule_followup si la conversación se enfría. Configurable por tenant.
+    if (reason !== 'system_event' && tenantConfig.followup_reset_on_reply !== false) {
+      await resetActiveCronsOnReply(getDb(), { tenantId, subscriberId });
+    }
 
     // 6. Dispatch
     const leadStage = await getLeadStage(getDb(), { tenantId, subscriberId });
