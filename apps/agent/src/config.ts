@@ -9,10 +9,11 @@ const AgentConfigSchema = z.object({
   REDIS_URL: z.string().min(1),
   // Observabilidad LangSmith (ADR-0025) — la lee la librería desde process.env;
   // las declaramos para validarlas/documentarlas. Provisional, opcional.
-  LANGCHAIN_TRACING_V2: z.string().optional(),
-  LANGCHAIN_API_KEY: z.string().optional(),
-  LANGCHAIN_PROJECT: z.string().optional(),
-  LANGCHAIN_ENDPOINT: z.string().optional(),
+  // langsmith >=0.2 usa LANGSMITH_* (no LANGCHAIN_*).
+  LANGSMITH_TRACING: z.string().optional(),
+  LANGSMITH_API_KEY: z.string().optional(),
+  LANGSMITH_PROJECT: z.string().optional(),
+  LANGSMITH_ENDPOINT: z.string().optional(),
   // Alertas operativas via Telegram
   TELEGRAM_BOT_TOKEN: z.string().optional(),
   TELEGRAM_DEFAULT_CHAT_ID: z.string().optional(),
