@@ -37,6 +37,7 @@ export interface DebugTracePayload {
   reasoning: string | null;
 
   // Decisión
+  decision_path: string;
   commands: unknown[];
   flow_path: unknown[];
 
@@ -120,6 +121,7 @@ export function buildDebugPayload(
     conversation_history: s.llmRequest?.messages ?? null,
     reasoning: s.llmReasoning,
 
+    decision_path: s.decisionPath,
     commands: s.allCommands,
     flow_path: s.flowResult?.path ?? [],
 
@@ -236,6 +238,7 @@ export async function saveTurnTrace(
       subscriberId: s.input.subscriber_id,
       mode: args.mode,
       status: args.status,
+      decisionPath: s.decisionPath,
       input: s.input,
       contextSnapshot: full ? serializeContext(s.assembled) : null,
       prompt: full ? s.llmRequest : null,

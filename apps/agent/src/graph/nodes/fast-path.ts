@@ -120,8 +120,16 @@ export function tryFastPath(input: TurnInput, ctx: AssembledContext): FastPathRe
     'text_ok';
   if (policy !== 'flow_only') return null;
 
-  // Destino inequívoco: exactamente UNA transición válida desde la etapa actual.
-  const outgoing = ctx.transitions.filter((t) => t.fromStageSlug === ctx.currentStage);
+  // Destino inequívoco: exactamente UNA transición de AVANCE desde la etapa
+  // actual. Las etapas terminales (is_terminal: disqualified, cerrado) NO cuentan
+  // como destino: una señal positiva nunca descalifica, así que la escotilla
+  // A→disqualified no debe romper el camino feliz A→B.
+  const terminalSlugs = new Set(
+    (ctx.funnelStages ?? []).filter((s) => s.isTerminal).map((s) => s.slug),
+  );
+  const outgoing = ctx.transitions.filter(
+    (t) => t.fromStageSlug === ctx.currentStage && !terminalSlugs.has(t.toStageSlug),
+  );
   if (outgoing.length !== 1) return null;
   const target = outgoing[0];
   if (!target) return null;

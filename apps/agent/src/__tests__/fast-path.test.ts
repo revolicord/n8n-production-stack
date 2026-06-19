@@ -8,6 +8,11 @@ function makeCtx(overrides: Partial<AssembledContext> = {}): AssembledContext {
     currentStage: 'A',
     tenantConfig: { text_policy_by_stage: { A: 'flow_only' } },
     transitions: [{ fromStageSlug: 'A', toStageSlug: 'B', whenToUse: 'avance' }],
+    funnelStages: [
+      { slug: 'A', isTerminal: false },
+      { slug: 'B', isTerminal: false },
+      { slug: 'disqualified', isTerminal: true },
+    ],
     dialogueState: { version: 1, stack: [], slots: {}, repair_context: null, last_turn_id: null },
     handoffState: null,
     ...overrides,
@@ -61,6 +66,20 @@ describe('tryFastPath (camino feliz determinista)', () => {
   it('NO fast-path con texto ambiguo / objeción', () => {
     expect(tryFastPath(makeInput([{ text: 'mmm no sé' }]), makeCtx())).toBeNull();
     expect(tryFastPath(makeInput([{ text: 'todavía no lo vi' }]), makeCtx())).toBeNull();
+  });
+
+  it('avanza con 👍 aunque exista la escotilla A→disqualified (terminal no cuenta)', () => {
+    const ctx = makeCtx({
+      transitions: [
+        { fromStageSlug: 'A', toStageSlug: 'disqualified', whenToUse: 'rechazo' },
+        { fromStageSlug: 'A', toStageSlug: 'B', whenToUse: 'avance' },
+        // biome-ignore lint/suspicious/noExplicitAny: stub
+      ] as any,
+    });
+    const r = tryFastPath(makeInput([{ text: '👍' }]), ctx);
+    expect(r).not.toBeNull();
+    const cmd = r?.commands[0];
+    if (cmd?.type === 'ChangeStage') expect(cmd.to_stage).toBe('B');
   });
 
   it('NO fast-path si la etapa no es flow_only', () => {

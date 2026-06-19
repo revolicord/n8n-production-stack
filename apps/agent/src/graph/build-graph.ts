@@ -8,7 +8,7 @@ import type { Deps } from '../deps.js';
 import { loadDialogueState, saveDialogueState } from '../services/dialogue-states.js';
 import { pauseSubscriberForHandoff } from '../services/handoff.js';
 import { type TraceLevel, resolveTraceMode, saveTurnTrace } from '../services/traces.js';
-import { AgentState, type AgentStateT, initialState } from './annotation.js';
+import { AgentState, type AgentStateT, type DecisionPath, initialState } from './annotation.js';
 import { assembleContextNode } from './nodes/assemble-context.js';
 import { executeActionsNode } from './nodes/execute-actions.js';
 import { tryFastPath } from './nodes/fast-path.js';
@@ -67,13 +67,17 @@ export function compileAgentGraph(deps: Deps) {
           allCommands: [...state.input.system_commands, ...state.fastPath.commands],
           llmReasoning: state.fastPath.reason,
           llmMetrics: null,
+          decisionPath: 'fast_path' as const,
         };
       }
       const r = await understandNode(state.input, ctx, deps, state.llmRequest);
+      // metrics === null + sin llmRequest ⟹ turno solo de system_commands (sin LLM).
+      const decisionPath: DecisionPath = r.metrics ? 'llm' : 'system';
       return {
         allCommands: r.commands,
         llmReasoning: r.reasoning,
         llmMetrics: r.metrics,
+        decisionPath,
       };
     })
     .addNode('flow_engine', (state: AgentStateT) => {

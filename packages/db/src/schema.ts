@@ -681,11 +681,20 @@ export const agentTurnTraces = apiSchema.table(
     dialogueStateAfter: jsonb('dialogue_state_after'),
     error: jsonb('error'), // { node, message, stack }
     metrics: jsonb('metrics'), // { model, input_tokens, output_tokens, llm_ms, total_ms }
+    // Camino de decisión del turno: 'fast_path' (CALM determinista, 0 tokens),
+    // 'system' (solo system_commands, 0 tokens), 'llm' (se llamó a Claude),
+    // 'none' (error antes de decidir). Habilita la métrica de ahorro determinista.
+    decisionPath: text('decision_path'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
     turnModeUnique: uniqueIndex('agent_turn_traces_turn_mode_uniq').on(t.turnId, t.mode),
     tenantCreatedIdx: index('agent_turn_traces_tenant_created_idx').on(t.tenantId, t.createdAt),
+    tenantDecisionIdx: index('agent_turn_traces_tenant_decision_idx').on(
+      t.tenantId,
+      t.decisionPath,
+      t.createdAt,
+    ),
     tenantSubIdx: index('agent_turn_traces_tenant_sub_idx').on(
       t.tenantId,
       t.subscriberId,

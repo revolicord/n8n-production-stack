@@ -10,6 +10,16 @@ import type { AssembledContext } from '../core/context/assemble.js';
 import type { FlowEngineResult } from '../core/flow-engine/engine.js';
 import type { FastPathResult } from './nodes/fast-path.js';
 
+/**
+ * Camino de decisión del turno. Lo determina el nodo `understand`:
+ *  - `fast_path`: el CALM determinista resolvió el turno sin LLM (0 tokens).
+ *  - `system`: turno solo de system_commands (webhook), sin LLM (0 tokens).
+ *  - `llm`: se llamó a Claude.
+ *  - `none`: error antes de decidir (default).
+ * Habilita la métrica de ahorro determinista (GET /admin/agent-savings).
+ */
+export type DecisionPath = 'fast_path' | 'system' | 'llm' | 'none';
+
 export interface LlmCallMetrics {
   model: string;
   inputTokens: number;
@@ -47,6 +57,7 @@ export const AgentState = Annotation.Root({
   }),
 
   fastPath: Annotation<FastPathResult | null>({ reducer: lastWrite, default: () => null }),
+  decisionPath: Annotation<DecisionPath>({ reducer: lastWrite, default: () => 'none' }),
   allCommands: Annotation<DialogueCommand[]>({ reducer: lastWrite, default: () => [] }),
   llmReasoning: Annotation<string | null>({ reducer: lastWrite, default: () => null }),
   llmRequest: Annotation<LlmRequestSnapshot | null>({ reducer: lastWrite, default: () => null }),
@@ -81,6 +92,8 @@ export function initialState(input: TurnInput): Partial<AgentStateT> {
     currentNode: null,
     assembled: null,
     dialogueStateBefore: null,
+    fastPath: null,
+    decisionPath: 'none',
     allCommands: [],
     llmReasoning: null,
     llmRequest: null,
