@@ -38,6 +38,8 @@ export interface DebugTracePayload {
 
   // Decisión
   decision_path: string;
+  /** Si decision_path='llm', POR QUÉ no tomó el fast-path. null si fue determinista. */
+  fast_path_skip_reason: string | null;
   commands: unknown[];
   flow_path: unknown[];
 
@@ -122,6 +124,7 @@ export function buildDebugPayload(
     reasoning: s.llmReasoning,
 
     decision_path: s.decisionPath,
+    fast_path_skip_reason: s.fastPathSkipReason,
     commands: s.allCommands,
     flow_path: s.flowResult?.path ?? [],
 
@@ -259,6 +262,9 @@ export async function saveTurnTrace(
         cache_write_tokens: m?.cacheWriteTokens ?? null,
         llm_ms: m?.llmMs ?? null,
         total_ms: Date.now() - s.startedAt,
+        // Diagnóstico del fast-path: por qué este turno fue (o no) determinista.
+        decision_path: s.decisionPath,
+        fast_path_skip_reason: s.fastPathSkipReason,
       },
     })
     .onConflictDoNothing();

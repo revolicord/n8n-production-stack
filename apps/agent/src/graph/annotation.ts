@@ -57,6 +57,7 @@ export const AgentState = Annotation.Root({
   }),
 
   fastPath: Annotation<FastPathResult | null>({ reducer: lastWrite, default: () => null }),
+  fastPathSkipReason: Annotation<string | null>({ reducer: lastWrite, default: () => null }),
   decisionPath: Annotation<DecisionPath>({ reducer: lastWrite, default: () => 'none' }),
   allCommands: Annotation<DialogueCommand[]>({ reducer: lastWrite, default: () => [] }),
   llmReasoning: Annotation<string | null>({ reducer: lastWrite, default: () => null }),
@@ -93,6 +94,7 @@ export function initialState(input: TurnInput): Partial<AgentStateT> {
     assembled: null,
     dialogueStateBefore: null,
     fastPath: null,
+    fastPathSkipReason: null,
     decisionPath: 'none',
     allCommands: [],
     llmReasoning: null,

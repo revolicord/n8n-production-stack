@@ -8,7 +8,8 @@ import type { AssembledContext } from '../../core/context/assemble.js';
  * `ChangeStage(cascade)` directamente. El flow de la nueva etapa entrega el
  * contenido. Esto es "ponerlo en memoria sin pensar": cero tokens en el turno.
  *
- * Ante la MÍNIMA ambigüedad se devuelve `null` y el turno cae al LLM normal:
+ * Ante la MÍNIMA ambigüedad devuelve `{ kind: 'llm', skipReason }` (el turno cae
+ * al LLM) y `skipReason` deja por escrito CUÁL compuerta lo rechazó:
  *  - la etapa no es `flow_only`;
  *  - hay 0 o >1 transiciones válidas (destino ambiguo);
  *  - hay un `repair_context` o escalaciones abiertas (no es camino feliz);
@@ -20,6 +21,36 @@ export interface FastPathResult {
   commands: DialogueCommand[];
   reason: string;
 }
+
+/**
+ * Por qué el turno NO tomó el fast-path y cayó al LLM. Cada valor corresponde a
+ * exactamente una compuerta de `tryFastPath`, en orden. Se persiste en la traza
+ * (`fast_path_skip_reason`) para diagnosticar sin leer código:
+ *  - `has_system_commands`  → llegó un evento de sistema (webhook) → flujo normal.
+ *  - `no_messages`          → turno sin mensajes del lead.
+ *  - `non_text_message`     → audio/imagen/etc. → posible escalado, no es feliz.
+ *  - `not_positive_signal`  → el texto no es señal positiva exacta (o es pregunta).
+ *  - `repair_context_active`→ hay reparación/handoff en curso.
+ *  - `open_escalation`      → hay una escalación a humano abierta.
+ *  - `stage_not_flow_only`  → la etapa NO está en política `flow_only`.
+ *  - `no_forward_transition`→ 0 transiciones de avance (solo terminales/ninguna).
+ *  - `ambiguous_target`     → >1 transición de avance no-terminal (destino ambiguo).
+ */
+export type FastPathSkipReason =
+  | 'has_system_commands'
+  | 'no_messages'
+  | 'non_text_message'
+  | 'not_positive_signal'
+  | 'repair_context_active'
+  | 'open_escalation'
+  | 'stage_not_flow_only'
+  | 'no_forward_transition'
+  | 'ambiguous_target';
+
+/** Resultado explícito de evaluar el fast-path: o avanza sin LLM, o dice por qué no. */
+export type FastPathDecision =
+  | { kind: 'fast_path'; result: FastPathResult }
+  | { kind: 'llm'; skipReason: FastPathSkipReason };
 
 /** Señales positivas inequívocas (texto normalizado, match EXACTO). */
 const POSITIVE_PHRASES = new Set([
@@ -98,27 +129,29 @@ function isPositiveSignal(text: string): boolean {
   return false;
 }
 
-export function tryFastPath(input: TurnInput, ctx: AssembledContext): FastPathResult | null {
+export function tryFastPath(input: TurnInput, ctx: AssembledContext): FastPathDecision {
   // Sólo turnos puros del lead: si hay system_commands, va por el flujo normal.
-  if (input.system_commands.length > 0) return null;
-  if (input.messages.length === 0) return null;
+  if (input.system_commands.length > 0) return { kind: 'llm', skipReason: 'has_system_commands' };
+  if (input.messages.length === 0) return { kind: 'llm', skipReason: 'no_messages' };
 
   // Todos los mensajes deben ser texto y señal positiva inequívoca.
   for (const m of input.messages) {
-    if (m.content_class !== 'text') return null;
-    if (!m.text || !isPositiveSignal(m.text)) return null;
+    if (m.content_class !== 'text') return { kind: 'llm', skipReason: 'non_text_message' };
+    if (!m.text || !isPositiveSignal(m.text))
+      return { kind: 'llm', skipReason: 'not_positive_signal' };
   }
 
   // No estamos en camino feliz si hay reparación o escalación activa.
-  if (ctx.dialogueState.repair_context) return null;
-  if (ctx.handoffState?.open_escalations.length) return null;
+  if (ctx.dialogueState.repair_context) return { kind: 'llm', skipReason: 'repair_context_active' };
+  if (ctx.handoffState?.open_escalations.length)
+    return { kind: 'llm', skipReason: 'open_escalation' };
 
   // La etapa debe ser flow_only.
   const policy =
     ctx.tenantConfig.text_policy_by_stage?.[ctx.currentStage] ??
     ctx.tenantConfig.text_policy_default ??
     'text_ok';
-  if (policy !== 'flow_only') return null;
+  if (policy !== 'flow_only') return { kind: 'llm', skipReason: 'stage_not_flow_only' };
 
   // Destino inequívoco: exactamente UNA transición de AVANCE desde la etapa
   // actual. Las etapas terminales (is_terminal: disqualified, cerrado) NO cuentan
@@ -130,9 +163,10 @@ export function tryFastPath(input: TurnInput, ctx: AssembledContext): FastPathRe
   const outgoing = ctx.transitions.filter(
     (t) => t.fromStageSlug === ctx.currentStage && !terminalSlugs.has(t.toStageSlug),
   );
-  if (outgoing.length !== 1) return null;
+  if (outgoing.length === 0) return { kind: 'llm', skipReason: 'no_forward_transition' };
+  if (outgoing.length > 1) return { kind: 'llm', skipReason: 'ambiguous_target' };
   const target = outgoing[0];
-  if (!target) return null;
+  if (!target) return { kind: 'llm', skipReason: 'no_forward_transition' };
 
   const command: DialogueCommand = {
     type: 'ChangeStage',
@@ -144,7 +178,10 @@ export function tryFastPath(input: TurnInput, ctx: AssembledContext): FastPathRe
   };
 
   return {
-    commands: [command],
-    reason: `fast-path determinista: señal positiva en etapa flow_only "${ctx.currentStage}" → ${target.toStageSlug} (sin LLM)`,
+    kind: 'fast_path',
+    result: {
+      commands: [command],
+      reason: `fast-path determinista: señal positiva en etapa flow_only "${ctx.currentStage}" → ${target.toStageSlug} (sin LLM)`,
+    },
   };
 }

@@ -48,9 +48,25 @@ export function compileAgentGraph(deps: Deps) {
       const ctx = state.assembled;
       if (!ctx) throw new Error('prepare_prompt: assembled context missing');
       // Camino feliz determinista: si aplica, NO se llama al LLM (cero tokens).
-      const fastPath = tryFastPath(state.input, ctx);
-      if (fastPath) return { fastPath, llmRequest: null };
-      return { fastPath: null, llmRequest: buildLlmRequest(state.input, ctx) };
+      // La decisión (y, si cae al LLM, POR QUÉ) se loguea y se persiste en la
+      // traza (decision_path + fast_path_skip_reason) para diagnóstico sin código.
+      const decision = tryFastPath(state.input, ctx);
+      deps.logger.child({ turn_id: state.input.turn_id, node: 'prepare_prompt' }).info(
+        {
+          decision: decision.kind,
+          skip_reason: decision.kind === 'llm' ? decision.skipReason : null,
+          stage: ctx.currentStage,
+        },
+        'fast-path decision',
+      );
+      if (decision.kind === 'fast_path') {
+        return { fastPath: decision.result, fastPathSkipReason: null, llmRequest: null };
+      }
+      return {
+        fastPath: null,
+        fastPathSkipReason: decision.skipReason,
+        llmRequest: buildLlmRequest(state.input, ctx),
+      };
     })
     .addNode('understand', async (state: AgentStateT) => {
       const ctx = state.assembled;
