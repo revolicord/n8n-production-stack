@@ -11,6 +11,7 @@ import { getRedis } from '../lib/redis.js';
 import { cancelBooking, upsertBooking } from '../services/bookings.js';
 import { getOrCreateOpenConversation } from '../services/conversations.js';
 import { debouncePush } from '../services/debounce.js';
+import { cancelActiveCrons } from '../services/lead-crons.js';
 import { createStageTransition, getLeadStage, upsertLeadStage } from '../services/lead-stages.js';
 import { getSubscriberByUuid } from '../services/subscribers.js';
 
@@ -186,6 +187,18 @@ export default async function webhookCalendlyRoute(app: FastifyInstance): Promis
           agentEvidence: `Calendly invitee.created @ ${startTimeRaw} — ${payload.uri}`,
         });
       }
+
+      // El lead agendó: cancelar follow-ups de prospección activos (p. ej. el cron de C
+      // "¿ya agendaste?"). D no es terminal, así que el avance de etapa no los cancela por
+      // sí solo, y agendar es un webhook (no un reply IG), por lo que `resetActiveCronsOnReply`
+      // tampoco dispara. Sin esto, el lead recibiría follow-ups de C tras haber agendado.
+      // Los recordatorios de cita (tabla `bookings`) son un mecanismo aparte y no se ven
+      // afectados.
+      await cancelActiveCrons(db, {
+        tenantId: subscriber.tenantId,
+        subscriberId: subscriber.id,
+        reason: 'calendly_booked',
+      });
 
       log.info(
         { subscriber_id: subscriberId, from_stage: fromStage, start_time: startTimeRaw },

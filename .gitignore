@@ -43,3 +43,6 @@ build/
 coverage/
 .vitest/
 .turbo/
+
+# Fase 4 tuning — exports de conversación (no versionar)
+agent-tuning-out/

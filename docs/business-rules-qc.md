@@ -157,6 +157,48 @@ contenido core), `Clarify`.
 
 ---
 
+## 5b. Registro y tono — situacional, NO global
+
+**Problema raíz de las quejas "muy seco":** el tono estaba codificado como un rasgo
+**global** ("seco, binario"). Pero el cliente lo quiere seco en unos momentos y *suave,
+eliminador de miedos* en otros. Con una sola perilla global, cada corrección contradice
+otra situación → ciclo infinito de cambios de prompt. La solución es la misma que con MS:
+**descomponer por situación.** El tono lo decide **el estado emocional del lead**, no un
+adjetivo fijo.
+
+### Los tres registros
+
+| Estado emocional del lead | Registro | Por qué |
+|---|---|---|
+| **Aprobación / señal clara** (👍, "sí", "ya vi") | **Seco, eficiente.** Una frase, avanza. | No hay fricción que disolver; lo seco es correcto. |
+| **Miedo / duda / fricción** (un *"sí asustado"*) | **Suave, eliminador de miedos.** Valida el miedo, baja el riesgo percibido, hazlo seguro decir que sí. | Lo seco aquí AHUYENTA. El lead quiere, pero tiene miedo. |
+| **Rechazo claro** (un *"no" real*) | **Tajante.** Una frase, descalifica sin insistir. | Sin cambios respecto al diseño actual. |
+
+### Reglas
+
+1. **El registro se alinea con el split determinista/LLM.** Lo seco vive en los rieles
+   (confirmaciones del camino feliz, cortas por naturaleza). Lo suave vive en los momentos
+   donde entra el LLM — y el LLM sólo entra ante un **desvío**, que casi siempre **es
+   miedo/duda**. Por tanto: **cuando el LLM tiene que hablar, el registro por defecto es
+   el suave**, no el seco de los rieles.
+2. **Suavizar ≠ rogar.** Suavizar un *"sí asustado"* = quitar fricción (validar, reducir
+   el riesgo). Eso está permitido y es deseable. Rogar a un *"no real"* = perseguir,
+   sobre-justificar. Eso sigue **prohibido** y tajante.
+3. **La habilidad clave del LLM: distinguir miedo de rechazo.** El defecto histórico es
+   tratar un *"sí asustado"* como un *"no"* y ponerse seco/descalificar. Antes de responder
+   a un desvío, el LLM clasifica: ¿aprobación, miedo, o rechazo claro? — y elige el registro.
+   Debe dejar esa lectura explícita en su `reasoning` (ej. *"leído como sí asustado →
+   registro suave"*), para que el feedback loop pueda corregir la **clasificación**, no el
+   adjetivo vago.
+4. **La calidez viene de las palabras, no de emojis.** La restricción CERO EMOJIS (§5) se
+   mantiene incluso en el registro suave.
+
+> **Estado:** hipótesis no probada por el cliente. Se valida con el feedback loop (§ Fase 4),
+> acumulando correcciones como **ejemplos etiquetados por registro** en vez de reescribir
+> la prosa de la persona (los ejemplos componen; las reglas en prosa se contradicen).
+
+---
+
 ## 6. Notas de migración / tareas abiertas (derivadas de este modelo)
 
 Cosas que hoy NO concuerdan con este documento y hay que corregir:

@@ -1,8 +1,9 @@
 [
   {
-    "flow_id": "qc_cascade_a_ms",
-    "name": "Cascada A→MS: audio + VSL y avance a B",
-    "trigger": { "type": "stage_transition", "from": "A", "to": "MS" },
+    "flow_id": "qc_cascade_a_b",
+    "name": "Cascada A→B: audio + VSL tras señal positiva al hook",
+    "description": "Disparado cuando el lead aprueba el hook (LLM emite ChangeStage A→B con cascade:true). Entrega el contenido core (audio pre-VSL + VSL). NO avanza de etapa: B es un estado de espera donde se aguarda la reacción a la VSL.",
+    "trigger": { "type": "stage_transition", "from": "A", "to": "B" },
     "slots": [],
     "steps": [
       {
@@ -11,7 +12,7 @@
         "action": "send_content",
         "config": {
           "slug_id": "audio_prevsl",
-          "lookup_stage": "MS"
+          "lookup_stage": "B"
         }
       },
       {
@@ -20,44 +21,7 @@
         "action": "send_content",
         "config": {
           "slug_id": "vsl_resultados",
-          "lookup_stage": "MS"
-        }
-      },
-      {
-        "id": "s3",
-        "type": "action",
-        "action": "change_stage",
-        "config": {
-          "to_stage": "B",
-          "reason": null,
-          "evidence": "auto: contenido core entregado tras señal positiva",
-          "cascade": false
-        }
-      }
-    ]
-  },
-  {
-    "flow_id": "qc_cascade_ms_b",
-    "name": "Cascada MS→B: reenvío de audio + VSL",
-    "trigger": { "type": "stage_transition", "from": "MS", "to": "B" },
-    "slots": [],
-    "steps": [
-      {
-        "id": "s1",
-        "type": "action",
-        "action": "send_content",
-        "config": {
-          "slug_id": "audio_prevsl",
-          "lookup_stage": "MS"
-        }
-      },
-      {
-        "id": "s2",
-        "type": "action",
-        "action": "send_content",
-        "config": {
-          "slug_id": "vsl_resultados",
-          "lookup_stage": "MS"
+          "lookup_stage": "B"
         }
       }
     ]

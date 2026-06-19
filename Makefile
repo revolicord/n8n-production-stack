@@ -1,6 +1,6 @@
 .PHONY: help deploy status logs-main logs-webhook logs-worker logs-api logs-api-worker logs-dashboard \
         scale-workers scale-api backup update down rebuild-api rebuild-dashboard migrate seed-tenant \
-        cutover-agent seed-agent-config prune-traces
+        cutover-agent seed-agent-config prune-traces export-conversation
 
 STACK=n8n
 
@@ -86,6 +86,17 @@ seed-agent-config: ## Importar flows + persona + config de un tenant. Usar: make
 	  -e DATABASE_URL="postgres://n8n:$$POSTGRES_PASSWORD@postgres:5432/n8n" \
 	  dm-api:local \
 	  node /app/apps/agent/dist/scripts/seed-agent-config.js --tenant-slug $(SLUG) $(DRY)
+
+export-conversation: ## Fase 4 tuning: exporta una conversación + bundle a ./agent-tuning-out. Usar: make export-conversation CONV=<conversation_id>
+	@test -n "$(CONV)" || (echo "Falta CONV=<conversation_id> (ej: make export-conversation CONV=...)" && exit 1)
+	@mkdir -p agent-tuning-out
+	@set -a; . ./.env; set +a; \
+	docker run --rm \
+	  --network $(STACK)_n8n_internal \
+	  -e DATABASE_URL="postgres://n8n:$$POSTGRES_PASSWORD@postgres:5432/n8n" \
+	  -v $(PWD)/agent-tuning-out:/app/agent-tuning-out \
+	  dm-api:local \
+	  node /app/apps/agent/dist/scripts/export-conversation.js --conversation-id $(CONV) --out /app/agent-tuning-out
 
 prune-traces: ## ADR-0025: borrar agent_turn_traces con más de N días. Usar: make prune-traces DAYS=30
 	@set -a; . ./.env; set +a; \

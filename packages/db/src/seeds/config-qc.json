@@ -2,7 +2,6 @@
   "text_policy_default": "text_ok",
   "text_policy_by_stage": {
     "A": "flow_only",
-    "MS": "flow_only",
     "B": "flow_only",
     "C": "text_ok",
     "D": "text_ok"
