@@ -37,6 +37,26 @@ export const FollowupWindowSchema = z.object({
 });
 export type FollowupWindow = z.infer<typeof FollowupWindowSchema>;
 
+/**
+ * Señales positivas que disparan el fast-path determinista (cero tokens): cuando
+ * el lead las envía en una etapa `flow_only`, el motor avanza por la transición
+ * `trigger:'affirm'` SIN llamar al LLM. Editable por tenant para que el equipo del
+ * dashboard agregue variaciones que surjan ("oki", "ya quedó", "perfe", …).
+ *
+ * - `phrases`: frases extra que cuentan como señal positiva. Se normalizan igual
+ *   que el input (sin acentos/signos, lowercase, match EXACTO de la frase completa).
+ * - `emojis`: emojis de aprobación extra (los tonos de piel se normalizan solos).
+ * - `mode`: 'extend' (default) SUMA a los defaults del sistema; 'replace' usa SOLO
+ *   las `phrases` del tenant. Los emojis de aprobación base (👍👌✅…) SIEMPRE se
+ *   conservan — el pulgar arriba nunca deja de ser cero-tokens.
+ */
+export const AffirmSignalsSchema = z.object({
+  phrases: z.array(z.string()).optional(),
+  emojis: z.array(z.string()).optional(),
+  mode: z.enum(['extend', 'replace']).optional(),
+});
+export type AffirmSignals = z.infer<typeof AffirmSignalsSchema>;
+
 export const TenantConfigSchema = z
   .object({
     debounce_ms: z.number().int().positive().optional(),
@@ -96,6 +116,9 @@ export const TenantConfigSchema = z
     followup_reset_on_reply: z.boolean().optional(),
     // Quiet hours: ventana permitida de envío de follow-ups. Sin definir o null = 24/7.
     followup_window: FollowupWindowSchema.nullable().optional(),
+    // Fast-path determinista: señales positivas editables por tenant (👍, "ya lo vi",
+    // variaciones). Ver AffirmSignalsSchema. Si no se define, se usan los defaults.
+    affirm_signals: AffirmSignalsSchema.optional(),
   })
   .passthrough();
 

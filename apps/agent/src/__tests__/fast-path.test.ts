@@ -1,7 +1,7 @@
 import type { TurnInput } from '@dm-api/shared';
 import { describe, expect, it } from 'vitest';
 import type { AssembledContext } from '../core/context/assemble.js';
-import { tryFastPath } from '../graph/nodes/fast-path.js';
+import { resolveAffirmSignals, tryFastPath } from '../graph/nodes/fast-path.js';
 
 function makeCtx(overrides: Partial<AssembledContext> = {}): AssembledContext {
   return {
@@ -170,5 +170,52 @@ describe('tryFastPath (camino feliz determinista)', () => {
     (input as any).system_commands = [{ type: 'SetSlot', slot: 'x', value: 1, evidence: 'sys' }];
     const r = tryFastPath(input, makeCtx());
     expect(r.kind === 'llm' && r.skipReason).toBe('has_system_commands');
+  });
+
+  it('señales del tenant: "oki" no es default pero avanza si el tenant la agrega', () => {
+    const base = makeCtx();
+    // Sin override: "oki" no matchea → LLM.
+    expect(tryFastPath(makeInput([{ text: 'oki' }]), base).kind).toBe('llm');
+
+    // El dashboard agrega la variación → fast-path sin tocar código.
+    const ctx = makeCtx({
+      tenantConfig: {
+        text_policy_by_stage: { A: 'flow_only' },
+        affirm_signals: { phrases: ['oki', 'ya quedó'] },
+      } as never,
+    });
+    expect(tryFastPath(makeInput([{ text: 'oki' }]), ctx).kind).toBe('fast_path');
+    // Se normaliza igual que el input (acentos/case).
+    expect(tryFastPath(makeInput([{ text: 'YA QUEDO' }]), ctx).kind).toBe('fast_path');
+  });
+
+  it('mode:replace ignora frases default pero conserva el 👍', () => {
+    const ctx = makeCtx({
+      tenantConfig: {
+        text_policy_by_stage: { A: 'flow_only' },
+        affirm_signals: { phrases: ['solo esto'], mode: 'replace' },
+      } as never,
+    });
+    // "ok" es default pero con replace ya no cuenta.
+    expect(tryFastPath(makeInput([{ text: 'ok' }]), ctx).kind).toBe('llm');
+    expect(tryFastPath(makeInput([{ text: 'solo esto' }]), ctx).kind).toBe('fast_path');
+    // El pulgar arriba SIEMPRE sigue siendo cero-tokens, incluso con replace.
+    expect(tryFastPath(makeInput([{ text: '👍' }]), ctx).kind).toBe('fast_path');
+  });
+
+  it('resolveAffirmSignals: extend suma a defaults; emoji base siempre presente', () => {
+    const def = resolveAffirmSignals({});
+    expect(def.phrases.has('ok')).toBe(true);
+    expect(def.emojis.has('👍')).toBe(true);
+
+    const ext = resolveAffirmSignals({ affirm_signals: { phrases: ['Oki!'], emojis: ['🤙'] } });
+    expect(ext.phrases.has('ok')).toBe(true); // default conservado
+    expect(ext.phrases.has('oki')).toBe(true); // normalizado y agregado
+    expect(ext.emojis.has('🤙')).toBe(true);
+    expect(ext.emojis.has('👍')).toBe(true);
+
+    const rep = resolveAffirmSignals({ affirm_signals: { phrases: ['x'], mode: 'replace' } });
+    expect(rep.phrases.has('ok')).toBe(false); // default descartado
+    expect(rep.emojis.has('👍')).toBe(true); // emoji base SIEMPRE
   });
 });

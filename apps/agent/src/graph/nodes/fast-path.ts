@@ -58,8 +58,12 @@ export type FastPathDecision =
   | { kind: 'fast_path'; result: FastPathResult }
   | { kind: 'llm'; skipReason: FastPathSkipReason };
 
-/** Señales positivas inequívocas (texto normalizado, match EXACTO). */
-const POSITIVE_PHRASES = new Set([
+/**
+ * Señales positivas inequívocas POR DEFECTO (texto normalizado, match EXACTO).
+ * El tenant puede sumar variaciones vía `tenantConfig.affirm_signals` (editable en
+ * el dashboard) — ver `resolveAffirmSignals`. Se exportan para documentación/panel.
+ */
+export const DEFAULT_POSITIVE_PHRASES = new Set([
   'si',
   'ok',
   'oka',
@@ -90,8 +94,57 @@ const POSITIVE_PHRASES = new Set([
   'claro',
 ]);
 
-/** Emojis de aprobación que, solos, cuentan como señal positiva. */
-const POSITIVE_EMOJI = new Set(['👍', '👌', '✅', '🙌', '🔥', '💪', '🙏', '👏', '🤝']);
+/**
+ * Emojis de aprobación POR DEFECTO que, solos, cuentan como señal positiva. Estos
+ * SIEMPRE se conservan (incluso con `mode:'replace'`): el 👍 nunca deja de ser
+ * cero-tokens. El tenant puede sumar más vía `affirm_signals.emojis`.
+ */
+export const DEFAULT_POSITIVE_EMOJI = new Set([
+  '👍',
+  '👌',
+  '✅',
+  '🙌',
+  '🔥',
+  '💪',
+  '🙏',
+  '👏',
+  '🤝',
+]);
+
+/** Señales positivas resueltas para un turno (defaults + overrides del tenant). */
+export interface AffirmSignalSets {
+  phrases: Set<string>;
+  emojis: Set<string>;
+}
+
+/**
+ * Resuelve las señales positivas efectivas combinando los defaults del sistema con
+ * `tenantConfig.affirm_signals` (editable en el dashboard). Las frases del tenant
+ * se NORMALIZAN igual que el input. `mode:'extend'` (default) suma a los defaults;
+ * `mode:'replace'` usa solo las frases del tenant. Los emojis base siempre se
+ * conservan (👍 garantizado). Robusto: si el tenant no define nada, usa defaults.
+ */
+export function resolveAffirmSignals(tenantConfig: {
+  affirm_signals?: { phrases?: string[]; emojis?: string[]; mode?: 'extend' | 'replace' };
+}): AffirmSignalSets {
+  const cfg = tenantConfig.affirm_signals;
+  const replace = cfg?.mode === 'replace';
+
+  const phrases = new Set<string>(replace ? [] : DEFAULT_POSITIVE_PHRASES);
+  for (const p of cfg?.phrases ?? []) {
+    const norm = normalizePhrase(p);
+    if (norm.length > 0) phrases.add(norm);
+  }
+
+  // Los emojis de aprobación base SIEMPRE están: el pulgar arriba nunca se pierde.
+  const emojis = new Set<string>(DEFAULT_POSITIVE_EMOJI);
+  for (const e of cfg?.emojis ?? []) {
+    const pelado = stripEmojiModifiers(e).replace(/\s/g, '');
+    if (pelado.length > 0) emojis.add(pelado);
+  }
+
+  return { phrases, emojis };
+}
 
 /** Marcas diacríticas combinantes (U+0300–U+036F) que deja `normalize('NFD')`. */
 // biome-ignore lint/suspicious/noMisleadingCharacterClass: rango de marcas combinantes, intencional
@@ -117,19 +170,19 @@ function stripEmojiModifiers(text: string): string {
   return text.replace(EMOJI_MODIFIERS, '');
 }
 
-/** ¿Un mensaje individual es una señal positiva inequívoca? */
-function isPositiveSignal(text: string): boolean {
+/** ¿Un mensaje individual es una señal positiva inequívoca, según las señales del tenant? */
+function isPositiveSignal(text: string, signals: AffirmSignalSets): boolean {
   // Una pregunta NUNCA es señal de avance (aunque empiece por "sí").
   if (text.includes('?') || text.includes('¿')) return false;
 
   const normalized = normalizePhrase(text);
-  if (normalized.length > 0 && POSITIVE_PHRASES.has(normalized)) return true;
+  if (normalized.length > 0 && signals.phrases.has(normalized)) return true;
 
   // Mensaje compuesto sólo de emojis positivos (👍, 👍👍, 👍🔥, …).
   const emojiOnly = stripEmojiModifiers(text).replace(/\s/g, '');
   if (emojiOnly.length > 0) {
     const chars = [...emojiOnly];
-    if (chars.every((c) => POSITIVE_EMOJI.has(c))) return true;
+    if (chars.every((c) => signals.emojis.has(c))) return true;
   }
 
   return false;
@@ -140,10 +193,13 @@ export function tryFastPath(input: TurnInput, ctx: AssembledContext): FastPathDe
   if (input.system_commands.length > 0) return { kind: 'llm', skipReason: 'has_system_commands' };
   if (input.messages.length === 0) return { kind: 'llm', skipReason: 'no_messages' };
 
-  // Todos los mensajes deben ser texto y señal positiva inequívoca.
+  // Todos los mensajes deben ser texto y señal positiva inequívoca. Las señales
+  // (frases/emojis) se resuelven por tenant: defaults del sistema + overrides
+  // editables en el dashboard (tenantConfig.affirm_signals).
+  const signals = resolveAffirmSignals(ctx.tenantConfig);
   for (const m of input.messages) {
     if (m.content_class !== 'text') return { kind: 'llm', skipReason: 'non_text_message' };
-    if (!m.text || !isPositiveSignal(m.text))
+    if (!m.text || !isPositiveSignal(m.text, signals))
       return { kind: 'llm', skipReason: 'not_positive_signal' };
   }
 
