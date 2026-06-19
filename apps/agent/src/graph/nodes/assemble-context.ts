@@ -55,7 +55,7 @@ export async function assembleContextNode(input: TurnInput, deps: Deps): Promise
       subscriberId: subscriber_id,
       conversationId: conversation_id,
     }),
-    loadRecentTurns(db, { tenantId: tenant_id, subscriberId: subscriber_id, limit: 20 }),
+    loadRecentTurns(db, { tenantId: tenant_id, subscriberId: subscriber_id, limit: 10 }),
     loadDialogueState(db, { conversationId: conversation_id }),
     loadActiveFlows(db, tenant_id),
   ]);
@@ -73,7 +73,7 @@ export async function assembleContextNode(input: TurnInput, deps: Deps): Promise
   const transcript = await buildTranscript(db, {
     tenantId: tenant_id,
     subscriberId: subscriber_id,
-    maxTurns: 20,
+    maxTurns: 10,
     recentTurns,
   });
 

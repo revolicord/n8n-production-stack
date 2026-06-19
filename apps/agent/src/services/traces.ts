@@ -53,6 +53,8 @@ export interface DebugTracePayload {
     model: string | null;
     input_tokens: number | null;
     output_tokens: number | null;
+    cache_read_tokens: number | null;
+    cache_write_tokens: number | null;
     llm_ms: number | null;
     total_ms: number;
   };
@@ -112,7 +114,9 @@ export function buildDebugPayload(
       active_flows: activeFlows instanceof Map ? Array.from(activeFlows.keys()) : [],
     },
 
-    system_prompt: s.llmRequest?.systemPrompt ?? null,
+    system_prompt: s.llmRequest
+      ? `${s.llmRequest.systemStable}\n${s.llmRequest.systemVolatile}`
+      : null,
     conversation_history: s.llmRequest?.messages ?? null,
     reasoning: s.llmReasoning,
 
@@ -129,6 +133,8 @@ export function buildDebugPayload(
       model: m?.model ?? null,
       input_tokens: m?.inputTokens ?? null,
       output_tokens: m?.outputTokens ?? null,
+      cache_read_tokens: m?.cacheReadTokens ?? null,
+      cache_write_tokens: m?.cacheWriteTokens ?? null,
       llm_ms: m?.llmMs ?? null,
       total_ms: Date.now() - s.startedAt,
     },
@@ -246,6 +252,8 @@ export async function saveTurnTrace(
         model: m?.model ?? null,
         input_tokens: m?.inputTokens ?? null,
         output_tokens: m?.outputTokens ?? null,
+        cache_read_tokens: m?.cacheReadTokens ?? null,
+        cache_write_tokens: m?.cacheWriteTokens ?? null,
         llm_ms: m?.llmMs ?? null,
         total_ms: Date.now() - s.startedAt,
       },

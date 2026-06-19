@@ -31,7 +31,7 @@ export function buildLlmRequest(
 
   const personaBlock =
     ctx.tenantConfig.persona_prompt ?? 'Sé profesional, conciso y orientado a resultados.';
-  const systemPrompt = composePrompt(ctx, personaBlock);
+  const { stable, volatile } = composePrompt(ctx, personaBlock);
 
   const transcriptMsgs = ctx.transcript.map((t) => ({
     role: t.role,
@@ -40,7 +40,7 @@ export function buildLlmRequest(
   const currentBatchText = input.messages.map((m) => m.text ?? `[${m.content_class}]`).join('\n');
   const messages = [...transcriptMsgs, { role: 'user' as const, content: currentBatchText }];
 
-  return { systemPrompt, messages };
+  return { systemStable: stable, systemVolatile: volatile, messages };
 }
 
 /**
@@ -68,7 +68,8 @@ export async function understandNode(
   const model = ctx.tenantConfig.model ?? agentConfig.ANTHROPIC_MODEL;
 
   const result = await callLlm({
-    systemPrompt: prebuiltRequest.systemPrompt,
+    systemStable: prebuiltRequest.systemStable,
+    systemVolatile: prebuiltRequest.systemVolatile,
     messages: prebuiltRequest.messages,
     model,
     apiKey: agentConfig.ANTHROPIC_API_KEY,
@@ -90,6 +91,8 @@ export async function understandNode(
       model: result.model,
       in_tok: result.inputTokens,
       out_tok: result.outputTokens,
+      cache_read_tok: result.cacheReadTokens,
+      cache_write_tok: result.cacheWriteTokens,
       llm_ms: result.durationMs,
       n_commands: commands.length,
     },
@@ -105,6 +108,8 @@ export async function understandNode(
       model: result.model,
       inputTokens: result.inputTokens,
       outputTokens: result.outputTokens,
+      cacheReadTokens: result.cacheReadTokens,
+      cacheWriteTokens: result.cacheWriteTokens,
       llmMs: result.durationMs,
     },
   };

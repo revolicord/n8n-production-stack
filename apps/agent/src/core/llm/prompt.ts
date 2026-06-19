@@ -1,7 +1,28 @@
 import { DEFAULT_PLATFORM_SKELETON } from '@dm-api/shared';
 import type { AssembledContext } from '../context/assemble.js';
 
-export function composePrompt(ctx: AssembledContext, personaBlock: string): string {
+/**
+ * System prompt dividido en dos bloques para aprovechar prompt caching de
+ * Anthropic (ADR-0025 / optimización de tokens):
+ *
+ *  - `stable`:  vocabulario de comandos + reglas + persona del tenant. NO cambia
+ *    turno a turno → se marca con `cache_control` y se cobra al ~10% en cache hits
+ *    (reaprovechable entre turnos y entre leads del mismo tenant durante 5 min).
+ *  - `volatile`: transiciones válidas, opciones de contenido, política de respuesta
+ *    y contexto de diálogo. Dependen de la etapa/estado → fuera del breakpoint.
+ *
+ * El orden importa: TODO lo estable va primero para que el prefijo cacheado sea
+ * el más largo posible.
+ */
+export interface ComposedPrompt {
+  stable: string;
+  volatile: string;
+}
+
+/** Placeholders dinámicos que rompen el cache si quedan en el prefijo estable. */
+const DYNAMIC_PLACEHOLDERS = ['{VALID_TRANSITIONS}', '{CONTENT_OPTIONS}', '{REPLY_POLICY}'];
+
+export function composePrompt(ctx: AssembledContext, personaBlock: string): ComposedPrompt {
   const validTransitions =
     ctx.transitions
       .filter((t) => t.fromStageSlug === ctx.currentStage)
@@ -18,12 +39,25 @@ export function composePrompt(ctx: AssembledContext, personaBlock: string): stri
   const dialogueInfo = buildDialogueContextBlock(ctx);
 
   const skeletonTemplate = ctx.tenantConfig.skeleton_prompt ?? DEFAULT_PLATFORM_SKELETON;
-  const skeleton = skeletonTemplate
+
+  // Punto de corte: la primera aparición de cualquier placeholder dinámico. Todo
+  // lo anterior es estático (vocabulario + reglas); lo posterior es volátil.
+  const cutIdx = DYNAMIC_PLACEHOLDERS.map((p) => skeletonTemplate.indexOf(p))
+    .filter((i) => i >= 0)
+    .sort((a, b) => a - b)[0];
+
+  const staticHead = cutIdx === undefined ? skeletonTemplate : skeletonTemplate.slice(0, cutIdx);
+  const dynamicTail = cutIdx === undefined ? '' : skeletonTemplate.slice(cutIdx);
+
+  const renderedTail = dynamicTail
     .replace('{VALID_TRANSITIONS}', validTransitions)
     .replace('{CONTENT_OPTIONS}', contentOptions)
     .replace('{REPLY_POLICY}', buildReplyPolicyBlock(ctx));
 
-  return [skeleton, '', '## Persona del agente', '', personaBlock, '', dialogueInfo].join('\n');
+  const stable = [staticHead.trimEnd(), '', '## Persona del agente', '', personaBlock].join('\n');
+  const volatile = [renderedTail.trim(), '', dialogueInfo].join('\n');
+
+  return { stable, volatile };
 }
 
 /**

@@ -8,17 +8,23 @@ import type {
 import { Annotation } from '@langchain/langgraph';
 import type { AssembledContext } from '../core/context/assemble.js';
 import type { FlowEngineResult } from '../core/flow-engine/engine.js';
+import type { FastPathResult } from './nodes/fast-path.js';
 
 export interface LlmCallMetrics {
   model: string;
   inputTokens: number;
   outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
   llmMs: number;
 }
 
 /** Lo exacto que se envió al LLM en este turno (para la traza legible). */
 export interface LlmRequestSnapshot {
-  systemPrompt: string;
+  /** Prefijo estable del system prompt (cacheado vía cache_control). */
+  systemStable: string;
+  /** Cola volátil del system prompt (transiciones/contenido/diálogo, sin cache). */
+  systemVolatile: string;
   messages: Array<{ role: 'user' | 'assistant'; content: string }>;
 }
 
@@ -40,6 +46,7 @@ export const AgentState = Annotation.Root({
     default: () => null,
   }),
 
+  fastPath: Annotation<FastPathResult | null>({ reducer: lastWrite, default: () => null }),
   allCommands: Annotation<DialogueCommand[]>({ reducer: lastWrite, default: () => [] }),
   llmReasoning: Annotation<string | null>({ reducer: lastWrite, default: () => null }),
   llmRequest: Annotation<LlmRequestSnapshot | null>({ reducer: lastWrite, default: () => null }),

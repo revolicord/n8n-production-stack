@@ -11,6 +11,7 @@ import { type TraceLevel, resolveTraceMode, saveTurnTrace } from '../services/tr
 import { AgentState, type AgentStateT, initialState } from './annotation.js';
 import { assembleContextNode } from './nodes/assemble-context.js';
 import { executeActionsNode } from './nodes/execute-actions.js';
+import { tryFastPath } from './nodes/fast-path.js';
 import { flowEngineNode } from './nodes/flow-engine.js';
 import { respondNode } from './nodes/respond.js';
 import { buildLlmRequest, understandNode } from './nodes/understand.js';
@@ -46,11 +47,28 @@ export function compileAgentGraph(deps: Deps) {
     .addNode('prepare_prompt', (state: AgentStateT) => {
       const ctx = state.assembled;
       if (!ctx) throw new Error('prepare_prompt: assembled context missing');
-      return { llmRequest: buildLlmRequest(state.input, ctx) };
+      // Camino feliz determinista: si aplica, NO se llama al LLM (cero tokens).
+      const fastPath = tryFastPath(state.input, ctx);
+      if (fastPath) return { fastPath, llmRequest: null };
+      return { fastPath: null, llmRequest: buildLlmRequest(state.input, ctx) };
     })
     .addNode('understand', async (state: AgentStateT) => {
       const ctx = state.assembled;
       if (!ctx) throw new Error('understand: assembled context missing');
+      // Fast-path: el plan ya está decidido sin LLM.
+      if (state.fastPath) {
+        deps.logger
+          .child({ turn_id: state.input.turn_id, node: 'understand' })
+          .info(
+            { fast_path: true, reason: state.fastPath.reason },
+            'understand skipped (fast-path)',
+          );
+        return {
+          allCommands: [...state.input.system_commands, ...state.fastPath.commands],
+          llmReasoning: state.fastPath.reason,
+          llmMetrics: null,
+        };
+      }
       const r = await understandNode(state.input, ctx, deps, state.llmRequest);
       return {
         allCommands: r.commands,

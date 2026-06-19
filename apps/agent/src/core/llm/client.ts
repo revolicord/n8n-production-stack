@@ -7,16 +7,33 @@ import { zodToJsonSchema } from 'zod-to-json-schema';
 
 const EMIT_PLAN_TOOL = 'emit_plan';
 
+/** Tokens servidos desde el cache de prompt (cobrados al ~10%). */
+function cacheRead(usage: Anthropic.Usage): number {
+  return usage.cache_read_input_tokens ?? 0;
+}
+
+/** Tokens escritos al cache de prompt en esta llamada (cobrados al ~125%). */
+function cacheWrite(usage: Anthropic.Usage): number {
+  return usage.cache_creation_input_tokens ?? 0;
+}
+
 export interface LlmCallResult {
   plan: LlmPlan;
   inputTokens: number;
   outputTokens: number;
+  /** Tokens de input servidos desde cache (cobrados al ~10%). */
+  cacheReadTokens: number;
+  /** Tokens de input escritos al cache en esta llamada (cobrados al ~125%). */
+  cacheWriteTokens: number;
   model: string;
   durationMs: number;
 }
 
 export interface LlmCallInput {
-  systemPrompt: string;
+  /** Prefijo estable del system prompt: vocabulario + reglas + persona (cacheado). */
+  systemStable: string;
+  /** Cola volátil: transiciones/contenido/diálogo (sin cache). */
+  systemVolatile: string;
   messages: Array<{ role: 'user' | 'assistant'; content: string }>;
   model: string;
   apiKey: string;
@@ -39,20 +56,31 @@ export async function callLlm(input: LlmCallInput): Promise<LlmCallResult> {
       EMIT_PLAN_TOOL
     ] ?? (toolSchema as Record<string, unknown>);
 
+  // Prompt caching: el tool schema + el prefijo estable del system son idénticos
+  // turno a turno → un breakpoint `ephemeral` en cada uno los cobra al ~10% en
+  // cache hits (ventana de 5 min, reaprovechable entre turnos y leads del tenant).
+  // La cola volátil (transiciones/contenido/diálogo) queda fuera del prefijo cacheado.
+  const tools: Anthropic.Tool[] = [
+    {
+      name: EMIT_PLAN_TOOL,
+      description: 'Emite el plan de diálogo para este turno',
+      input_schema: inputSchema as Anthropic.Tool['input_schema'],
+      cache_control: { type: 'ephemeral' },
+    },
+  ];
+  const system: Anthropic.TextBlockParam[] = [
+    { type: 'text', text: input.systemStable, cache_control: { type: 'ephemeral' } },
+    { type: 'text', text: input.systemVolatile },
+  ];
+
   const startedAt = Date.now();
 
   const response = await client.messages.create({
     model: input.model,
     max_tokens: 2048,
-    system: input.systemPrompt,
+    system,
     messages: input.messages,
-    tools: [
-      {
-        name: EMIT_PLAN_TOOL,
-        description: 'Emite el plan de diálogo para este turno',
-        input_schema: inputSchema as Anthropic.Tool['input_schema'],
-      },
-    ],
+    tools,
     tool_choice: { type: 'tool', name: EMIT_PLAN_TOOL },
   });
 
@@ -84,15 +112,9 @@ export async function callLlm(input: LlmCallInput): Promise<LlmCallResult> {
     const retryResponse = await client.messages.create({
       model: input.model,
       max_tokens: 2048,
-      system: input.systemPrompt,
+      system,
       messages: retryMessages,
-      tools: [
-        {
-          name: EMIT_PLAN_TOOL,
-          description: 'Emite el plan de diálogo para este turno',
-          input_schema: inputSchema as Anthropic.Tool['input_schema'],
-        },
-      ],
+      tools,
       tool_choice: { type: 'tool', name: EMIT_PLAN_TOOL },
     });
 
@@ -110,6 +132,8 @@ export async function callLlm(input: LlmCallInput): Promise<LlmCallResult> {
       plan: retryParse.data,
       inputTokens: (response.usage.input_tokens ?? 0) + (retryResponse.usage.input_tokens ?? 0),
       outputTokens: (response.usage.output_tokens ?? 0) + (retryResponse.usage.output_tokens ?? 0),
+      cacheReadTokens: cacheRead(response.usage) + cacheRead(retryResponse.usage),
+      cacheWriteTokens: cacheWrite(response.usage) + cacheWrite(retryResponse.usage),
       model: input.model,
       durationMs: Date.now() - startedAt,
     };
@@ -119,6 +143,8 @@ export async function callLlm(input: LlmCallInput): Promise<LlmCallResult> {
     plan: parseResult.data,
     inputTokens: response.usage.input_tokens ?? 0,
     outputTokens: response.usage.output_tokens ?? 0,
+    cacheReadTokens: cacheRead(response.usage),
+    cacheWriteTokens: cacheWrite(response.usage),
     model: input.model,
     durationMs,
   };
