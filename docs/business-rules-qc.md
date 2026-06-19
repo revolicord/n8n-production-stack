@@ -50,8 +50,8 @@ deterministas** (lo que se manda al avanzar).
 |---|---|---|
 | entrada → A | video hook 25s | `hook_video` |
 | A → B | audio pre-VSL + VSL de resultados | `audio_prevsl`, `vsl_resultados` |
-| B → C | link de Calendly (por texto) | — (reply_text) |
-| C → D | audio de cierre + video nurturing | `booking_audio`, nurturing url |
+| B → C | audio de preparación + link de Calendly | `audio_precalendly`, reply_text |
+| C → D | texto intro + URL sola del video nurturing | reply_text × 2 |
 
 > **MS NO EXISTE.** "Media Seen" era un residuo del motor *outbound* de Alex (distinguía
 > a quién veía su video frío de quién lo dejaba en visto). En *inbound* esa población no
@@ -132,9 +132,9 @@ LLM le creyó y avanzó C→D. **Eso es un bug.** Decir "ya agendé" no es agend
 | `hook_video` | video | gancho 25s pidiendo permiso para enviar propuesta | entrada → A |
 | `audio_prevsl` | audio | nota de voz que prepara para la VSL y dice qué hacer si interesa | arista A→B |
 | `vsl_resultados` | video | VSL ~2min con resultados de clientes; pide 👍 o conversar | arista A→B (tras el audio) |
-| (link) | texto | link de Calendly con UTM del subscriber | arista B→C |
-| `booking_audio` | audio | cierre de sesión post-agendamiento | arista C→D |
-| nurturing | texto/video | video configurable por tenant (`nurturing_video_url`) | arista C→D |
+| `audio_precalendly` | audio | nota de voz que prepara al lead antes de recibir el link de agendamiento | arista B→C (antes del link) |
+| (link) | texto | link de Calendly con UTM del subscriber | arista B→C (tras el audio) |
+| nurturing | texto/video | video configurable por tenant (`nurturing_video_url`); se manda la URL sola (sin texto alrededor) para que Instagram muestre solo el preview del video | arista C→D |
 
 ---
 

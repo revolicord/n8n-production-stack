@@ -28,12 +28,22 @@
   },
   {
     "flow_id": "qc_cascade_b_c",
-    "name": "Cascada B→C: lead_in + link de Calendly",
+    "name": "Cascada B→C: audio + link de Calendly",
     "trigger": { "type": "stage_transition", "from": "B", "to": "C" },
     "slots": [],
     "steps": [
       {
         "id": "s1",
+        "type": "action",
+        "action": "send_content",
+        "config": {
+          "slug_id": "audio_precalendly",
+          "lookup_stage": "C"
+        },
+        "on_failure": "continue"
+      },
+      {
+        "id": "s2",
         "type": "action",
         "action": "reply_text",
         "config": {
@@ -45,28 +55,27 @@
   },
   {
     "flow_id": "qc_cascade_c_d",
-    "name": "Cascada C→D: audio + video nurturing tras agendar",
-    "description": "Disparado por el ChangeStage(C→D, cascade) que inyecta el webhook de Calendly tras confirmar la reserva. Entrega audio de bienvenida (stage D) y link de video de nurturing configurable por tenant. El texto de confirmación lo aporta el agente (LLM).",
+    "name": "Cascada C→D: video nurturing tras agendar",
+    "description": "Disparado por el ChangeStage(C→D, cascade) que inyecta el webhook de Calendly. El LLM aporta el texto de confirmación con la hora. La cascada solo entrega el intro + link de video de nurturing (sin audio).",
     "trigger": { "type": "stage_transition", "from": "C", "to": "D" },
     "slots": [],
     "steps": [
       {
         "id": "s1",
         "type": "action",
-        "action": "send_content",
+        "action": "reply_text",
         "config": {
-          "slug_id": "booking_audio",
-          "lookup_stage": "D"
-        },
-        "on_failure": "continue"
+          "template": "🎥 Mientras llega el día, mira este video que preparé para ti:",
+          "fallback": "Nos vemos en la llamada."
+        }
       },
       {
         "id": "s2",
         "type": "action",
         "action": "reply_text",
         "config": {
-          "template": "🎥 Mientras llega el día, mira este video que preparé para ti: {tenant.nurturing_video_url}",
-          "fallback": "¡Nos vemos en la llamada!"
+          "template": "{tenant.nurturing_video_url}",
+          "fallback": ""
         }
       }
     ]
