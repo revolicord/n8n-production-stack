@@ -35,6 +35,7 @@ export async function createStageTransition(
     fromStageSlug: string;
     toStageSlug: string;
     whenToUse: string;
+    trigger?: string | null;
   },
 ): Promise<StageTransitionsMap> {
   const [row] = await db
@@ -44,6 +45,7 @@ export async function createStageTransition(
       fromStageSlug: args.fromStageSlug,
       toStageSlug: args.toStageSlug,
       whenToUse: args.whenToUse,
+      trigger: args.trigger ?? null,
     })
     .returning();
 
@@ -54,7 +56,7 @@ export async function createStageTransition(
 export async function updateStageTransition(
   db: DbClient,
   id: string,
-  patch: Partial<{ whenToUse: string; isActive: boolean }>,
+  patch: Partial<{ whenToUse: string; isActive: boolean; trigger: string | null }>,
 ): Promise<StageTransitionsMap | null> {
   const rows = await db
     .update(stageTransitionsMap)

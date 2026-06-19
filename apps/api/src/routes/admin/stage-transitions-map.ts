@@ -26,15 +26,19 @@ const IncludeInactiveQuery = {
   },
 } as const;
 
+const TriggerSchema = z.enum(['affirm', 'deny']).nullable();
+
 export const CreateStageTransitionBodySchema = z.object({
   from_stage_slug: StageSlugSchema,
   to_stage_slug: StageSlugSchema,
   when_to_use: z.string().min(1).max(2000),
+  trigger: TriggerSchema.optional(),
 });
 
 export const UpdateStageTransitionBodySchema = z.object({
   when_to_use: z.string().min(1).max(2000).optional(),
   is_active: z.boolean().optional(),
+  trigger: TriggerSchema.optional(),
 });
 
 function isDuplicateFromTo(err: unknown): boolean {
@@ -109,13 +113,14 @@ export default async function stageTransitionsMapRoutes(app: FastifyInstance): P
           .code(400)
           .send({ error: { code: 'INVALID_PAYLOAD', details: bodyParsed.error.issues } });
       }
-      const { from_stage_slug, to_stage_slug, when_to_use } = bodyParsed.data;
+      const { from_stage_slug, to_stage_slug, when_to_use, trigger } = bodyParsed.data;
       try {
         const transition = await createStageTransition(getDb(), {
           tenantId: paramParsed.data,
           fromStageSlug: from_stage_slug,
           toStageSlug: to_stage_slug,
           whenToUse: when_to_use,
+          trigger: trigger ?? null,
         });
         req.log.info({ transition_id: transition.id }, 'stage transition created');
         return reply.code(201).send(transition);
@@ -162,6 +167,7 @@ export default async function stageTransitionsMapRoutes(app: FastifyInstance): P
       const drizzlePatch: Parameters<typeof updateStageTransition>[2] = {};
       if (patch.when_to_use !== undefined) drizzlePatch.whenToUse = patch.when_to_use;
       if (patch.is_active !== undefined) drizzlePatch.isActive = patch.is_active;
+      if (patch.trigger !== undefined) drizzlePatch.trigger = patch.trigger;
 
       const updated = await updateStageTransition(getDb(), paramParsed.data, drizzlePatch);
       if (!updated) {

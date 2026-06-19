@@ -134,6 +134,13 @@
       "when": 1750291200000,
       "tag": "0019_agent_decision_path",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1750377600000,
+      "tag": "0020_stage_transition_trigger",
+      "breakpoints": true
     }
   ]
 }

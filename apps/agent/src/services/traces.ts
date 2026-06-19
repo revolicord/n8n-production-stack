@@ -202,6 +202,9 @@ function serializeContext(ctx: AgentStateT['assembled']): Record<string, unknown
   return {
     tenant_config: redact(c.tenantConfig as Record<string, unknown>),
     current_stage: c.currentStage ?? null,
+    // funnel_stages incluye is_terminal: visible en la traza para diagnosticar el
+    // ruteo determinista sin abrir la DB. transitions ahora trae `trigger`.
+    funnel_stages: c.funnelStages ?? null,
     transitions: c.transitions ?? null,
     stage_catalog: c.stageCatalog ?? null,
     handoff_state: c.handoffState ?? null,

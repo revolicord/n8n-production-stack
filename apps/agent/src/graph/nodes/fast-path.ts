@@ -8,10 +8,16 @@ import type { AssembledContext } from '../../core/context/assemble.js';
  * `ChangeStage(cascade)` directamente. El flow de la nueva etapa entrega el
  * contenido. Esto es "ponerlo en memoria sin pensar": cero tokens en el turno.
  *
+ * El destino se DECLARA, no se infiere de la topología: el motor toma la
+ * transición marcada `trigger: 'affirm'` (camino feliz). No cuenta aristas ni
+ * depende de `is_terminal` — robusto ante bifurcaciones (B→C 'affirm' + B→nurture
+ * 'deny' conviven sin ambigüedad).
+ *
  * Ante la MÍNIMA ambigüedad devuelve `{ kind: 'llm', skipReason }` (el turno cae
  * al LLM) y `skipReason` deja por escrito CUÁL compuerta lo rechazó:
  *  - la etapa no es `flow_only`;
- *  - hay 0 o >1 transiciones válidas (destino ambiguo);
+ *  - no hay ninguna transición `trigger: 'affirm'` desde la etapa (sin avance feliz);
+ *  - hay >1 transición `trigger: 'affirm'` (destino ambiguo, mal configurado);
  *  - hay un `repair_context` o escalaciones abiertas (no es camino feliz);
  *  - hay `system_commands` inyectados (eventos de sistema → flujo normal);
  *  - algún mensaje no es texto (audio/imagen/… → posible escalado);
@@ -33,8 +39,8 @@ export interface FastPathResult {
  *  - `repair_context_active`→ hay reparación/handoff en curso.
  *  - `open_escalation`      → hay una escalación a humano abierta.
  *  - `stage_not_flow_only`  → la etapa NO está en política `flow_only`.
- *  - `no_forward_transition`→ 0 transiciones de avance (solo terminales/ninguna).
- *  - `ambiguous_target`     → >1 transición de avance no-terminal (destino ambiguo).
+ *  - `no_affirm_transition` → ninguna transición con `trigger:'affirm'` (sin avance feliz).
+ *  - `ambiguous_target`     → >1 transición `trigger:'affirm'` (mal configurado).
  */
 export type FastPathSkipReason =
   | 'has_system_commands'
@@ -44,7 +50,7 @@ export type FastPathSkipReason =
   | 'repair_context_active'
   | 'open_escalation'
   | 'stage_not_flow_only'
-  | 'no_forward_transition'
+  | 'no_affirm_transition'
   | 'ambiguous_target';
 
 /** Resultado explícito de evaluar el fast-path: o avanza sin LLM, o dice por qué no. */
@@ -153,20 +159,17 @@ export function tryFastPath(input: TurnInput, ctx: AssembledContext): FastPathDe
     'text_ok';
   if (policy !== 'flow_only') return { kind: 'llm', skipReason: 'stage_not_flow_only' };
 
-  // Destino inequívoco: exactamente UNA transición de AVANCE desde la etapa
-  // actual. Las etapas terminales (is_terminal: disqualified, cerrado) NO cuentan
-  // como destino: una señal positiva nunca descalifica, así que la escotilla
-  // A→disqualified no debe romper el camino feliz A→B.
-  const terminalSlugs = new Set(
-    (ctx.funnelStages ?? []).filter((s) => s.isTerminal).map((s) => s.slug),
+  // Destino DECLARADO: la transición marcada `trigger: 'affirm'` es el avance del
+  // camino feliz. Se lee del dato, no se infiere contando aristas ni mirando
+  // is_terminal — así una bifurcación legítima (B→C 'affirm' + B→nurture 'deny')
+  // no rompe el determinismo. 0 'affirm' ⟹ etapa sin avance feliz; >1 ⟹ mal config.
+  const affirmEdges = ctx.transitions.filter(
+    (t) => t.fromStageSlug === ctx.currentStage && t.trigger === 'affirm',
   );
-  const outgoing = ctx.transitions.filter(
-    (t) => t.fromStageSlug === ctx.currentStage && !terminalSlugs.has(t.toStageSlug),
-  );
-  if (outgoing.length === 0) return { kind: 'llm', skipReason: 'no_forward_transition' };
-  if (outgoing.length > 1) return { kind: 'llm', skipReason: 'ambiguous_target' };
-  const target = outgoing[0];
-  if (!target) return { kind: 'llm', skipReason: 'no_forward_transition' };
+  if (affirmEdges.length === 0) return { kind: 'llm', skipReason: 'no_affirm_transition' };
+  if (affirmEdges.length > 1) return { kind: 'llm', skipReason: 'ambiguous_target' };
+  const target = affirmEdges[0];
+  if (!target) return { kind: 'llm', skipReason: 'no_affirm_transition' };
 
   const command: DialogueCommand = {
     type: 'ChangeStage',

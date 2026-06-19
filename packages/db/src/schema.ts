@@ -466,6 +466,11 @@ export const stageTransitionsMap = apiSchema.table(
     fromStageSlug: text('from_stage_slug').notNull(),
     toStageSlug: text('to_stage_slug').notNull(),
     whenToUse: text('when_to_use').notNull(),
+    // Disparador determinista de la transición (ADR-0024 fast-path declarativo):
+    // 'affirm' = avance del camino feliz ante señal positiva (el motor lo toma sin
+    // LLM); 'deny' = escotilla de rechazo/descalificación; null = lo decide el LLM.
+    // El ruteo determinista lee ESTE campo, no la topología del grafo.
+    trigger: text('trigger'),
     isActive: boolean('is_active').notNull().default(true),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

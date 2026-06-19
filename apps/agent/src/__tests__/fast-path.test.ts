@@ -7,11 +7,9 @@ function makeCtx(overrides: Partial<AssembledContext> = {}): AssembledContext {
   return {
     currentStage: 'A',
     tenantConfig: { text_policy_by_stage: { A: 'flow_only' } },
-    transitions: [{ fromStageSlug: 'A', toStageSlug: 'B', whenToUse: 'avance' }],
-    funnelStages: [
-      { slug: 'A', isTerminal: false },
-      { slug: 'B', isTerminal: false },
-      { slug: 'disqualified', isTerminal: true },
+    transitions: [
+      { fromStageSlug: 'A', toStageSlug: 'B', whenToUse: 'avance', trigger: 'affirm' },
+      { fromStageSlug: 'A', toStageSlug: 'disqualified', whenToUse: 'rechazo', trigger: 'deny' },
     ],
     dialogueState: { version: 1, stack: [], slots: {}, repair_context: null, last_turn_id: null },
     handoffState: null,
@@ -68,15 +66,9 @@ describe('tryFastPath (camino feliz determinista)', () => {
     }
   });
 
-  it('avanza con 👍 aunque exista la escotilla A→disqualified (terminal no cuenta)', () => {
-    const ctx = makeCtx({
-      transitions: [
-        { fromStageSlug: 'A', toStageSlug: 'disqualified', whenToUse: 'rechazo' },
-        { fromStageSlug: 'A', toStageSlug: 'B', whenToUse: 'avance' },
-        // biome-ignore lint/suspicious/noExplicitAny: stub
-      ] as any,
-    });
-    const r = tryFastPath(makeInput([{ text: '👍' }]), ctx);
+  it('toma la arista trigger:affirm (B) e ignora la escotilla deny (disqualified)', () => {
+    // makeCtx por defecto ya tiene A→B (affirm) + A→disqualified (deny).
+    const r = tryFastPath(makeInput([{ text: '👍' }]), makeCtx());
     expect(r.kind).toBe('fast_path');
     if (r.kind === 'fast_path') {
       const cmd = r.result.commands[0];
@@ -84,23 +76,18 @@ describe('tryFastPath (camino feliz determinista)', () => {
     }
   });
 
-  it('skipReason "ambiguous_target" si disqualified NO está marcado is_terminal', () => {
+  it('skipReason "no_affirm_transition" si las transiciones existen pero sin trigger', () => {
+    // El bug real del seed: las aristas existen pero ninguna tiene trigger='affirm'.
     const ctx = makeCtx({
-      funnelStages: [
-        { slug: 'A', isTerminal: false },
-        { slug: 'B', isTerminal: false },
-        { slug: 'disqualified', isTerminal: false }, // ← el bug típico de seed
-        // biome-ignore lint/suspicious/noExplicitAny: stub
-      ] as any,
       transitions: [
-        { fromStageSlug: 'A', toStageSlug: 'disqualified', whenToUse: 'rechazo' },
-        { fromStageSlug: 'A', toStageSlug: 'B', whenToUse: 'avance' },
+        { fromStageSlug: 'A', toStageSlug: 'B', whenToUse: 'avance', trigger: null },
+        { fromStageSlug: 'A', toStageSlug: 'disqualified', whenToUse: 'rechazo', trigger: null },
         // biome-ignore lint/suspicious/noExplicitAny: stub
       ] as any,
     });
     const r = tryFastPath(makeInput([{ text: '👍' }]), ctx);
     expect(r.kind).toBe('llm');
-    if (r.kind === 'llm') expect(r.skipReason).toBe('ambiguous_target');
+    if (r.kind === 'llm') expect(r.skipReason).toBe('no_affirm_transition');
   });
 
   it('skipReason "stage_not_flow_only" si la etapa no es flow_only', () => {
@@ -109,20 +96,45 @@ describe('tryFastPath (camino feliz determinista)', () => {
     expect(r.kind === 'llm' && r.skipReason).toBe('stage_not_flow_only');
   });
 
-  it('skipReason según el número de transiciones de avance', () => {
-    const none = makeCtx({ transitions: [] });
+  it('skipReason según las aristas trigger:affirm', () => {
+    // 0 affirm (solo escotilla deny) → sin avance feliz.
+    const none = makeCtx({
+      transitions: [
+        { fromStageSlug: 'A', toStageSlug: 'disqualified', whenToUse: 'x', trigger: 'deny' },
+        // biome-ignore lint/suspicious/noExplicitAny: stub
+      ] as any,
+    });
     const rNone = tryFastPath(makeInput([{ text: 'ok' }]), none);
-    expect(rNone.kind === 'llm' && rNone.skipReason).toBe('no_forward_transition');
+    expect(rNone.kind === 'llm' && rNone.skipReason).toBe('no_affirm_transition');
 
+    // >1 affirm (mal configurado) → destino ambiguo.
     const many = makeCtx({
       transitions: [
-        { fromStageSlug: 'A', toStageSlug: 'B', whenToUse: 'x' },
-        { fromStageSlug: 'A', toStageSlug: 'C', whenToUse: 'y' },
+        { fromStageSlug: 'A', toStageSlug: 'B', whenToUse: 'x', trigger: 'affirm' },
+        { fromStageSlug: 'A', toStageSlug: 'C', whenToUse: 'y', trigger: 'affirm' },
         // biome-ignore lint/suspicious/noExplicitAny: stub
       ] as any,
     });
     const rMany = tryFastPath(makeInput([{ text: 'ok' }]), many);
     expect(rMany.kind === 'llm' && rMany.skipReason).toBe('ambiguous_target');
+  });
+
+  it('robusto a bifurcaciones: B→C (affirm) + B→nurture (deny) avanza a C', () => {
+    const ctx = makeCtx({
+      currentStage: 'B',
+      tenantConfig: { text_policy_by_stage: { B: 'flow_only' } } as never,
+      transitions: [
+        { fromStageSlug: 'B', toStageSlug: 'C', whenToUse: 'avance', trigger: 'affirm' },
+        { fromStageSlug: 'B', toStageSlug: 'nurture', whenToUse: 'no listo', trigger: 'deny' },
+        // biome-ignore lint/suspicious/noExplicitAny: stub
+      ] as any,
+    });
+    const r = tryFastPath(makeInput([{ text: '👍' }]), ctx);
+    expect(r.kind).toBe('fast_path');
+    if (r.kind === 'fast_path') {
+      const cmd = r.result.commands[0];
+      if (cmd?.type === 'ChangeStage') expect(cmd.to_stage).toBe('C');
+    }
   });
 
   it('skipReason "repair_context_active" / "open_escalation"', () => {
