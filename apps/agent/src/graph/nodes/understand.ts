@@ -76,7 +76,14 @@ export async function understandNode(
     log: deps.logger,
   });
 
-  const commands: DialogueCommand[] = [...input.system_commands, ...result.plan.commands];
+  // Anti-anzuelo: `system_authorized` solo puede venir de un system_command inyectado
+  // (webhook confiable). Lo saneamos a `false` en lo que emite el LLM para que NUNCA
+  // pueda saltarse la validación de transiciones por su cuenta (p. ej. mover C→D porque
+  // el lead *diga* que agendó). Ver engine.ts (bypass) y webhook-calendly.ts.
+  const llmCommands: DialogueCommand[] = result.plan.commands.map((c) =>
+    c.type === 'ChangeStage' ? { ...c, system_authorized: false } : c,
+  );
+  const commands: DialogueCommand[] = [...input.system_commands, ...llmCommands];
 
   log.info(
     {

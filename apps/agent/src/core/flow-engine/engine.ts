@@ -207,10 +207,17 @@ export function advanceDialogue(input: FlowEngineInput): FlowEngineResult {
     }
 
     if (cmd.type === 'ChangeStage') {
-      // Validate transition
-      const allowed = input.transitions.filter((t) => t.fromStageSlug === currentStage);
-      const valid = allowed.some((t) => t.toStageSlug === cmd.to_stage);
-      if (!valid) continue; // invalid transition silently dropped
+      // Transición autorizada por el sistema (webhook confiable): salta la validación
+      // contra stage_transitions_map. Permite C→D tras una reserva real manteniendo C→D
+      // FUERA del mapa a propósito (anti-anzuelo). El LLM no puede setear este flag: se
+      // sanea a false en understandNode, así que solo los system_commands lo llevan.
+      const systemAuthorized = cmd.system_authorized === true;
+      if (!systemAuthorized) {
+        // Validate transition
+        const allowed = input.transitions.filter((t) => t.fromStageSlug === currentStage);
+        const valid = allowed.some((t) => t.toStageSlug === cmd.to_stage);
+        if (!valid) continue; // invalid transition silently dropped
+      }
 
       newStage = cmd.to_stage;
       currentStage = cmd.to_stage;

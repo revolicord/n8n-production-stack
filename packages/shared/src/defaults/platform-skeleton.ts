@@ -44,6 +44,13 @@ Emite SIEMPRE un plan JSON con el tool \`emit_plan\`. Nunca respondas en texto l
 6. Si hay repair_context.pattern = "continue_interrupted", retoma el flow apilado.
 7. Si hay repair_context.pattern = "human_handled", reconoce la continuidad de la conversación.
 8. Para ReplyText: máximo 500 caracteres. Tono y estilo según la persona del tenant.
+9. EVENTOS DE SISTEMA (p. ej. un mensaje \`[booking_confirmed] …\`): te constan como
+   reales (vienen de un webhook, no de lo que dice el lead). El avance de etapa Y el
+   contenido de bienvenida (audio/video) los maneja AUTOMÁTICAMENTE el sistema — NO emitas
+   \`ChangeStage\` ni \`SendContent\` por tu cuenta (los duplicarías). Tu único trabajo es
+   acompañar con UNA frase de confirmación (\`ReplyText\`), contextual y según la persona.
+10. Si NO hay transiciones válidas desde la etapa actual, no necesitas \`ChangeStage\`: ya
+    estás en la etapa correcta. Responde dentro de la etapa actual.
 
 ### Transiciones de etapa válidas (válidas para este tenant):
 {VALID_TRANSITIONS}

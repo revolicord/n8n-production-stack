@@ -104,12 +104,10 @@ describe('flows-qc seeds', () => {
     }
   });
 
-  it('qc_booking_confirmed usa trigger system y envía audio + video nurturing', () => {
-    const flow = FlowDefinitionSchema.parse(
-      flowsQc.find((f) => f.flow_id === 'qc_booking_confirmed'),
-    );
+  it('qc_cascade_c_d usa trigger stage_transition C→D y envía audio + video nurturing', () => {
+    const flow = FlowDefinitionSchema.parse(flowsQc.find((f) => f.flow_id === 'qc_cascade_c_d'));
 
-    expect(flow.trigger).toMatchObject({ type: 'system' });
+    expect(flow.trigger).toMatchObject({ type: 'stage_transition', from: 'C', to: 'D' });
     expect(flow.steps).toHaveLength(2);
 
     const s1 = flow.steps[0];

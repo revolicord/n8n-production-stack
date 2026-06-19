@@ -71,19 +71,46 @@ export async function executeActionsNode(
   );
   const suppressLlmText = stagePolicy === 'flow_only' && hasFlowOutbound;
 
-  const invocations = suppressLlmText
-    ? flowResult.invocations.filter(
-        (inv) => !(inv.action === 'reply_text' && inv.origin === 'command'),
-      )
-    : flowResult.invocations;
+  // ─── Dedup de contenido: el LLM no re-envía lo que un flow ya entrega ──────
+  // Un `system_event` (p. ej. `booking_confirmed`) inyecta un StartFlow que entrega
+  // contenido determinista (booking_audio + video) y, a la vez, deja correr al LLM
+  // para que el agente sea consciente del agendamiento (queda en su memoria). El LLM,
+  // al ver el evento + el slug en content_options, suele emitir su PROPIO
+  // `SendContent(booking_audio)` → el audio sale dos veces. Descartamos el
+  // SendContent improvisado cuyo slug ya entrega el flow; su `ReplyText` contextual
+  // (la confirmación "Te veo el miércoles…") se conserva. El texto del LLM va en
+  // origin:'command' (Fase 1) → se procesa ANTES que el flow (Fase 2), así la cascada
+  // final queda: texto del agente → audio → video.
+  const flowContentSlugs = new Set(
+    flowResult.invocations
+      .filter((inv) => inv.action === 'send_content' && inv.origin === 'flow')
+      .map((inv) => (inv.config as { slug_id?: string }).slug_id)
+      .filter((slug): slug is string => typeof slug === 'string'),
+  );
 
-  if (suppressLlmText && invocations.length < flowResult.invocations.length) {
-    deps.logger
-      .child({ turn_id: input.turn_id, node: 'actions' })
-      .info(
-        { stage: ctx.currentStage, suppressed: flowResult.invocations.length - invocations.length },
-        'flow_only: texto improvisado del LLM suprimido (camino feliz)',
-      );
+  const invocations = flowResult.invocations.filter((inv) => {
+    // Camino feliz flow_only: descarta el texto improvisado del LLM.
+    if (suppressLlmText && inv.action === 'reply_text' && inv.origin === 'command') return false;
+    // Dedup: el LLM no re-envía un contenido que el flow ya entrega este turno.
+    if (
+      inv.action === 'send_content' &&
+      inv.origin === 'command' &&
+      flowContentSlugs.has((inv.config as { slug_id?: string }).slug_id ?? '')
+    ) {
+      return false;
+    }
+    return true;
+  });
+
+  if (invocations.length < flowResult.invocations.length) {
+    deps.logger.child({ turn_id: input.turn_id, node: 'actions' }).info(
+      {
+        stage: ctx.currentStage,
+        suppressed: flowResult.invocations.length - invocations.length,
+        flow_only: suppressLlmText,
+      },
+      'invocaciones del LLM suprimidas (camino feliz / dedup de contenido del flow)',
+    );
   }
 
   for (const invocation of invocations) {

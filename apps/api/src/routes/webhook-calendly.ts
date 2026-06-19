@@ -12,7 +12,6 @@ import { cancelBooking, upsertBooking } from '../services/bookings.js';
 import { getOrCreateOpenConversation } from '../services/conversations.js';
 import { debouncePush } from '../services/debounce.js';
 import { cancelActiveCrons } from '../services/lead-crons.js';
-import { createStageTransition, getLeadStage, upsertLeadStage } from '../services/lead-stages.js';
 import { getSubscriberByUuid } from '../services/subscribers.js';
 
 const CalendlyWebhookBodySchema = z.object({
@@ -57,8 +56,11 @@ export default async function webhookCalendlyRoute(app: FastifyInstance): Promis
       summary: 'Calendly invitee.created webhook',
       description:
         'Recibe invitee.created de Calendly. Extrae subscriber_id de utm_content, ' +
-        'avanza la etapa a D, persiste el booking en subscribers.metadata y dispara ' +
-        'un system_event para que el agente responda con confirmación + audio + video.',
+        'persiste el booking (subscribers.metadata + tabla bookings) y dispara un ' +
+        'system_event con un ChangeStage(→D, cascade) inyectado: la transición C→D la ' +
+        'ejecuta el plan del agente (no el webhook), queda registrada como C→D y la ' +
+        'cascada entrega audio + video. El LLM corre igual → el agente es consciente y ' +
+        'añade el texto de confirmación.',
     }),
     async (req, reply) => {
       const log = req.log.child({ route: 'webhook-calendly' });
@@ -164,29 +166,13 @@ export default async function webhookCalendlyRoute(app: FastifyInstance): Promis
         timezone: tz,
       });
 
-      // Advance to stage D — bypass transition validation (external trigger)
-      const fromStage = await getLeadStage(db, {
-        tenantId: subscriber.tenantId,
-        subscriberId: subscriber.id,
-      });
-
-      if (fromStage !== 'D') {
-        await upsertLeadStage(db, {
-          tenantId: subscriber.tenantId,
-          subscriberId: subscriber.id,
-          stage: 'D',
-        });
-
-        await createStageTransition(db, {
-          tenantId: subscriber.tenantId,
-          subscriberId: subscriber.id,
-          turnId: null,
-          fromStage,
-          toStage: 'D',
-          reason: 'calendly_booked',
-          agentEvidence: `Calendly invitee.created @ ${startTimeRaw} — ${payload.uri}`,
-        });
-      }
+      // NO avanzamos la etapa aquí. La transición C→D la ejecuta el PLAN del agente:
+      // inyectamos abajo un `ChangeStage(→D, cascade:true, system_authorized:true)` como
+      // system_command. El engine la registra como C→D (no como un salto opaco D→D del
+      // webhook) y dispara la cascada `qc_cascade_c_d` (audio + video). `system_authorized`
+      // hace que el engine OMITA la validación del mapa, así C→D se mantiene FUERA de
+      // stage_transitions_map a propósito (anti-anzuelo: el LLM no la ve ni la dispara por
+      // lo que diga el lead). El LLM corre igual → consciente + texto de confirmación.
 
       // El lead agendó: cancelar follow-ups de prospección activos (p. ej. el cron de C
       // "¿ya agendaste?"). D no es terminal, así que el avance de etapa no los cancela por
@@ -201,16 +187,24 @@ export default async function webhookCalendlyRoute(app: FastifyInstance): Promis
       });
 
       log.info(
-        { subscriber_id: subscriberId, from_stage: fromStage, start_time: startTimeRaw },
+        { subscriber_id: subscriberId, start_time: startTimeRaw },
         'calendly booking processed',
       );
 
-      // Inject StartFlow command so the agent deterministically runs audio + video
-      const startFlowCmd: DialogueCommand = {
-        type: 'StartFlow',
-        flow_id: 'qc_booking_confirmed',
-        inputs: {},
-        evidence: `booking_confirmed @ ${startTimeRaw}`,
+      // Inyecta el ChangeStage(→D, cascade) que el plan del agente ejecutará: avanza la
+      // etapa C→D (validado contra stage_transitions_map), lo registra y dispara la
+      // cascada `qc_cascade_c_d` (audio + video). El LLM corre igual (el mensaje lleva
+      // texto) → el agente es consciente del agendamiento y añade el texto de confirmación.
+      const changeStageCmd: DialogueCommand = {
+        type: 'ChangeStage',
+        to_stage: 'D',
+        reason: 'calendly_booked',
+        evidence: `booking_confirmed @ ${startTimeRaw} — ${payload.uri}`,
+        cascade: true,
+        // Autorizado por el sistema: el engine salta la validación de transiciones, así
+        // C→D se mantiene FUERA de stage_transitions_map (anti-anzuelo) y aun así la
+        // mueve este webhook confiable. Ver engine.ts y commands.ts.
+        system_authorized: true,
       };
 
       const now = Date.now();
@@ -226,7 +220,7 @@ export default async function webhookCalendlyRoute(app: FastifyInstance): Promis
           reply_type: 'system_event',
           ts: now,
           media_urls: [],
-          system_commands: [startFlowCmd],
+          system_commands: [changeStageCmd],
         },
         token,
         debounceMs: config.DEBOUNCE_MS,

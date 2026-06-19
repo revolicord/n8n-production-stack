@@ -136,6 +136,63 @@ describe('advanceDialogue — ChangeStage with cascade', () => {
     expect(result.invocations[2]?.action).toBe('send_content');
     expect(result.newStage).toBe('MS');
   });
+
+  // Cascada C→D del booking: el trigger del flow es C→D aunque NO exista en el mapa.
+  const cdCascade = makeFlow('cascade_c_d', [
+    {
+      id: 's1',
+      type: 'action',
+      action: 'send_content',
+      config: { slug_id: 'booking_audio' },
+      on_failure: 'continue',
+    },
+  ]);
+  cdCascade.def.trigger = { type: 'stage_transition', from: 'C', to: 'D' };
+  const cdFlows = new Map([['cascade_c_d', cdCascade]]);
+
+  it('ChangeStage C→D con system_authorized salta la validación y dispara la cascada (C→D NO está en el mapa)', () => {
+    const result = advanceDialogue({
+      state: EMPTY_STATE,
+      commands: [
+        {
+          type: 'ChangeStage',
+          to_stage: 'D',
+          reason: 'calendly_booked',
+          evidence: 'booking_confirmed',
+          cascade: true,
+          system_authorized: true,
+        },
+      ],
+      flows: cdFlows,
+      transitions: [], // C→D ausente del mapa a propósito (anti-anzuelo)
+      currentStage: 'C',
+      now: NOW,
+    });
+    expect(result.newStage).toBe('D');
+    expect(result.invocations[0]?.action).toBe('change_stage');
+    expect(result.invocations.some((i) => i.action === 'send_content')).toBe(true);
+  });
+
+  it('ChangeStage C→D SIN system_authorized se descarta si no está en el mapa (anti-anzuelo)', () => {
+    const result = advanceDialogue({
+      state: EMPTY_STATE,
+      commands: [
+        {
+          type: 'ChangeStage',
+          to_stage: 'D',
+          reason: null,
+          evidence: 'el lead dijo que agendó',
+          cascade: true,
+        },
+      ],
+      flows: cdFlows,
+      transitions: [],
+      currentStage: 'C',
+      now: NOW,
+    });
+    expect(result.newStage).toBeNull();
+    expect(result.invocations).toHaveLength(0);
+  });
 });
 
 describe('advanceDialogue — HumanHandoff interrupt', () => {

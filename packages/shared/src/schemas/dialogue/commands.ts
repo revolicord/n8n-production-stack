@@ -65,6 +65,15 @@ const ChangeStageCommand = z.object({
   evidence: z.string().min(1),
   lead_in: z.string().max(200).optional(),
   cascade: z.boolean().default(true),
+  /**
+   * Transición autorizada por un evento de sistema confiable (p. ej. el webhook de
+   * Calendly tras una reserva real). Cuando es `true`, el engine OMITE la validación
+   * contra `stage_transitions_map`: permite movimientos como C→D que se mantienen
+   * fuera del mapa a propósito (anti-anzuelo: el LLM no debe verlos ni dispararlos por
+   * lo que diga el lead). NUNCA debe venir del LLM — se sanea a `false` en
+   * `understandNode` para que solo los `system_commands` inyectados puedan llevarla.
+   */
+  system_authorized: z.boolean().optional(),
 });
 
 const ScheduleFollowupCommand = z.object({

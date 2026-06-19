@@ -44,10 +44,10 @@
     ]
   },
   {
-    "flow_id": "qc_booking_confirmed",
-    "name": "Booking confirmado: audio + video nurturing",
-    "description": "Disparado por StartFlow tras webhook de Calendly. Envía audio de bienvenida (stage D) y link de video de nurturing configurable por tenant.",
-    "trigger": { "type": "system" },
+    "flow_id": "qc_cascade_c_d",
+    "name": "Cascada C→D: audio + video nurturing tras agendar",
+    "description": "Disparado por el ChangeStage(C→D, cascade) que inyecta el webhook de Calendly tras confirmar la reserva. Entrega audio de bienvenida (stage D) y link de video de nurturing configurable por tenant. El texto de confirmación lo aporta el agente (LLM).",
+    "trigger": { "type": "stage_transition", "from": "C", "to": "D" },
     "slots": [],
     "steps": [
       {

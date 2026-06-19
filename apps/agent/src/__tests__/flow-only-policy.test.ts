@@ -153,6 +153,70 @@ describe('flow_only policy (camino feliz sin texto del LLM)', () => {
     expect(out.responseTexts).toContain('mira esto');
   });
 
+  it('dedup booking: el SendContent del LLM que duplica el contenido del flow se descarta, el texto del agente se conserva', async () => {
+    // Escenario real post-agendar (etapa D, text_ok): el StartFlow del evento
+    // entrega audio + video (origin:flow) y el LLM, consciente del booking, emite
+    // su PROPIO SendContent(audio) + ReplyText. El audio NO debe salir dos veces.
+    const fr = flowResult([
+      // LLM (Fase 1, origin:command) — va primero en el array
+      {
+        action: 'send_content',
+        config: { slug_id: 'audio_hook' },
+        on_failure: 'abort',
+        origin: 'command',
+      },
+      {
+        action: 'reply_text',
+        config: { text: 'Confirmado. Te veo el miércoles a las 07:30.' },
+        on_failure: 'abort',
+        origin: 'command',
+      },
+      // Flow (Fase 2, origin:flow) — audio + "video"
+      {
+        action: 'send_content',
+        config: { slug_id: 'audio_hook' },
+        on_failure: 'continue',
+        origin: 'flow',
+      },
+      {
+        action: 'reply_text',
+        config: { text: '🎥 Mira este video: https://youtu.be/x' },
+        on_failure: 'abort',
+        origin: 'flow',
+      },
+    ]);
+    const ctx = makeCtx({
+      // biome-ignore lint/suspicious/noExplicitAny: partial tenantConfig
+      tenantConfig: { text_policy_by_stage: { A: 'text_ok' } } as any,
+    });
+
+    const out = await executeActionsNode(makeInput(), fr, ctx, makeDeps());
+
+    // El audio sale UNA sola vez (el del flow; el del LLM se dedupe).
+    const audios = out.results.filter((r) => r.command_type === 'SendContent');
+    expect(audios).toHaveLength(1);
+
+    // El texto contextual del agente se conserva, además del link de video del flow.
+    expect(out.responseTexts).toContain('Confirmado. Te veo el miércoles a las 07:30.');
+    expect(out.responseTexts).toContain('🎥 Mira este video: https://youtu.be/x');
+
+    // Orden final de lo que llega al lead: texto del agente → audio → video.
+    const visibleOrder = out.results
+      .filter(
+        (r) =>
+          (r.command_type === 'ReplyText' || r.command_type === 'SendContent') &&
+          (r.status === 'sent' || r.status === 'dry_run'),
+      )
+      .map((r) =>
+        r.command_type === 'SendContent'
+          ? 'audio'
+          : (r.detail as { text?: string }).text?.startsWith('🎥')
+            ? 'video'
+            : 'texto',
+      );
+    expect(visibleOrder).toEqual(['texto', 'audio', 'video']);
+  });
+
   it('content-first: un ChangeStage silencioso a una etapa con contenido envía el contenido, no texto', async () => {
     // ChangeStage a MS sin que el cascade haya empujado send_content.
     const fr = flowResult(
