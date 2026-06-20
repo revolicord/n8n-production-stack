@@ -4,10 +4,12 @@ import { verifyAdminAuth } from '../../lib/admin-auth.js';
 import { getDb } from '../../lib/db.js';
 import { logger } from '../../lib/logger.js';
 import { adminSecurity, doc, uuidParams, zodDoc } from '../../lib/openapi.js';
+import { getRedis } from '../../lib/redis.js';
 import { editMessageText, escapeHtml } from '../../lib/telegram.js';
 import {
   getNotificationById,
   listNotifications,
+  releaseNotificationThrottles,
   resolveNotification,
 } from '../../services/notifications.js';
 import { maybeResumeAgentConversation } from '../../services/resume-agent.js';
@@ -98,6 +100,10 @@ export default async function notificationsRoutes(app: FastifyInstance): Promise
 
       if (parsed.data.resume) {
         await resumeSubscriber(getDb(), { subscriberId: resolved.subscriberId });
+        await releaseNotificationThrottles(getRedis(), {
+          tenantId: resolved.tenantId,
+          subscriberId: resolved.subscriberId,
+        });
         await maybeResumeAgentConversation(getDb(), {
           tenantId: resolved.tenantId,
           subscriberId: resolved.subscriberId,

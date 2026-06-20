@@ -18,6 +18,18 @@ export type NotificationKind =
   | 'agent';
 export type NotificationSource = 'code' | 'agent';
 
+/** Universo cerrado de kinds: usado para limpiar todos los throttles de un lead. */
+const ALL_NOTIFICATION_KINDS: readonly NotificationKind[] = [
+  'audio',
+  'image',
+  'video',
+  'location',
+  'file',
+  'unknown',
+  'keyword',
+  'agent',
+];
+
 /** TTL del throttle por (tenant, subscriber, kind): evita spam en ráfagas. */
 const THROTTLE_TTL_SECONDS = 600;
 
@@ -34,6 +46,24 @@ export async function tryClaimNotificationThrottle(
   const key = redisKeys.notif(args.tenantId, args.subscriberId, args.kind);
   const result = await redis.set(key, '1', 'EX', ttlSeconds, 'NX');
   return result === 'OK';
+}
+
+/**
+ * Libera TODOS los throttles de escalado de un lead. Se llama al reanudar al
+ * subscriber: tras volver a poner el bot activo, la siguiente escalación del
+ * mismo tipo (p.ej. un segundo audio en <10 min) debe volver a notificar y
+ * re-pausar, no quedar silenciada por la ventana del primer aviso. Sin esto,
+ * los voice notes (que llegan como CDN URL → kind='unknown', mismo throttle)
+ * dejaban al lead sin re-pausar durante 10 min tras cada resume.
+ */
+export async function releaseNotificationThrottles(
+  redis: Redis,
+  args: { tenantId: string; subscriberId: string },
+): Promise<void> {
+  const keys = ALL_NOTIFICATION_KINDS.map((k) =>
+    redisKeys.notif(args.tenantId, args.subscriberId, k),
+  );
+  await redis.del(...keys);
 }
 
 /**

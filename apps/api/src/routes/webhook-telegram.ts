@@ -5,12 +5,17 @@ import { verifyMcToken } from '../lib/auth.js';
 import { getDb } from '../lib/db.js';
 import { logger } from '../lib/logger.js';
 import { doc, zodDoc } from '../lib/openapi.js';
+import { getRedis } from '../lib/redis.js';
 import {
   type TelegramInlineButton,
   answerCallbackQuery,
   editMessageReplyMarkup,
 } from '../lib/telegram.js';
-import { getNotificationById, resolveNotification } from '../services/notifications.js';
+import {
+  getNotificationById,
+  releaseNotificationThrottles,
+  resolveNotification,
+} from '../services/notifications.js';
 import { maybeResumeAgentConversation } from '../services/resume-agent.js';
 import { pauseSubscriber, resumeSubscriber } from '../services/subscribers.js';
 import { pendingButtons } from '../workers/notify.js';
@@ -104,6 +109,10 @@ export default async function webhookTelegramRoute(app: FastifyInstance): Promis
         ];
       } else if (action === 'resume') {
         await resumeSubscriber(getDb(), { subscriberId: notification.subscriberId });
+        await releaseNotificationThrottles(getRedis(), {
+          tenantId: notification.tenantId,
+          subscriberId: notification.subscriberId,
+        });
         await maybeResumeAgentConversation(getDb(), {
           tenantId: notification.tenantId,
           subscriberId: notification.subscriberId,

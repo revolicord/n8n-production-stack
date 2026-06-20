@@ -85,9 +85,16 @@ export function matchEscalationTrigger(
 }
 
 /**
- * Detección determinista de escalado (audio / keywords del tenant). Corre
- * fire-and-forget tras persistir el mensaje: nunca bloquea ni rompe el ACK a
- * ManyChat; el throttle Redis evita spam en ráfagas del mismo tipo.
+ * Detección determinista de escalado (audio / keywords del tenant). Corre de
+ * forma síncrona ANTES de empujar al buffer: si escala, pausa al lead y devuelve
+ * `true` para que el webhook NO despache el mensaje al agente (lo atiende un
+ * humano). La entrega a Telegram sigue siendo asíncrona (job BullMQ), así que el
+ * ACK a ManyChat no espera a la red. El throttle Redis evita spam en ráfagas del
+ * mismo tipo.
+ *
+ * Devuelve `true` solo cuando creó la notificación y pausó al lead. Si el trigger
+ * no aplica o está throttled (un humano ya está al tanto y dejó el bot activo),
+ * devuelve `false` y el mensaje sigue su curso normal.
  */
 async function detectEscalation(args: {
   tenantId: string;
@@ -97,18 +104,23 @@ async function detectEscalation(args: {
   keywords: string[] | undefined;
   mediaPolicy: MediaPolicy | undefined;
   log: FastifyBaseLogger;
-}): Promise<void> {
+}): Promise<boolean> {
   const { tenantId, subscriberId, messageId, event, keywords, mediaPolicy, log } = args;
 
   const trigger = matchEscalationTrigger(event.message, keywords, mediaPolicy);
-  if (!trigger) return;
+  if (!trigger) return false;
   const { kind, reason } = trigger;
 
   const fresh = await tryClaimNotificationThrottle(getRedis(), { tenantId, subscriberId, kind });
   if (!fresh) {
     log.debug({ subscriber_id: subscriberId, kind }, 'escalation throttled');
-    return;
+    return false;
   }
+
+  // Pausar PRIMERO: garantiza que ningún dispatch (ni el forzado por hard_limit)
+  // alcance al agente con contenido que no puede manejar. La notificación se crea
+  // después; su entrega a Telegram es un job aparte.
+  await pauseSubscriber(getDb(), { subscriberId });
 
   const notification = await createNotification(getDb(), {
     tenantId,
@@ -120,14 +132,11 @@ async function detectEscalation(args: {
     metadata: { message_id: messageId },
   });
 
-  // Pausar al lead para que processBatchJob salte el dispatch al agente.
-  // El agente no puede actuar sobre este contenido; el humano lo resuelve.
-  await pauseSubscriber(getDb(), { subscriberId });
-
   log.info(
     { subscriber_id: subscriberId, kind, notification_id: notification.id },
     'escalation notification created — subscriber paused',
   );
+  return true;
 }
 
 export default async function webhookManyChatRoute(app: FastifyInstance): Promise<void> {
@@ -230,18 +239,28 @@ export default async function webhookManyChatRoute(app: FastifyInstance): Promis
         return reply.code(200).send();
       }
 
-      // 7b. Escalado a humano (medios/keywords) — fire-and-forget, no bloquea el ACK
-      void detectEscalation({
-        tenantId: tenant.id,
-        subscriberId: subscriber.id,
-        messageId: messageRow.id,
-        event,
-        keywords: tenantConfig.notification_keywords,
-        mediaPolicy: tenantConfig.media_policy,
-        log: req.log,
-      }).catch((err) => {
+      // 7b. Escalado a humano (medios/keywords). Síncrono y ANTES del buffer: si
+      // escala, pausa al lead y cortocircuita — el mensaje NO se despacha al
+      // agente (lo atiende un humano), evitando la carrera con el dispatch forzado
+      // y un turno desperdiciado. Un fallo de detección nunca rompe el flujo:
+      // caemos al dispatch normal.
+      let escalated = false;
+      try {
+        escalated = await detectEscalation({
+          tenantId: tenant.id,
+          subscriberId: subscriber.id,
+          messageId: messageRow.id,
+          event,
+          keywords: tenantConfig.notification_keywords,
+          mediaPolicy: tenantConfig.media_policy,
+          log: req.log,
+        });
+      } catch (err) {
         req.log.error({ err }, 'escalation detection failed');
-      });
+      }
+      if (escalated) {
+        return reply.code(200).send();
+      }
 
       // 8. Push al buffer Redis (Lua atómico) + nuevo token
       const token = crypto.randomUUID();

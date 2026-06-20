@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { verifyAdminAuth } from '../../lib/admin-auth.js';
 import { getDb } from '../../lib/db.js';
 import { adminSecurity, doc, uuidParams, zodDoc } from '../../lib/openapi.js';
+import { getRedis } from '../../lib/redis.js';
+import { releaseNotificationThrottles } from '../../services/notifications.js';
 import {
   getSubscriberByUuid,
   pauseSubscriber,
@@ -83,6 +85,11 @@ export default async function pauseRoutes(app: FastifyInstance): Promise<void> {
       }
 
       const updated = await resumeSubscriber(getDb(), { subscriberId: subscriber.id });
+      // Limpiar throttles: la próxima escalación del mismo tipo debe re-pausar.
+      await releaseNotificationThrottles(getRedis(), {
+        tenantId: subscriber.tenantId,
+        subscriberId: subscriber.id,
+      });
       req.log.info({ subscriber_id: subscriber.id }, 'subscriber resumed');
       return reply.send({ subscriber: updated });
     },

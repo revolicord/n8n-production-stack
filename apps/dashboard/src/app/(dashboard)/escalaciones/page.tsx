@@ -1,4 +1,5 @@
 import { EscalationActions } from '@/components/escalaciones/EscalationActions';
+import { AutoRefresh } from '@/components/shell/AutoRefresh';
 import { PeriodSwitcher } from '@/components/shell/PeriodSwitcher';
 import { TopBar } from '@/components/shell/TopBar';
 import { type EscalationRow, getEscalations } from '@/lib/notifications';
@@ -10,6 +11,11 @@ type StatusFilter = 'pending' | 'resolved' | 'all';
 
 const KIND_LABELS: Record<string, string> = {
   audio: '🎙 Audio',
+  image: '🖼 Imagen',
+  video: '🎬 Video',
+  location: '📍 Ubicación',
+  file: '📎 Archivo',
+  unknown: '❓ No soportado',
   keyword: '🚨 Keyword',
   agent: '🤖 Agente',
 };
@@ -52,6 +58,7 @@ export default async function EscalacionesPage({
 
   return (
     <div className="px-6 py-5">
+      <AutoRefresh />
       <TopBar
         title="Escalaciones"
         subtitle="Avisos de audio, palabras clave y peticiones de humano del agente"
