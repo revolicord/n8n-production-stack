@@ -14,6 +14,7 @@ import { executeActionsNode } from './nodes/execute-actions.js';
 import { tryFastPath } from './nodes/fast-path.js';
 import { flowEngineNode } from './nodes/flow-engine.js';
 import { respondNode } from './nodes/respond.js';
+import { tryStuckBreaker } from './nodes/stuck-breaker.js';
 import { buildLlmRequest, understandNode } from './nodes/understand.js';
 
 /** Payload que el nodo handoff entrega al humano vía `interrupt()`. */
@@ -51,7 +52,8 @@ export function compileAgentGraph(deps: Deps) {
       // La decisión (y, si cae al LLM, POR QUÉ) se loguea y se persiste en la
       // traza (decision_path + fast_path_skip_reason) para diagnóstico sin código.
       const decision = tryFastPath(state.input, ctx);
-      deps.logger.child({ turn_id: state.input.turn_id, node: 'prepare_prompt' }).info(
+      const log = deps.logger.child({ turn_id: state.input.turn_id, node: 'prepare_prompt' });
+      log.info(
         {
           decision: decision.kind,
           skip_reason: decision.kind === 'llm' ? decision.skipReason : null,
@@ -60,11 +62,38 @@ export function compileAgentGraph(deps: Deps) {
         'fast-path decision',
       );
       if (decision.kind === 'fast_path') {
-        return { fastPath: decision.result, fastPathSkipReason: null, llmRequest: null };
+        return {
+          fastPath: decision.result,
+          fastPathSkipReason: null,
+          stuckBreaker: null,
+          llmRequest: null,
+        };
+      }
+      // El turno iba a caer al LLM: antes de pagarlo, el circuit breaker corta los
+      // atascos de la cola caótica (cero tokens). Solo dispara en atascos reales —
+      // un 👍 que avanza ya se resolvió arriba por fast-path (reseteando la cuenta).
+      const stuck = tryStuckBreaker(ctx);
+      log.info(
+        {
+          decision: stuck.kind,
+          skip_reason: stuck.kind === 'pass' ? stuck.skipReason : null,
+          turns_in_stage: ctx.turnsInCurrentStage,
+          stage: ctx.currentStage,
+        },
+        'stuck-breaker decision',
+      );
+      if (stuck.kind === 'break') {
+        return {
+          fastPath: null,
+          fastPathSkipReason: decision.skipReason,
+          stuckBreaker: stuck.result,
+          llmRequest: null,
+        };
       }
       return {
         fastPath: null,
         fastPathSkipReason: decision.skipReason,
+        stuckBreaker: null,
         llmRequest: buildLlmRequest(state.input, ctx),
       };
     })
@@ -84,6 +113,21 @@ export function compileAgentGraph(deps: Deps) {
           llmReasoning: state.fastPath.reason,
           llmMetrics: null,
           decisionPath: 'fast_path' as const,
+        };
+      }
+      // Circuit breaker: el atasco se cortó de forma determinista, sin LLM.
+      if (state.stuckBreaker) {
+        deps.logger
+          .child({ turn_id: state.input.turn_id, node: 'understand' })
+          .info(
+            { stuck_breaker: true, reason: state.stuckBreaker.reason },
+            'understand skipped (stuck-breaker)',
+          );
+        return {
+          allCommands: [...state.input.system_commands, state.stuckBreaker.command],
+          llmReasoning: state.stuckBreaker.reason,
+          llmMetrics: null,
+          decisionPath: 'stuck_breaker' as const,
         };
       }
       const r = await understandNode(state.input, ctx, deps, state.llmRequest);

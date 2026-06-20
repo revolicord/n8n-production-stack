@@ -17,6 +17,7 @@ export interface AgentSavings {
   /** Desglose crudo de turnos por camino de decisión. */
   by_decision_path: {
     fast_path: number;
+    stuck_breaker: number;
     system: number;
     llm: number;
     none: number;
@@ -68,7 +69,7 @@ export async function getAgentSavings(
     )
     .groupBy(agentTurnTraces.decisionPath)) as DecisionRow[];
 
-  const counts = { fast_path: 0, system: 0, llm: 0, none: 0 };
+  const counts = { fast_path: 0, stuck_breaker: 0, system: 0, llm: 0, none: 0 };
   let llmInputTokens = 0;
   for (const r of rows) {
     const key = (r.decisionPath ?? 'none') as keyof typeof counts;
@@ -76,8 +77,9 @@ export async function getAgentSavings(
     if (r.decisionPath === 'llm') llmInputTokens += r.inputTokens;
   }
 
-  const totalTurns = counts.fast_path + counts.system + counts.llm + counts.none;
-  const deterministicTurns = counts.fast_path + counts.system;
+  const totalTurns =
+    counts.fast_path + counts.stuck_breaker + counts.system + counts.llm + counts.none;
+  const deterministicTurns = counts.fast_path + counts.stuck_breaker + counts.system;
   const avgInputPerLlm = counts.llm > 0 ? Math.round(llmInputTokens / counts.llm) : 0;
 
   return {

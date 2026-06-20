@@ -13,6 +13,7 @@ import {
   loadSubscriber,
   loadTenant,
   loadTransitions,
+  loadTurnsInCurrentStage,
 } from '../../services/context-queries.js';
 import { loadDialogueState } from '../../services/dialogue-states.js';
 import { loadActiveFlows } from '../../services/flow-definitions.js';
@@ -44,6 +45,7 @@ export async function assembleContextNode(input: TurnInput, deps: Deps): Promise
     recentTurns,
     dialogueState,
     activeFlows,
+    turnsInCurrentStage,
   ] = await Promise.all([
     loadCurrentStage(db, { tenantId: tenant_id, subscriberId: subscriber_id }),
     loadFunnelStages(db, tenant_id),
@@ -58,6 +60,7 @@ export async function assembleContextNode(input: TurnInput, deps: Deps): Promise
     loadRecentTurns(db, { tenantId: tenant_id, subscriberId: subscriber_id, limit: 10 }),
     loadDialogueState(db, { conversationId: conversation_id }),
     loadActiveFlows(db, tenant_id),
+    loadTurnsInCurrentStage(db, { tenantId: tenant_id, subscriberId: subscriber_id }),
   ]);
 
   log.info(
@@ -74,6 +77,7 @@ export async function assembleContextNode(input: TurnInput, deps: Deps): Promise
     tenantId: tenant_id,
     subscriberId: subscriber_id,
     maxTurns: 10,
+    maxTokens: tenantConfig.transcript_max_tokens,
     recentTurns,
   });
 
@@ -90,6 +94,7 @@ export async function assembleContextNode(input: TurnInput, deps: Deps): Promise
     dialogueState,
     transcript,
     activeFlows,
+    turnsInCurrentStage,
     rng: deps.rng,
   });
 }

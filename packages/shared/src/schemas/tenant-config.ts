@@ -57,6 +57,34 @@ export const AffirmSignalsSchema = z.object({
 });
 export type AffirmSignals = z.infer<typeof AffirmSignalsSchema>;
 
+/**
+ * Circuit breaker / detector de atasco para la "cola caótica": leads que consumen
+ * muchos turnos LLM en la misma etapa sin avanzar (el lead que no entiende, el que da
+ * vueltas 20 turnos sin resultado y le cuesta dinero al dueño del setter). Cuando el
+ * lead lleva `max_turns_in_stage` turnos completados en la etapa actual SIN avanzar,
+ * el motor corta de forma DETERMINISTA (cero tokens) — escala a humano o descalifica —
+ * en vez de seguir pagando llamadas al LLM indefinidamente.
+ *
+ * Es un gate determinista análogo al fast-path: solo se evalúa cuando el turno IBA a
+ * caer al LLM (el fast-path ya no aplicó). Un 👍 que avanza por fast-path resetea la
+ * cuenta (nueva etapa) — el breaker solo dispara en atascos reales.
+ *
+ * - `enabled`: interruptor (default true — es una salvaguarda de costo).
+ * - `max_turns_in_stage`: turnos completados en la MISMA etapa antes de cortar (default 10).
+ *   Un lead sano avanza cada 1–3 turnos; 10 en una sola etapa es patológico.
+ * - `action`: 'handoff' (default, escala a humano, no pierde el lead) | 'disqualify'
+ *   (avanza por la transición `trigger:'deny'`; si no hay, cae a 'handoff').
+ * - `exempt_stages`: etapas donde NUNCA dispara. Las etapas terminales (is_terminal) se
+ *   eximen automáticamente — un lead aparcado en 'booked'/'disqualified' no se escala.
+ */
+export const StuckDetectorSchema = z.object({
+  enabled: z.boolean().optional(),
+  max_turns_in_stage: z.number().int().positive().optional(),
+  action: z.enum(['handoff', 'disqualify']).optional(),
+  exempt_stages: z.array(z.string()).optional(),
+});
+export type StuckDetector = z.infer<typeof StuckDetectorSchema>;
+
 export const TenantConfigSchema = z
   .object({
     debounce_ms: z.number().int().positive().optional(),
@@ -119,6 +147,14 @@ export const TenantConfigSchema = z
     // Fast-path determinista: señales positivas editables por tenant (👍, "ya lo vi",
     // variaciones). Ver AffirmSignalsSchema. Si no se define, se usan los defaults.
     affirm_signals: AffirmSignalsSchema.optional(),
+    // Presupuesto de tokens del transcript (historial). Tras compresión lossless de
+    // turnos triviales (👍 repetidos, placeholders de media) se conservan los mensajes
+    // MÁS RECIENTES que entren en este presupuesto; los más viejos se descartan (el
+    // estado estructurado — etapa + slots — ya resume lo consumido). NO se hace resumen
+    // por LLM: resumir contenido barato cuesta más de lo que ahorra. Default 1200.
+    transcript_max_tokens: z.number().int().positive().optional(),
+    // Circuit breaker / detector de atasco para la cola caótica. Ver StuckDetectorSchema.
+    stuck_detector: StuckDetectorSchema.optional(),
   })
   .passthrough();
 

@@ -36,6 +36,8 @@ export interface AssembledContext {
   handoffState: HandoffState | null;
   leadContentSent: LeadContentSent[];
   activeFlows: Map<string, { version: number; def: FlowDefinition }>;
+  /** Turnos completados del lead en la etapa actual (señal del circuit breaker). */
+  turnsInCurrentStage: number;
 }
 
 export interface AssembleInput {
@@ -51,6 +53,7 @@ export interface AssembleInput {
   dialogueState: DialogueState;
   transcript: TranscriptMessage[];
   activeFlows: Map<string, { version: number; def: FlowDefinition }>;
+  turnsInCurrentStage: number;
   rng: () => number;
 }
 
@@ -93,5 +96,6 @@ export function assembleContext(input: AssembleInput): AssembledContext {
     handoffState,
     leadContentSent: input.leadContentSent,
     activeFlows: input.activeFlows,
+    turnsInCurrentStage: input.turnsInCurrentStage,
   };
 }

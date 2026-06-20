@@ -17,6 +17,8 @@ configurarlo sin tocar código).
 | Optimización | Qué hace | Efecto |
 |---|---|---|
 | **Fast-path determinista** | Un 👍 / "ya lo vi" en una etapa `flow_only` avanza sin llamar al LLM | **0 tokens**, ~0 ms de LLM |
+| **Circuit breaker / stuck detector** | Lead atascado N turnos en una etapa sin avanzar → escala/descalifica sin LLM | **0 tokens**; corta la cola caótica |
+| **Reasoning adaptativo** | Longitud del `reasoning` según dificultad (no fija) | Menos tokens de **salida** ($15/M) |
 | **Prompt caching** | Cachea el prefijo estable del system + el tool schema | Input cacheado se cobra al ~10% |
 | **Transcript acotado** | Historial limitado a 10 turnos | Recorta el input que crece con la conversación |
 | **Ruteo declarativo** | La transición declara `trigger:'affirm'` | Determinismo robusto, no inferido de la topología |
@@ -235,6 +237,48 @@ actualización de tenant config.
 
 ---
 
+## 5b. Circuit breaker / stuck detector (la cola caótica)
+
+El fast-path acota el costo del turno **normal** (un 👍 a cero tokens). El circuit breaker
+acota el costo de la conversación **patológica**: el lead que da vueltas 20 turnos en la
+misma etapa sin avanzar y le sangra dinero al dueño del setter. Optimizar tokens reduce la
+**media**; el breaker controla la **cola** (la distribución), que es donde realmente se
+fuga el presupuesto.
+
+Es un **segundo gate determinista** (cero tokens), análogo al fast-path
+(`graph/nodes/stuck-breaker.ts`, nodo `prepare_prompt`). Solo se evalúa **cuando el turno
+iba a caer al LLM** (el fast-path ya no aplicó). Un 👍 que avanza por fast-path resetea la
+cuenta (nueva etapa) → el breaker solo dispara en atascos reales.
+
+### 5b.1 Señal y umbral
+
+`turnsInCurrentStage` = turnos COMPLETADOS del lead desde que entró a la etapa actual (se
+cuenta desde el último `stage_transitions.created_at`; ver `loadTurnsInCurrentStage`). Si
+≥ `max_turns_in_stage` (default 10 — un lead sano avanza cada 1–3) → corta:
+
+- **`handoff`** (default): emite `HumanHandoff(kind:'agent', source:'code')` → reusa toda
+  la maquinaria de escalación (interrupt nativo + notificación Telegram + pausa). No pierde
+  el lead.
+- **`disqualify`**: avanza por la transición declarada `trigger:'deny'` desde la etapa; si
+  no hay ninguna, **cae a `handoff`** (nunca descalifica a ciegas).
+
+### 5b.2 Modo conservador (cuándo NO dispara)
+
+`tryStuckBreaker` devuelve `pass` con un `skipReason` (observabilidad, análogo a
+`fast_path_skip_reason`):
+
+| skipReason | Significado |
+|---|---|
+| `disabled` | el tenant lo apagó (`stuck_detector.enabled=false`) |
+| `exempt_stage` | etapa terminal (`is_terminal`) o listada en `exempt_stages` |
+| `already_handling` | ya hay escalación abierta o repair_context (humano en el caso) |
+| `under_threshold` | aún no llega al umbral (caso normal) |
+
+`decision_path: stuck_breaker` en la traza (y `context_snapshot.turns_in_current_stage`
+explica el porqué). Cuenta como turno determinista en `GET /admin/agent-savings`.
+
+---
+
 ## 6. Prompt caching (abaratar las llamadas que sí ocurren)
 
 Cuando el turno **sí** va al LLM, abaratamos el input con el prompt caching de
@@ -256,8 +300,33 @@ el caching está activo.
 > No baja el *conteo* de tokens; baja el *costo*. Reaprovechable entre turnos y entre
 > leads del mismo tenant dentro de la ventana de 5 minutos.
 
+### 6.1 Reasoning de longitud adaptativa (ventana móvil)
+
+El `reasoning` del plan **no alimenta la lógica** (lo consumen solo trazas + el feedback
+loop Fase 4), pero como forzamos `tool_choice: emit_plan` y NO usamos `thinking`, es la
+**única superficie de razonamiento del modelo** — y se cobra a precio de salida ($15/M,
+5× la entrada). El skeleton instruye una longitud **variable, no fija**: una frase cuando
+la intención es clara, 2–3 solo ante objeción/ambigüedad. Es una "ventana móvil" barata
+(prompt-level, cero cambios de API) que ataca el token más caro del turno sin perder
+calidad cuando la decisión es difícil. Ver `platform-skeleton.ts` (regla 11).
+
+### 6.2 Transcript por umbral + compresión lossless (NO resumen por LLM)
+
+Resumir con el LLM contenido barato cuesta más de lo que ahorra: el resumen se **genera**
+a precio de salida ($15/M) pero **ahorra** a precio de entrada ($3/M) → factor 5× en
+contra. Para 3 👍 seguidos (R≈300 tok) el "remedio es peor que la enfermedad". Por eso el
+transcript NO se resume con LLM; se optimiza en tres capas baratas (`transcript.ts`):
+
+1. **Estado estructurado primero (gratis):** la etapa + los slots + el dialogue_state YA
+   son un resumen comprimido de lo "consumido". El transcript solo aporta coherencia local.
+2. **Compresión lossless:** `collapseTrivialRuns` colapsa runs idénticos consecutivos
+   (`👍/👍/👍` → `👍 (×3)`), sin perder la señal de repetición y sin LLM.
+3. **Recorte por presupuesto:** `trimToTokenBudget` conserva los mensajes MÁS recientes que
+   entren en `transcript_max_tokens` (default 1200) y descarta lo viejo — seguro porque el
+   estado estructurado ya lleva lo consumido. Siempre conserva los últimos 4 mensajes.
+
 Transcript acotado: `assemble-context.ts` limita el historial a **10 turnos** (antes
-20), recortando la parte del input que crece con la conversación.
+20); luego se comprime y recorta por presupuesto.
 
 ---
 
@@ -342,8 +411,10 @@ Tres lugares para leerlo, de más barato a más caro:
 | Config | Dónde | Efecto en tokens |
 |---|---|---|
 | `text_policy_by_stage` / `text_policy_default` | tenant config | Habilita `flow_only` (precondición del fast-path) |
-| `stage_transitions_map.trigger` | DB / panel | Declara el destino del avance feliz |
+| `stage_transitions_map.trigger` | DB / panel | Declara el destino del avance feliz (lo usa fast-path Y el breaker en `disqualify`) |
 | `affirm_signals` | tenant config | Señales que disparan el fast-path (editable) |
+| `transcript_max_tokens` | tenant config | Presupuesto del transcript (default 1200); recorte por umbral sin resumir |
+| `stuck_detector` | tenant config | Circuit breaker: `enabled`, `max_turns_in_stage`, `action`, `exempt_stages` |
 | `skeleton_prompt` / `persona_prompt` | tenant config | Componen el prefijo `stable` cacheado |
 | `model` | tenant config | Modelo del turno LLM |
 | `trace_level` | tenant config | `full` para ver `context_snapshot` en la traza |
@@ -383,6 +454,8 @@ transiciones de esa etapa en el panel (debe haber exactamente una `affirm`).
 | Archivo | Rol |
 |---|---|
 | `apps/agent/src/graph/nodes/fast-path.ts` | Fast-path, señales, `resolveAffirmSignals` |
+| `apps/agent/src/graph/nodes/stuck-breaker.ts` | Circuit breaker / stuck detector |
+| `apps/agent/src/core/memory/transcript.ts` | `collapseTrivialRuns` + `trimToTokenBudget` |
 | `apps/agent/src/graph/build-graph.ts` | Nodo `prepare_prompt` (decide) + log de decisión |
 | `apps/agent/src/graph/annotation.ts` | Estado: `decisionPath`, `fastPathSkipReason` |
 | `apps/agent/src/core/llm/prompt.ts` | Split `stable`/`volatile` (caching) |

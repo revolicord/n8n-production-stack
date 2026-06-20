@@ -202,6 +202,9 @@ function serializeContext(ctx: AgentStateT['assembled']): Record<string, unknown
   return {
     tenant_config: redact(c.tenantConfig as Record<string, unknown>),
     current_stage: c.currentStage ?? null,
+    // Turnos del lead en la etapa actual: señal del circuit breaker. Si decision_path
+    // sale 'stuck_breaker', este número explica por qué (≥ max_turns_in_stage).
+    turns_in_current_stage: c.turnsInCurrentStage ?? null,
     // funnel_stages incluye is_terminal: visible en la traza para diagnosticar el
     // ruteo determinista sin abrir la DB. transitions ahora trae `trigger`.
     funnel_stages: c.funnelStages ?? null,

@@ -9,16 +9,18 @@ import { Annotation } from '@langchain/langgraph';
 import type { AssembledContext } from '../core/context/assemble.js';
 import type { FlowEngineResult } from '../core/flow-engine/engine.js';
 import type { FastPathResult } from './nodes/fast-path.js';
+import type { StuckBreakerResult } from './nodes/stuck-breaker.js';
 
 /**
  * Camino de decisión del turno. Lo determina el nodo `understand`:
  *  - `fast_path`: el CALM determinista resolvió el turno sin LLM (0 tokens).
+ *  - `stuck_breaker`: el circuit breaker cortó un atasco (escala/descalifica) sin LLM.
  *  - `system`: turno solo de system_commands (webhook), sin LLM (0 tokens).
  *  - `llm`: se llamó a Claude.
  *  - `none`: error antes de decidir (default).
  * Habilita la métrica de ahorro determinista (GET /admin/agent-savings).
  */
-export type DecisionPath = 'fast_path' | 'system' | 'llm' | 'none';
+export type DecisionPath = 'fast_path' | 'stuck_breaker' | 'system' | 'llm' | 'none';
 
 export interface LlmCallMetrics {
   model: string;
@@ -58,6 +60,7 @@ export const AgentState = Annotation.Root({
 
   fastPath: Annotation<FastPathResult | null>({ reducer: lastWrite, default: () => null }),
   fastPathSkipReason: Annotation<string | null>({ reducer: lastWrite, default: () => null }),
+  stuckBreaker: Annotation<StuckBreakerResult | null>({ reducer: lastWrite, default: () => null }),
   decisionPath: Annotation<DecisionPath>({ reducer: lastWrite, default: () => 'none' }),
   allCommands: Annotation<DialogueCommand[]>({ reducer: lastWrite, default: () => [] }),
   llmReasoning: Annotation<string | null>({ reducer: lastWrite, default: () => null }),
@@ -95,6 +98,7 @@ export function initialState(input: TurnInput): Partial<AgentStateT> {
     dialogueStateBefore: null,
     fastPath: null,
     fastPathSkipReason: null,
+    stuckBreaker: null,
     decisionPath: 'none',
     allCommands: [],
     llmReasoning: null,
