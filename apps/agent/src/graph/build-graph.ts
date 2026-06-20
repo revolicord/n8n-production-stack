@@ -1,5 +1,11 @@
 import { turns } from '@dm-api/db';
-import type { AgentResponse, TurnInput } from '@dm-api/shared';
+import {
+  type AgentResponse,
+  type ContentClass,
+  ESCALATING_CLASSES,
+  type TurnInput,
+  escalationReason,
+} from '@dm-api/shared';
 import { END, START, StateGraph, interrupt } from '@langchain/langgraph';
 import { eq, sql } from 'drizzle-orm';
 import { notifyHumanHandler } from '../actions/handlers/notify-human.js';
@@ -48,11 +54,53 @@ export function compileAgentGraph(deps: Deps) {
     .addNode('prepare_prompt', (state: AgentStateT) => {
       const ctx = state.assembled;
       if (!ctx) throw new Error('prepare_prompt: assembled context missing');
+      const { input } = state;
+      const log = deps.logger.child({ turn_id: input.turn_id, node: 'prepare_prompt' });
+
+      // ── Escalado de medios determinista (0 tokens) ──────────────────────────
+      // Si TODOS los mensajes son clases que el agente no puede procesar (audio,
+      // imagen, vídeo, …), inyectamos HumanHandoff sin llamar al LLM. El agente
+      // nunca debe improvisar texto para un audio que no puede escuchar.
+      // La notificación y pausa del lead ya las hizo detectEscalation() en el
+      // webhook; este bloque es el circuit breaker del agente (defense-in-depth).
+      const hasOnlyEscalating =
+        input.messages.length > 0 &&
+        input.system_commands.length === 0 &&
+        input.messages.every(
+          (m) =>
+            m.content_class !== 'text' &&
+            (ESCALATING_CLASSES as readonly string[]).includes(m.content_class as string),
+        );
+      if (hasOnlyEscalating) {
+        const firstClass = (input.messages[0]?.content_class ?? 'unknown') as ContentClass;
+        // HumanHandoff.kind solo acepta 'audio' | 'media' | 'keyword' | 'agent'
+        const handoffKind: 'audio' | 'media' = firstClass === 'audio' ? 'audio' : 'media';
+        log.info(
+          { content_class: firstClass, handoff_kind: handoffKind },
+          'media escalation short-circuit — 0 tokens',
+        );
+        return {
+          fastPath: {
+            commands: [
+              {
+                type: 'HumanHandoff' as const,
+                kind: handoffKind,
+                reason: escalationReason(firstClass),
+                source: 'code' as const,
+              },
+            ],
+            reason: `media-escalation-determinista: ${firstClass}`,
+          },
+          fastPathSkipReason: null,
+          stuckBreaker: null,
+          llmRequest: null,
+        };
+      }
+
       // Camino feliz determinista: si aplica, NO se llama al LLM (cero tokens).
       // La decisión (y, si cae al LLM, POR QUÉ) se loguea y se persiste en la
       // traza (decision_path + fast_path_skip_reason) para diagnóstico sin código.
-      const decision = tryFastPath(state.input, ctx);
-      const log = deps.logger.child({ turn_id: state.input.turn_id, node: 'prepare_prompt' });
+      const decision = tryFastPath(input, ctx);
       log.info(
         {
           decision: decision.kind,

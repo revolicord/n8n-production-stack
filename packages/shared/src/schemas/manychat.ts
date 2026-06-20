@@ -166,16 +166,37 @@ export type ManyChatMessagePayload = z.infer<typeof ManyChatMessageSchema>;
 export type ManyChatInstagramContext = z.infer<typeof ManyChatInstagramContextSchema>;
 
 /**
- * Clasifica un mensaje entrante en una `content_class`. Si trae texto, es
- * `text` (el agente puede leerlo); si no, la clase del primer media; si no
- * hay media, `text` (mensaje vacío que se renderiza como tal). Una sola clase
- * por mensaje basta: el placeholder solo se usa cuando no hay texto.
+ * ManyChat envía voice notes / audios como una URL de CDN de Instagram en el campo
+ * `text` con `media=[]` vacío (comportamiento observado en producción). Esta regex
+ * detecta ese patrón para clasificarlo como media no-legible, no como texto.
+ */
+const INSTAGRAM_CDN_RE = /^https?:\/\/lookaside\.fbsbx\.com\/ig_messaging_cdn\//i;
+
+/** True cuando `text` es SOLO una URL del CDN de Instagram (sin texto humano). */
+function isInstagramMediaCdnUrl(text: string): boolean {
+  const t = text.trim();
+  return INSTAGRAM_CDN_RE.test(t) && !t.includes(' ');
+}
+
+/**
+ * Clasifica un mensaje entrante en una `content_class`. Si trae texto legible, es
+ * `text`; si el texto es solo una URL del CDN de Instagram (voice note / media de
+ * ManyChat), es `unknown` (escala a humano — el agente no puede leerlo). Si no hay
+ * texto, la clase del primer media; si no hay media, `text` (mensaje vacío).
+ *
+ * Invariante: una sola clase por mensaje. El placeholder solo se usa cuando no hay
+ * texto legible (el LLM recibe la etiqueta, no la URL cruda).
  */
 export function classifyMessageContent(message: {
   text?: string;
   media?: { type: string }[];
 }): ContentClass {
-  if (message.text && message.text.trim() !== '') return 'text';
+  if (message.text && message.text.trim() !== '') {
+    // ManyChat a veces envía voice notes / videos como URL del CDN en text[] con media=[].
+    // Detectamos y escalamos como 'unknown' — el LLM no puede leer el contenido.
+    if (isInstagramMediaCdnUrl(message.text)) return 'unknown';
+    return 'text';
+  }
   const first = message.media?.[0];
   if (!first) return 'text';
   return classifyMediaType(first.type);

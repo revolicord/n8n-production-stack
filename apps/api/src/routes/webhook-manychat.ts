@@ -23,7 +23,11 @@ import {
   createNotification,
   tryClaimNotificationThrottle,
 } from '../services/notifications.js';
-import { getOrCreateSubscriber, isSubscriberActive } from '../services/subscribers.js';
+import {
+  getOrCreateSubscriber,
+  isSubscriberActive,
+  pauseSubscriber,
+} from '../services/subscribers.js';
 import { getTenantBySlug, parseTenantConfig } from '../services/tenants.js';
 
 const IDEMPOTENCY_TTL_MS = 24 * 3600 * 1000;
@@ -42,23 +46,35 @@ function effectiveAction(
 }
 
 /**
- * Clasificación pura del trigger de escalado. Allowlist por content_class: si
- * algún media cae en una clase que el tenant marca 'escalate' (o la allowlist
- * por defecto), escala; los medios ganan sobre keyword. Si no, evalúa keywords
- * sobre el texto. Exportada para tests; el match de keywords es por substring.
+ * Clasificación pura del trigger de escalado. Orden de prioridad:
+ *  1. media[]: adjuntos explícitos (tipo declarado por ManyChat).
+ *  2. classifyMessageContent(): captura URLs del CDN de IG en text[] cuando
+ *     media[] está vacío (voice notes, imágenes enviadas así por ManyChat).
+ *  3. keywords: solo sobre mensajes de texto puro.
+ *
+ * Exportada para tests; el match de keywords es por substring.
  */
 export function matchEscalationTrigger(
   message: ManyChatWebhookEvent['message'],
   keywords: string[] | undefined,
   mediaPolicy?: MediaPolicy | undefined,
 ): { kind: NotificationKind; reason: string } | null {
+  // 1. Adjuntos explícitos en media[]
   for (const m of message.media) {
     const cls = classifyMediaType(m.type);
     if (effectiveAction(cls, mediaPolicy) === 'escalate') {
       return { kind: cls as NotificationKind, reason: escalationReason(cls) };
     }
   }
-  if (keywords && keywords.length > 0 && message.text) {
+  // 2. Clasificación completa del mensaje (captura CDN URLs en text[])
+  const msgClass = classifyMessageContent(message);
+  if (msgClass !== 'text' && (ESCALATING_CLASSES as readonly string[]).includes(msgClass)) {
+    if (effectiveAction(msgClass, mediaPolicy) === 'escalate') {
+      return { kind: msgClass as NotificationKind, reason: escalationReason(msgClass) };
+    }
+  }
+  // 3. Keywords (solo texto legible)
+  if (keywords && keywords.length > 0 && message.text && msgClass === 'text') {
     const text = message.text.toLowerCase();
     const matched = keywords.find((k) => k.trim() && text.includes(k.trim().toLowerCase()));
     if (matched) {
@@ -103,9 +119,14 @@ async function detectEscalation(args: {
     summary: event.message.text ? event.message.text.slice(0, 300) : undefined,
     metadata: { message_id: messageId },
   });
+
+  // Pausar al lead para que processBatchJob salte el dispatch al agente.
+  // El agente no puede actuar sobre este contenido; el humano lo resuelve.
+  await pauseSubscriber(getDb(), { subscriberId });
+
   log.info(
     { subscriber_id: subscriberId, kind, notification_id: notification.id },
-    'escalation notification created',
+    'escalation notification created — subscriber paused',
   );
 }
 
@@ -225,14 +246,19 @@ export default async function webhookManyChatRoute(app: FastifyInstance): Promis
       // 8. Push al buffer Redis (Lua atómico) + nuevo token
       const token = crypto.randomUUID();
       const now = Date.now();
+      const contentClass = classifyMessageContent(event.message);
+      const isEscalating = (ESCALATING_CLASSES as readonly string[]).includes(contentClass);
       const bufferMsg: BufferMessage = {
         id: messageRow.id,
         external_message_id: messageRow.externalMessageId,
-        text: messageRow.text,
+        // Para contenido escalable (ej. voice note enviado como URL de CDN), text es la URL
+        // del CDN — no es texto legible. Lo nulleamos para que process-batch use el placeholder
+        // correcto (mediaPlaceholder) en vez de pasar la URL cruda al LLM.
+        text: isEscalating ? null : messageRow.text,
         reply_type: event.message.reply_type ?? null,
         ts: now,
         media_urls: mediaUrls,
-        content_class: classifyMessageContent(event.message),
+        content_class: contentClass,
       };
 
       const pushResult = await debouncePush(getRedis(), {

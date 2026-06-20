@@ -1,4 +1,5 @@
 import type { MediaPolicy } from '@dm-api/shared';
+import { classifyMessageContent } from '@dm-api/shared';
 import { describe, expect, it } from 'vitest';
 import { matchEscalationTrigger } from './webhook-manychat.js';
 
@@ -129,5 +130,47 @@ describe('matchEscalationTrigger — override de media_policy por tenant', () =>
       policy,
     );
     expect(result?.kind).toBe('sticker');
+  });
+});
+
+const AUDIO_CDN_URL =
+  'https://lookaside.fbsbx.com/ig_messaging_cdn/?asset_id=848893771274926&signature=Ab102U4gh';
+
+describe('classifyMessageContent — URL de CDN de Instagram en text[]', () => {
+  it('URL del CDN de IG en text → unknown', () => {
+    expect(classifyMessageContent({ text: AUDIO_CDN_URL, media: [] })).toBe('unknown');
+  });
+
+  it('URL del CDN con espacios → text (no es bare URL)', () => {
+    expect(classifyMessageContent({ text: `mira ${AUDIO_CDN_URL}`, media: [] })).toBe('text');
+  });
+
+  it('texto normal → text', () => {
+    expect(classifyMessageContent({ text: 'hola', media: [] })).toBe('text');
+  });
+
+  it('media[] tiene prioridad cuando text está vacío', () => {
+    expect(classifyMessageContent({ text: '', media: [{ type: 'audio' }] })).toBe('audio');
+  });
+});
+
+describe('matchEscalationTrigger — URL de CDN de Instagram en text[]', () => {
+  it('escala voice note enviada como URL en text[]', () => {
+    const result = matchEscalationTrigger({ text: AUDIO_CDN_URL, media: [] }, undefined);
+    expect(result?.kind).toBe('unknown');
+    expect(result?.reason).toBeTruthy();
+  });
+
+  it('no escala URL de CDN cuando media_policy lo desactiva', () => {
+    const policy: MediaPolicy = { unknown: 'annotate' };
+    const result = matchEscalationTrigger({ text: AUDIO_CDN_URL, media: [] }, undefined, policy);
+    expect(result).toBeNull();
+  });
+
+  it('keywords no hacen match sobre URL del CDN (no es texto legible)', () => {
+    const result = matchEscalationTrigger({ text: AUDIO_CDN_URL, media: [] }, ['fbsbx']);
+    // Escala por ser CDN URL, no por keyword (kind=unknown, no keyword)
+    expect(result?.kind).toBe('unknown');
+    expect(result?.kind).not.toBe('keyword');
   });
 });
