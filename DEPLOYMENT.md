@@ -36,7 +36,7 @@ Internet
   │
   ▼
 Traefik v2.11 (reverse proxy + TLS Let's Encrypt)
-  ├─ n8n.dominio.com          → n8n-main (UI) / n8n-webhook (/webhook/*)
+  ├─ paneln8n.dominio.com     → n8n-main (UI) / n8n-webhook (/webhook/*)
   ├─ api.dominio.com          → API DM Setter (Fastify + BullMQ)
   ├─ dashboard.dominio.com    → Dashboard analítico (Next.js)
   ├─ minio.dominio.com        → MinIO S3 (activos)
