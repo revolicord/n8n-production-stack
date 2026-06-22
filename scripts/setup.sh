@@ -87,13 +87,26 @@ echo    "  ☐  Repositorio GitHub donde guardar los backups de workflows"
 echo    "  ☐  Personal Access Token (PAT) con permiso  Contents: Read & Write"
 echo    "     Crear en: GitHub → Settings → Developer settings → Fine-grained tokens"
 echo ""
-echo -e "  ${YELLOW}TELEGRAM (opcional — escalado a humano)${NC}"
+echo -e "  ${YELLOW}TELEGRAM (obligatorio — escalado a humano)${NC}"
 echo    "  ☐  Bot creado en @BotFather → /newbot  (guarda el token que te da)"
 echo    "  ☐  Chat ID del destino de notificaciones"
 echo    "     (usa @userinfobot o @RawDataBot para obtener tu chat_id)"
 echo -e "  ${RED}  ☐  CRÍTICO: después de instalar, el agente DEBE abrir el bot en Telegram${NC}"
 echo -e "  ${RED}     y enviar /start una sola vez. Sin este paso Telegram rechaza los${NC}"
 echo -e "  ${RED}     mensajes del bot con error 403 y las notificaciones no llegan.${NC}"
+echo ""
+echo -e "  ${YELLOW}CALENDLY (obligatorio — requiere plan de pago)${NC}"
+echo    "  ☐  Plan Calendly de pago: Professional, Teams o Enterprise"
+echo    "     (el plan gratuito no permite registrar webhooks vía API)"
+echo    "  ☐  Personal Access Token: calendly.com/integrations/api_webhooks → Generate Token"
+echo    "  ☐  Organization URI: obtenido con"
+echo    "       curl https://api.calendly.com/users/me -H 'Authorization: Bearer <token>'"
+echo    "     (campo 'organization' en la respuesta)"
+echo -e "  ${YELLOW}  ↳  El webhook se registra automáticamente al final de esta instalación.${NC}"
+echo ""
+echo -e "  ${YELLOW}ANTHROPIC (obligatorio — motor del agente IA)${NC}"
+echo    "  ☐  API Key de Anthropic: console.anthropic.com → API Keys"
+echo    "     Formato: sk-ant-..."
 echo ""
 echo -e "  ${YELLOW}EMAIL${NC}"
 echo    "  ☐  Dirección de email válida para registrar los certificados SSL"
@@ -188,37 +201,77 @@ ask_if_missing GITHUB_REPO   "GitHub repo" "n8n-production-stack" "yes"
 ask_if_missing GITHUB_BRANCH "Branch" "master" "yes"
 ask_if_missing GITHUB_PATH   "Carpeta de workflows" "n8n-workflows" "yes"
 
-# ── 6. Escalado a humano — Telegram (opcional) ───────────────
-section "Escalado a humano vía Telegram (opcional)..."
+# ── 6. Escalado a humano — Telegram (OBLIGATORIO) ────────────
+section "Escalado a humano vía Telegram (obligatorio)..."
 echo ""
-info "Deja vacío para omitir. Se puede configurar después editando .env"
-info "y corriendo 'bash scripts/telegram-set-webhook.sh'."
-echo ""
-if [[ -z "${TELEGRAM_BOT_TOKEN:-}" ]]; then
-  read -rp "  Bot token de @BotFather (Enter para omitir): " TELEGRAM_BOT_TOKEN
-  TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN:-}"
-else
-  info "  TELEGRAM_BOT_TOKEN: ya configurado"
-fi
-if [[ -z "${TELEGRAM_DEFAULT_CHAT_ID:-}" ]]; then
-  read -rp "  Chat/grupo ID destino de Telegram (Enter para omitir): " TELEGRAM_DEFAULT_CHAT_ID
-  TELEGRAM_DEFAULT_CHAT_ID="${TELEGRAM_DEFAULT_CHAT_ID:-}"
-else
-  info "  TELEGRAM_DEFAULT_CHAT_ID: ya configurado"
-fi
-gen_if_missing TELEGRAM_WEBHOOK_SECRET "openssl rand -hex 16"
+ask_if_missing TELEGRAM_BOT_TOKEN        "Bot token de @BotFather" "" "yes"
+ask_if_missing TELEGRAM_DEFAULT_CHAT_ID  "Chat/grupo ID destino (de @userinfobot)" "" "yes"
+gen_if_missing TELEGRAM_WEBHOOK_SECRET   "openssl rand -hex 16"
 PAUSE_REMINDER_HOURS="${PAUSE_REMINDER_HOURS:-6}"
-if [[ -n "${TELEGRAM_BOT_TOKEN}" ]]; then
-  echo ""
-  warn "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  warn "  PASO MANUAL OBLIGATORIO tras la instalación:"
-  warn "  El agente (o cualquier destinatario de TELEGRAM_DEFAULT_CHAT_ID)"
-  warn "  debe abrir el bot en Telegram y enviar /start al menos una vez."
-  warn "  Telegram prohíbe que los bots inicien conversaciones con usuarios"
-  warn "  que no les han escrito primero. Sin este paso, las notificaciones"
-  warn "  de escalado fallan silenciosamente con error 403 Forbidden."
-  warn "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo ""
+echo ""
+warn "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+warn "  PASO MANUAL OBLIGATORIO tras la instalación:"
+warn "  El agente (o cualquier destinatario de TELEGRAM_DEFAULT_CHAT_ID)"
+warn "  debe abrir el bot en Telegram y enviar /start al menos una vez."
+warn "  Telegram prohíbe que los bots inicien conversaciones con usuarios"
+warn "  que no les han escrito primero. Sin este paso, las notificaciones"
+warn "  de escalado fallan silenciosamente con error 403 Forbidden."
+warn "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
+# ── 6b. Calendly (OBLIGATORIO — requiere plan de pago) ────────
+section "Calendly — webhook de agendamiento (obligatorio)..."
+echo ""
+info "Requiere plan Calendly de pago (Professional, Teams o Enterprise)."
+info "Obtener Personal Access Token en:"
+info "  calendly.com/integrations/api_webhooks → API & Webhooks → Generate Token"
+info ""
+info "Obtener Organization URI ejecutando (con el token anterior):"
+info "  curl https://api.calendly.com/users/me -H 'Authorization: Bearer <token>'"
+info "  → copiar el valor del campo 'organization'"
+echo ""
+ask_if_missing CALENDLY_PERSONAL_TOKEN "Calendly Personal Access Token" "" "yes"
+ask_if_missing CALENDLY_ORG_URI        "Calendly Organization URI (https://api.calendly.com/organizations/...)" "" "yes"
+
+# ── 6c. API Key de Anthropic (OBLIGATORIO) ────────────────────
+section "Anthropic — motor del agente IA (obligatorio)..."
+echo ""
+info "Obtener en: console.anthropic.com → API Keys"
+ask_if_missing ANTHROPIC_API_KEY "Anthropic API Key (sk-ant-...)" "" "yes"
+ANTHROPIC_MODEL="${ANTHROPIC_MODEL:-claude-sonnet-4-6}"
+AGENT_TIMEOUT_MS="${AGENT_TIMEOUT_MS:-60000}"
+
+# ── 6d. LangSmith (opcional — observabilidad técnica del agente)
+section "LangSmith — observabilidad técnica (opcional)..."
+echo ""
+info "La observabilidad de negocio (agent_turn_traces) funciona siempre."
+info "LangSmith es adicional para ver la traza interna del grafo LangGraph."
+info "Dejar vacío para omitir. Se puede activar después editando .env"
+echo ""
+if [[ -z "${LANGSMITH_API_KEY:-}" ]]; then
+  read -rp "  LangSmith API Key (lsv2_pt_...) [Enter para omitir]: " LANGSMITH_API_KEY
+  LANGSMITH_API_KEY="${LANGSMITH_API_KEY:-}"
+else
+  info "  LANGSMITH_API_KEY: ya configurado"
+fi
+if [[ -n "${LANGSMITH_API_KEY}" ]]; then
+  LANGSMITH_TRACING="${LANGSMITH_TRACING:-true}"
+  ask_if_missing LANGSMITH_PROJECT  "Nombre del proyecto en LangSmith" "dm-agent" "no"
+  LANGSMITH_PROJECT="${LANGSMITH_PROJECT:-dm-agent}"
+  info "¿Región de tu cuenta LangSmith?"
+  echo "  [eu] EU  → https://eu.api.smith.langchain.com"
+  echo "  [us] US  → https://api.smith.langchain.com"
+  if [[ -z "${LANGSMITH_ENDPOINT:-}" ]]; then
+    read -rp "  Región [eu/us]: " LS_REGION
+    case "${LS_REGION,,}" in
+      us) LANGSMITH_ENDPOINT="https://api.smith.langchain.com" ;;
+      *)  LANGSMITH_ENDPOINT="https://eu.api.smith.langchain.com" ;;
+    esac
+  fi
+else
+  LANGSMITH_TRACING=""
+  LANGSMITH_PROJECT="${LANGSMITH_PROJECT:-dm-agent}"
+  LANGSMITH_ENDPOINT="${LANGSMITH_ENDPOINT:-https://eu.api.smith.langchain.com}"
 fi
 
 # ── 7. Escribir .env ─────────────────────────────────────────
@@ -263,15 +316,27 @@ GITHUB_REPO=${GITHUB_REPO}
 GITHUB_BRANCH=${GITHUB_BRANCH}
 GITHUB_PATH=${GITHUB_PATH}
 # ---- Escalado a humano (Telegram) ---------------------------
-# Bot de @BotFather. Dejar vacío para deshabilitar envío Telegram.
 TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-# Chat/grupo destino por defecto (override por tenant: config.telegram_chat_id)
 TELEGRAM_DEFAULT_CHAT_ID=${TELEGRAM_DEFAULT_CHAT_ID}
-# Secreto del webhook de callbacks (botones inline).
-# Registrar una vez: bash scripts/telegram-set-webhook.sh
+# Registrar una vez tras deploy: bash scripts/telegram-set-webhook.sh
 TELEGRAM_WEBHOOK_SECRET=${TELEGRAM_WEBHOOK_SECRET}
 # Recordatorio periódico de leads pausados (horas, 0 = desactivado)
 PAUSE_REMINDER_HOURS=${PAUSE_REMINDER_HOURS}
+FOLLOWUP_INTERVAL_MINUTES=${FOLLOWUP_INTERVAL_MINUTES:-5}
+# ---- Calendly — agendamiento (requiere plan de pago) ---------
+# Registrar una vez tras deploy: bash scripts/calendly-set-webhook.sh
+CALENDLY_PERSONAL_TOKEN=${CALENDLY_PERSONAL_TOKEN}
+CALENDLY_ORG_URI=${CALENDLY_ORG_URI}
+# ---- Motor de diálogo (Anthropic) ---------------------------
+ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+ANTHROPIC_MODEL=${ANTHROPIC_MODEL}
+AGENT_TIMEOUT_MS=${AGENT_TIMEOUT_MS}
+# ---- Observabilidad LangSmith (opcional) --------------------
+# Dejar vacío para deshabilitar. La traza de negocio vive en agent_turn_traces.
+LANGSMITH_TRACING=${LANGSMITH_TRACING}
+LANGSMITH_API_KEY=${LANGSMITH_API_KEY}
+LANGSMITH_PROJECT=${LANGSMITH_PROJECT}
+LANGSMITH_ENDPOINT=${LANGSMITH_ENDPOINT}
 ENVEOF
 info ".env generado/actualizado."
 
@@ -400,6 +465,16 @@ docker stack services n8n
 
 bash "$(dirname "$0")/init-minio-bucket.sh" || warn "init-minio-bucket falló — corrígelo a mano con: bash scripts/init-minio-bucket.sh"
 
+# ── 13. Registrar webhook de Telegram ────────────────────────
+section "Registrando webhook de Telegram..."
+bash "$(dirname "$0")/telegram-set-webhook.sh" && info "Webhook de Telegram registrado." \
+  || warn "Telegram webhook falló. Correr a mano: bash scripts/telegram-set-webhook.sh"
+
+# ── 14. Registrar webhook de Calendly ────────────────────────
+section "Registrando webhook de Calendly..."
+bash "$(dirname "$0")/calendly-set-webhook.sh" && info "Webhook de Calendly registrado." \
+  || warn "Calendly webhook falló. Correr a mano: bash scripts/calendly-set-webhook.sh"
+
 section "COMPLETADO"
 echo ""
 echo -e "  Panel n8n:      ${GREEN}https://${N8N_HOST}${NC}"
@@ -419,13 +494,24 @@ if [[ "$MODE" == "fresh" ]]; then
   echo -e "  ${YELLOW}  ${MC_WEBHOOK_TOKEN}${NC}"
 fi
 echo ""
+warn "Los certificados SSL pueden tardar 1-2 minutos en generarse."
+warn "Si los dominios no apuntaban al servidor: docker service update --force traefik"
+echo ""
+warn "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+warn "  PASO MANUAL OBLIGATORIO — TELEGRAM:"
+warn "  El agente debe abrir el bot en Telegram y enviar /start"
+warn "  antes de que llegue la primera notificación de escalado."
+warn "  Sin este paso, Telegram devuelve 403 Forbidden silenciosamente."
+warn "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
 info "Próximos pasos:"
-echo "  1. Crear el primer tenant:"
+echo "  1. El agente envía /start al bot de Telegram (ver aviso arriba)"
+echo "  2. Crear el primer tenant:"
 echo "       make seed-tenant SLUG=dev N8N_WORKFLOW_URL=https://${N8N_HOST}/webhook/agent-run"
-echo "  2. Verificar que la API responde:"
+echo "  3. Verificar que la API responde:"
 echo "       curl https://${API_HOST}/healthz"
-echo "  3. Crear workflow 'agent-run' en n8n con webhook trigger"
-echo "  4. Configurar External Request en ManyChat:"
+echo "  4. Crear workflow 'agent-run' en n8n con webhook trigger"
+echo "  5. Configurar External Request en ManyChat:"
 echo "       URL:    https://${API_HOST}/webhook/manychat"
 echo "       Header: X-MC-Token: (ver .env MC_WEBHOOK_TOKEN)"
 echo ""
@@ -439,15 +525,3 @@ echo "  make scale-workers N=5  — escalar workers n8n a 5"
 echo "  make scale-api N=2      — escalar API a 2 réplicas"
 echo "  make migrate            — re-aplicar migraciones drizzle"
 echo "  make rebuild-api        — reconstruir imagen dm-api:local"
-echo ""
-warn "Los certificados SSL pueden tardar 1-2 minutos en generarse."
-warn "Si los dominios no apuntaban al servidor: docker service update --force traefik"
-if [[ -n "${TELEGRAM_BOT_TOKEN}" ]]; then
-  echo ""
-  info "Telegram configurado. Pasos finales para activarlo:"
-  echo "  A. Registrar el webhook de callbacks (una sola vez):"
-  echo "       bash scripts/telegram-set-webhook.sh"
-  echo "  B. El agente debe abrir el bot en Telegram y enviar /start"
-  echo "     antes de que llegue la primera notificación. Sin este paso"
-  echo "     Telegram devuelve 403 Forbidden y las alertas no se envían."
-fi
