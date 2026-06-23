@@ -50,7 +50,14 @@ export async function updateAgentResource(
   patch: Partial<
     Pick<
       AgentResource,
-      'displayName' | 'triggerHint' | 'textContent' | 'mediaUrl' | 'sortOrder' | 'category' | 'slug'
+      | 'displayName'
+      | 'triggerHint'
+      | 'textContent'
+      | 'mediaUrl'
+      | 'sortOrder'
+      | 'category'
+      | 'slug'
+      | 'config'
     >
   >,
 ): Promise<AgentResource | null> {

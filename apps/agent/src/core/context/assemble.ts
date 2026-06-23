@@ -38,6 +38,15 @@ export interface AssembledContext {
   activeFlows: Map<string, { version: number; def: FlowDefinition }>;
   /** Turnos completados del lead en la etapa actual (señal del circuit breaker). */
   turnsInCurrentStage: number;
+  /** Recursos de objeción del tenant (category='objecion') para detección y respuesta. */
+  objectionResources: Array<{
+    slug: string;
+    displayName: string;
+    triggerHint?: string | null;
+    textContent?: string | null;
+    mediaUrl?: string | null;
+    config?: unknown;
+  }>;
 }
 
 export interface AssembleInput {
@@ -54,6 +63,14 @@ export interface AssembleInput {
   transcript: TranscriptMessage[];
   activeFlows: Map<string, { version: number; def: FlowDefinition }>;
   turnsInCurrentStage: number;
+  objectionResources: Array<{
+    slug: string;
+    displayName: string;
+    triggerHint?: string | null;
+    textContent?: string | null;
+    mediaUrl?: string | null;
+    config?: unknown;
+  }>;
   rng: () => number;
 }
 
@@ -97,5 +114,6 @@ export function assembleContext(input: AssembleInput): AssembledContext {
     leadContentSent: input.leadContentSent,
     activeFlows: input.activeFlows,
     turnsInCurrentStage: input.turnsInCurrentStage,
+    objectionResources: input.objectionResources,
   };
 }

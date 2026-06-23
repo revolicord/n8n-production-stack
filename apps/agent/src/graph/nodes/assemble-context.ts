@@ -8,6 +8,7 @@ import {
   loadFunnelStages,
   loadLeadContentSent,
   loadNotifications,
+  loadObjectionResources,
   loadRecentTurns,
   loadStageFlowsByStage,
   loadSubscriber,
@@ -46,6 +47,7 @@ export async function assembleContextNode(input: TurnInput, deps: Deps): Promise
     dialogueState,
     activeFlows,
     turnsInCurrentStage,
+    objectionResources,
   ] = await Promise.all([
     loadCurrentStage(db, { tenantId: tenant_id, subscriberId: subscriber_id }),
     loadFunnelStages(db, tenant_id),
@@ -61,6 +63,7 @@ export async function assembleContextNode(input: TurnInput, deps: Deps): Promise
     loadDialogueState(db, { conversationId: conversation_id }),
     loadActiveFlows(db, tenant_id),
     loadTurnsInCurrentStage(db, { tenantId: tenant_id, subscriberId: subscriber_id }),
+    loadObjectionResources(db, tenant_id),
   ]);
 
   log.info(
@@ -95,6 +98,7 @@ export async function assembleContextNode(input: TurnInput, deps: Deps): Promise
     transcript,
     activeFlows,
     turnsInCurrentStage,
+    objectionResources,
     rng: deps.rng,
   });
 }

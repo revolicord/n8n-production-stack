@@ -260,6 +260,7 @@ export async function saveTurnTrace(
       dialogueStateBefore: s.dialogueStateBefore,
       dialogueStateAfter: args.dialogueStateAfter ?? s.flowResult?.state ?? null,
       error: args.error ?? null,
+      objectionDetected: s.objectionDetected ?? null,
       metrics: {
         model: m?.model ?? null,
         input_tokens: m?.inputTokens ?? null,

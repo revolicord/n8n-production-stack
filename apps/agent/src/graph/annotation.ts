@@ -3,6 +3,7 @@ import type {
   AgentResponse,
   DialogueCommand,
   DialogueState,
+  ObjectionDetectionResult,
   TurnInput,
 } from '@dm-api/shared';
 import { Annotation } from '@langchain/langgraph';
@@ -20,7 +21,7 @@ import type { StuckBreakerResult } from './nodes/stuck-breaker.js';
  *  - `none`: error antes de decidir (default).
  * Habilita la métrica de ahorro determinista (GET /admin/agent-savings).
  */
-export type DecisionPath = 'fast_path' | 'stuck_breaker' | 'system' | 'llm' | 'none';
+export type DecisionPath = 'fast_path' | 'stuck_breaker' | 'objection' | 'system' | 'llm' | 'none';
 
 export interface LlmCallMetrics {
   model: string;
@@ -79,6 +80,12 @@ export const AgentState = Annotation.Root({
   }),
 
   agentResponse: Annotation<AgentResponse | null>({ reducer: lastWrite, default: () => null }),
+
+  /** Objeción detectada en este turno (determinista o LLM). null si no hubo objeción. */
+  objectionDetected: Annotation<ObjectionDetectionResult | null>({
+    reducer: lastWrite,
+    default: () => null,
+  }),
 });
 
 export type AgentStateT = typeof AgentState.State;
@@ -111,5 +118,6 @@ export function initialState(input: TurnInput): Partial<AgentStateT> {
     status: null,
     interruptInfo: null,
     agentResponse: null,
+    objectionDetected: null,
   };
 }

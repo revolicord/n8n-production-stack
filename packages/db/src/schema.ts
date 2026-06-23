@@ -504,6 +504,8 @@ export const agentResources = apiSchema.table(
     mediaUrl: text('media_url'),
     sortOrder: integer('sort_order').notNull().default(0),
     isActive: boolean('is_active').notNull().default(true),
+    // Para category='objecion': acciones y metadatos estructurados (ObjectionResourceConfig).
+    config: jsonb('config'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -690,6 +692,8 @@ export const agentTurnTraces = apiSchema.table(
     // 'system' (solo system_commands, 0 tokens), 'llm' (se llamó a Claude),
     // 'none' (error antes de decidir). Habilita la métrica de ahorro determinista.
     decisionPath: text('decision_path'),
+    // Objeción detectada en el turno (ObjectionDetectionResult). null si no hubo.
+    objectionDetected: jsonb('objection_detected'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({

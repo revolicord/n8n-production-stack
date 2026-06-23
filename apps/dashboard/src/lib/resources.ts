@@ -12,6 +12,7 @@ export type AgentResourceRow = {
   textContent: string | null;
   mediaUrl: string | null;
   sortOrder: number;
+  config: unknown | null;
 };
 
 // Lectura directa con Drizzle desde RSC. Solo recursos activos, ordenados.
@@ -29,6 +30,7 @@ export async function listResources(
       textContent: agentResources.textContent,
       mediaUrl: agentResources.mediaUrl,
       sortOrder: agentResources.sortOrder,
+      config: agentResources.config,
     })
     .from(agentResources)
     .where(

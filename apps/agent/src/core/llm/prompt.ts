@@ -1,5 +1,6 @@
 import { DEFAULT_PLATFORM_SKELETON } from '@dm-api/shared';
 import type { AssembledContext } from '../context/assemble.js';
+import { buildObjectionClassificationBlock } from '../objections/detector.js';
 
 /**
  * System prompt dividido en dos bloques para aprovechar prompt caching de
@@ -54,8 +55,10 @@ export function composePrompt(ctx: AssembledContext, personaBlock: string): Comp
     .replace('{CONTENT_OPTIONS}', contentOptions)
     .replace('{REPLY_POLICY}', buildReplyPolicyBlock(ctx));
 
+  const objectionBlock = buildObjectionClassificationBlock(ctx.objectionResources);
+
   const stable = [staticHead.trimEnd(), '', '## Persona del agente', '', personaBlock].join('\n');
-  const volatile = [renderedTail.trim(), '', dialogueInfo].join('\n');
+  const volatile = [renderedTail.trim(), '', dialogueInfo, objectionBlock].join('\n');
 
   return { stable, volatile };
 }

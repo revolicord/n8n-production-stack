@@ -46,6 +46,8 @@ export const UpdateAgentResourceBodySchema = z.object({
   text_content: z.string().nullable().optional(),
   media_url: z.string().url().nullable().optional(),
   sort_order: z.number().int().min(0).optional(),
+  // Para category='objecion': acciones estructuradas (ObjectionResourceConfig)
+  config: z.record(z.string(), z.unknown()).nullable().optional(),
 });
 
 function isDuplicateSlug(err: unknown): boolean {
@@ -187,6 +189,7 @@ export default async function agentResourcesRoutes(app: FastifyInstance): Promis
       if ('text_content' in patch) drizzlePatch.textContent = patch.text_content ?? null;
       if ('media_url' in patch) drizzlePatch.mediaUrl = patch.media_url ?? null;
       if (patch.sort_order !== undefined) drizzlePatch.sortOrder = patch.sort_order;
+      if ('config' in patch) drizzlePatch.config = patch.config ?? null;
 
       try {
         const updated = await updateAgentResource(getDb(), paramParsed.data, drizzlePatch);

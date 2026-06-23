@@ -221,10 +221,10 @@ async function runTest(
   fn: () => Promise<ApiResult>,
 ): Promise<TestResult> {
   testIdx++;
-  console.log(`\n${C.cyan}──────────────────────────────────────────${C.reset}`);
-  console.log(`${bold(`TEST ${testIdx}:`)} ${name}`);
-  console.log(`${dim('Categoría:')} ${category}`);
-  console.log(`${C.cyan}──────────────────────────────────────────${C.reset}`);
+  console.info(`\n${C.cyan}──────────────────────────────────────────${C.reset}`);
+  console.info(`${bold(`TEST ${testIdx}:`)} ${name}`);
+  console.info(`${dim('Categoría:')} ${category}`);
+  console.info(`${C.cyan}──────────────────────────────────────────${C.reset}`);
 
   process.stdout.write('  Enviando a ManyChat... ');
 
@@ -236,13 +236,13 @@ async function runTest(
   }
 
   if (result.success) {
-    console.log(
+    console.info(
       ok(`${result.statusCode} OK (${result.attempts} intento${result.attempts !== 1 ? 's' : ''})`),
     );
   } else {
-    console.log(fail(`ERROR ${result.statusCode} (${result.attempts} intentos)`));
+    console.info(fail(`ERROR ${result.statusCode} (${result.attempts} intentos)`));
     if (result.errorBody) {
-      console.log(`  ${C.red}${result.errorBody}${C.reset}`);
+      console.info(`  ${C.red}${result.errorBody}${C.reset}`);
     }
   }
 
@@ -264,9 +264,9 @@ async function runTest(
 // ── Resumen final ──────────────────────────────────────────────────
 
 function printSummary() {
-  console.log(`\n${C.bold}═══════════════════════════════════════════${C.reset}`);
-  console.log(bold('  RESUMEN DE PRUEBAS'));
-  console.log(`${C.bold}═══════════════════════════════════════════${C.reset}\n`);
+  console.info(`\n${C.bold}═══════════════════════════════════════════${C.reset}`);
+  console.info(bold('  RESUMEN DE PRUEBAS'));
+  console.info(`${C.bold}═══════════════════════════════════════════${C.reset}\n`);
 
   const passed = results.filter((r) => r.userConfirm === 'yes');
   const failed = results.filter((r) => r.userConfirm === 'no' || !r.apiSuccess);
@@ -274,49 +274,51 @@ function printSummary() {
 
   for (const r of results) {
     if (!r.apiSuccess) {
-      console.log(fail(`${bold(r.name)} ${dim(`[${r.category}]`)} — API error ${r.apiStatusCode}`));
-      if (r.apiError) console.log(`    ${dim(r.apiError.slice(0, 120))}`);
+      console.info(
+        fail(`${bold(r.name)} ${dim(`[${r.category}]`)} — API error ${r.apiStatusCode}`),
+      );
+      if (r.apiError) console.info(`    ${dim(r.apiError.slice(0, 120))}`);
     } else if (r.userConfirm === 'yes') {
-      console.log(ok(`${bold(r.name)} ${dim(`[${r.category}]`)}`));
+      console.info(ok(`${bold(r.name)} ${dim(`[${r.category}]`)}`));
     } else if (r.userConfirm === 'no') {
-      console.log(
+      console.info(
         fail(`${bold(r.name)} ${dim(`[${r.category}]`)} — API OK pero NO recibido en IG`),
       );
     } else {
-      console.log(skip(`${bold(r.name)} ${dim(`[${r.category}]`)} — sin confirmar`));
+      console.info(skip(`${bold(r.name)} ${dim(`[${r.category}]`)} — sin confirmar`));
     }
   }
 
-  console.log('');
-  console.log(
+  console.info('');
+  console.info(
     `${C.bold}Resultado:${C.reset} ${C.green}${passed.length} PASS${C.reset}  ${C.red}${failed.length} FAIL${C.reset}  ${C.gray}${skipped.length} sin confirmar${C.reset}  de ${results.length} pruebas`,
   );
 
   if (failed.length === 0 && passed.length > 0) {
-    console.log(`\n${C.green}${bold('🎉 Todo llegó a Instagram correctamente.')}${C.reset}`);
+    console.info(`\n${C.green}${bold('🎉 Todo llegó a Instagram correctamente.')}${C.reset}`);
   } else if (failed.length > 0) {
-    console.log(`\n${C.red}${bold('Revisar los FAILs.')}${C.reset} Posibles causas:`);
+    console.info(`\n${C.red}${bold('Revisar los FAILs.')}${C.reset} Posibles causas:`);
     const hasApiErrors = results.some((r) => !r.apiSuccess);
     const hasIgErrors = results.some((r) => r.apiSuccess && r.userConfirm === 'no');
     if (hasApiErrors) {
-      console.log('  • API error: revisar SMOKE_API_KEY y SMOKE_SUBSCRIBER_ID');
-      console.log('  • Verificar que el API key del tenant es válido en ManyChat');
+      console.info('  • API error: revisar SMOKE_API_KEY y SMOKE_SUBSCRIBER_ID');
+      console.info('  • Verificar que el API key del tenant es válido en ManyChat');
     }
     if (hasIgErrors) {
-      console.log('  • La API respondió OK pero el mensaje no llegó a IG');
-      console.log('  • Verificar que el subscriber_id corresponde a tu cuenta de IG');
-      console.log('  • Verificar que el flow_ns existe y está activo en ManyChat');
+      console.info('  • La API respondió OK pero el mensaje no llegó a IG');
+      console.info('  • Verificar que el subscriber_id corresponde a tu cuenta de IG');
+      console.info('  • Verificar que el flow_ns existe y está activo en ManyChat');
     }
   }
-  console.log('');
+  console.info('');
 }
 
 // ── Main ───────────────────────────────────────────────────────────
 
 async function main() {
-  console.log(`\n${C.bold}${C.blue}╔═══════════════════════════════════════════╗${C.reset}`);
-  console.log(`${C.bold}${C.blue}║   SMOKE TEST — ManyChat + Telegram        ║${C.reset}`);
-  console.log(`${C.bold}${C.blue}╚═══════════════════════════════════════════╝${C.reset}\n`);
+  console.info(`\n${C.bold}${C.blue}╔═══════════════════════════════════════════╗${C.reset}`);
+  console.info(`${C.bold}${C.blue}║   SMOKE TEST — ManyChat + Telegram        ║${C.reset}`);
+  console.info(`${C.bold}${C.blue}╚═══════════════════════════════════════════╝${C.reset}\n`);
 
   // Validaciones
   if (!DATABASE_URL) {
@@ -333,7 +335,7 @@ async function main() {
   }
 
   // Conexión DB
-  console.log(`${dim('Conectando a DB...')} `);
+  console.info(`${dim('Conectando a DB...')} `);
   const db = createDb(DATABASE_URL);
 
   // Cargar tenant
@@ -357,22 +359,22 @@ async function main() {
     process.exit(1);
   }
 
-  console.log(`\n${bold('Configuración:')}`);
-  console.log(`  Tenant:        ${C.cyan}${tenant.slug}${C.reset} (${tenant.id})`);
-  console.log(`  Subscriber ID: ${C.cyan}${SUBSCRIBER_ID}${C.reset}`);
-  console.log(`  API Key:       ${C.gray}...${apiKey.slice(-6)}${C.reset}`);
-  if (FILTER_STAGE) console.log(`  Filtro etapa:  ${C.yellow}${FILTER_STAGE}${C.reset}`);
+  console.info(`\n${bold('Configuración:')}`);
+  console.info(`  Tenant:        ${C.cyan}${tenant.slug}${C.reset} (${tenant.id})`);
+  console.info(`  Subscriber ID: ${C.cyan}${SUBSCRIBER_ID}${C.reset}`);
+  console.info(`  API Key:       ${C.gray}...${apiKey.slice(-6)}${C.reset}`);
+  if (FILTER_STAGE) console.info(`  Filtro etapa:  ${C.yellow}${FILTER_STAGE}${C.reset}`);
   if (TG_TOKEN)
-    console.log(
+    console.info(
       `  Telegram:      ${C.green}configurado${C.reset} → chat ${TG_CHAT || '(default)'}`,
     );
-  console.log('');
+  console.info('');
 
   // ─── TEST 1: Texto libre ───────────────────────────────────────────
   const timestamp = new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
   const testText = `Hola, este es un mensaje de prueba de texto libre. [smoke-test ${timestamp}]`;
 
-  console.log(`${dim('Texto que se enviará:')} "${testText}"`);
+  console.info(`${dim('Texto que se enviará:')} "${testText}"`);
   await runTest('Texto libre (sendContent)', 'texto', () =>
     mcSendText(testText, SUBSCRIBER_ID, apiKey),
   );
@@ -408,7 +410,7 @@ async function main() {
         const label = flow.humanName ?? flow.slugId ?? flow.flowNs;
         const mediaTag = flow.mediaType ? ` [${flow.mediaType}]` : '';
 
-        console.log(
+        console.info(
           `\n  ${dim('Flow NS:')} ${flow.flowNs}${flow.slugId ? `  ${dim('Slug:')} ${flow.slugId}` : ''}`,
         );
 
@@ -445,7 +447,7 @@ async function main() {
             .replace('{first_name}', 'Lead')
             .replace(/\{[^}]+\}/g, '[var]');
 
-          console.log(
+          console.info(
             `\n  ${dim('Texto:')} "${rendered.slice(0, 80)}${rendered.length > 80 ? '...' : ''}"`,
           );
 
@@ -455,7 +457,7 @@ async function main() {
             () => mcSendText(rendered, SUBSCRIBER_ID, apiKey),
           );
         } else if (tmpl.type === 'flow' && tmpl.flowNs) {
-          console.log(`\n  ${dim('Flow NS:')} ${tmpl.flowNs}`);
+          console.info(`\n  ${dim('Flow NS:')} ${tmpl.flowNs}`);
 
           const tmplFlowNs = tmpl.flowNs;
           await runTest(
@@ -471,10 +473,10 @@ async function main() {
   // ─── TEST: Telegram ────────────────────────────────────────────────
   if (TG_TOKEN && TG_CHAT) {
     testIdx++;
-    console.log(`\n${C.cyan}──────────────────────────────────────────${C.reset}`);
-    console.log(`${bold(`TEST ${testIdx}:`)} Notificación Telegram (escalado a humano)`);
-    console.log(`${C.cyan}──────────────────────────────────────────${C.reset}`);
-    console.log(`  Chat ID: ${TG_CHAT}`);
+    console.info(`\n${C.cyan}──────────────────────────────────────────${C.reset}`);
+    console.info(`${bold(`TEST ${testIdx}:`)} Notificación Telegram (escalado a humano)`);
+    console.info(`${C.cyan}──────────────────────────────────────────${C.reset}`);
+    console.info(`  Chat ID: ${TG_CHAT}`);
 
     process.stdout.write('  Enviando a Telegram... ');
     const tgResult = await tgSendMessage(
@@ -483,9 +485,9 @@ async function main() {
     );
 
     if (tgResult.ok) {
-      console.log(ok('Enviado'));
+      console.info(ok('Enviado'));
     } else {
-      console.log(fail(`ERROR: ${tgResult.error}`));
+      console.info(fail(`ERROR: ${tgResult.error}`));
     }
 
     const tgConfirm = await confirmReceipt(tgResult.ok);

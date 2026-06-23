@@ -34,6 +34,7 @@ type ResourcePatch = {
   trigger_hint?: string | null;
   text_content?: string | null;
   media_url?: string | null;
+  config?: Record<string, unknown> | null;
 };
 
 export async function updateResource(id: string, patch: ResourcePatch): Promise<ActionResult> {

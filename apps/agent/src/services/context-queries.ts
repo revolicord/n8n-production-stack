@@ -10,6 +10,7 @@ import type {
   Turn,
 } from '@dm-api/db';
 import {
+  agentResources,
   funnelStages,
   leadContentSent,
   leadStages,
@@ -180,4 +181,40 @@ export async function loadTurnsInCurrentStage(
     .where(and(...conds));
 
   return rows[0]?.n ?? 0;
+}
+
+/**
+ * Carga los recursos de objeción activos del tenant (category='objecion').
+ * Usados por el detector determinista y por el executor para obtener la respuesta.
+ */
+export async function loadObjectionResources(
+  db: DbClient,
+  tenantId: string,
+): Promise<
+  Array<{
+    slug: string;
+    displayName: string;
+    triggerHint?: string | null;
+    textContent?: string | null;
+    mediaUrl?: string | null;
+    config?: unknown;
+  }>
+> {
+  return db
+    .select({
+      slug: agentResources.slug,
+      displayName: agentResources.displayName,
+      triggerHint: agentResources.triggerHint,
+      textContent: agentResources.textContent,
+      mediaUrl: agentResources.mediaUrl,
+      config: agentResources.config,
+    })
+    .from(agentResources)
+    .where(
+      and(
+        eq(agentResources.tenantId, tenantId),
+        eq(agentResources.category, 'objecion'),
+        eq(agentResources.isActive, true),
+      ),
+    );
 }

@@ -9,7 +9,10 @@ import {
 import { END, START, StateGraph, interrupt } from '@langchain/langgraph';
 import { eq, sql } from 'drizzle-orm';
 import { notifyHumanHandler } from '../actions/handlers/notify-human.js';
+import { executeObjectionResponse } from '../actions/handlers/objection-executor.js';
+import { createDryRunAdapter, createManyChatAdapter } from '../channel/manychat.js';
 import { setRepairContext } from '../core/flow-engine/repair.js';
+import { detectDeterministicObjection } from '../core/objections/detector.js';
 import type { Deps } from '../deps.js';
 import { loadDialogueState, saveDialogueState } from '../services/dialogue-states.js';
 import { pauseSubscriberForHandoff } from '../services/handoff.js';
@@ -138,6 +141,30 @@ export function compileAgentGraph(deps: Deps) {
           llmRequest: null,
         };
       }
+
+      // Detección determinista de objeciones (0 tokens): keywords para NQ/NI.
+      // Solo aplica si hay recursos de objeción configurados para el tenant.
+      if (
+        ctx.objectionResources.length > 0 &&
+        input.messages.length > 0 &&
+        input.system_commands.length === 0
+      ) {
+        const objectionMatch = detectDeterministicObjection(input.messages, ctx.objectionResources);
+        if (objectionMatch) {
+          log.info(
+            { objection_id: objectionMatch.objection_id, reason: objectionMatch.reason },
+            'objection detected (deterministic) — 0 tokens',
+          );
+          return {
+            fastPath: null,
+            fastPathSkipReason: decision.skipReason,
+            stuckBreaker: null,
+            llmRequest: null,
+            objectionDetected: objectionMatch,
+          };
+        }
+      }
+
       return {
         fastPath: null,
         fastPathSkipReason: decision.skipReason,
@@ -178,6 +205,21 @@ export function compileAgentGraph(deps: Deps) {
           decisionPath: 'stuck_breaker' as const,
         };
       }
+      // Objeción determinista: respuesta via executor, sin LLM.
+      if (state.objectionDetected) {
+        deps.logger
+          .child({ turn_id: state.input.turn_id, node: 'understand' })
+          .info(
+            { objection_id: state.objectionDetected.objection_id },
+            'understand skipped (objection-deterministic)',
+          );
+        return {
+          allCommands: [],
+          llmReasoning: `objeción detectada: ${state.objectionDetected.objection_id}`,
+          llmMetrics: null,
+          decisionPath: 'objection' as const,
+        };
+      }
       const r = await understandNode(state.input, ctx, deps, state.llmRequest);
       // metrics === null + sin llmRequest ⟹ turno solo de system_commands (sin LLM).
       const decisionPath: DecisionPath = r.metrics ? 'llm' : 'system';
@@ -194,6 +236,39 @@ export function compileAgentGraph(deps: Deps) {
       return { flowResult: flowEngineNode(ctx, state.allCommands) };
     })
     .addNode('handoff', async (state: AgentStateT) => handoffNode(state, deps))
+    .addNode('execute_objection', async (state: AgentStateT) => {
+      const ctx = state.assembled;
+      const detection = state.objectionDetected;
+      if (!ctx || !detection) throw new Error('execute_objection: state missing');
+      const apiKey = ctx.tenantConfig.manychat_api_key ?? '';
+      const channel =
+        state.input.dry_run || !apiKey ? createDryRunAdapter() : createManyChatAdapter(apiKey);
+      const actionCtx = {
+        tenant: ctx.tenant,
+        tenantConfig: ctx.tenantConfig,
+        subscriber: ctx.subscriber,
+        conversationId: state.input.conversation_id,
+        turnId: state.input.turn_id,
+        channel,
+        db: deps.db,
+        redis: deps.redis,
+        log: deps.logger,
+        dryRun: state.input.dry_run,
+        stageCatalog: ctx.stageCatalog,
+        currentStage: ctx.currentStage,
+      };
+      const result = await executeObjectionResponse(
+        detection,
+        ctx.objectionResources,
+        actionCtx,
+        deps.logger,
+      );
+      return {
+        actionResults: result.actionResults,
+        responseTexts: result.responseTexts,
+        finalStage: ctx.currentStage,
+      };
+    })
     .addNode('execute_actions', async (state: AgentStateT) => {
       const ctx = state.assembled;
       const fr = state.flowResult;
@@ -205,13 +280,18 @@ export function compileAgentGraph(deps: Deps) {
     .addEdge(START, 'assemble_context')
     .addEdge('assemble_context', 'prepare_prompt')
     .addEdge('prepare_prompt', 'understand')
-    .addEdge('understand', 'flow_engine')
+    .addConditionalEdges(
+      'understand',
+      (state: AgentStateT) => (state.objectionDetected ? 'execute_objection' : 'flow_engine'),
+      ['execute_objection', 'flow_engine'],
+    )
     .addConditionalEdges(
       'flow_engine',
       (state: AgentStateT) => (state.flowResult?.interrupt ? 'handoff' : 'execute_actions'),
       ['handoff', 'execute_actions'],
     )
     .addEdge('handoff', 'respond')
+    .addEdge('execute_objection', 'respond')
     .addEdge('execute_actions', 'respond')
     .addEdge('respond', END);
 

@@ -6,6 +6,7 @@ import {
   updateResource,
 } from '@/app/(dashboard)/settings/_actions/resources';
 import { ImageField } from '@/components/settings/ImageField';
+import { ObjectionActionsEditor } from '@/components/settings/ObjectionActionsEditor';
 import { toast } from '@/components/settings/ToastHost';
 import type { AgentResourceRow } from '@/lib/resources';
 import { useState, useTransition } from 'react';
@@ -50,7 +51,14 @@ export function ResourcesEditor({ tenantId, category, title, resources }: Resour
           <p className="text-qc-textSubtle text-sm">No hay recursos en esta categoría.</p>
         ) : (
           resources.map((r) => (
-            <ResourceCard key={r.id} tenantId={tenantId} resource={r} run={run} busy={isPending} />
+            <ResourceCard
+              key={r.id}
+              tenantId={tenantId}
+              resource={r}
+              run={run}
+              busy={isPending}
+              showActions={category === 'objecion'}
+            />
           ))
         )}
       </div>
@@ -84,9 +92,10 @@ interface ResourceCardProps {
   resource: AgentResourceRow;
   run: (action: () => Promise<{ ok: true } | { ok: false; error: string }>, okMsg?: string) => void;
   busy: boolean;
+  showActions?: boolean;
 }
 
-function ResourceCard({ tenantId, resource, run, busy }: ResourceCardProps) {
+function ResourceCard({ tenantId, resource, run, busy, showActions }: ResourceCardProps) {
   function saveName(value: string) {
     const trimmed = value.trim();
     if (!trimmed || trimmed === resource.displayName) return;
@@ -149,6 +158,13 @@ function ResourceCard({ tenantId, resource, run, busy }: ResourceCardProps) {
           if (!result.ok) throw new Error(result.error);
         }}
       />
+
+      {showActions && (
+        <ObjectionActionsEditor
+          resourceId={resource.id}
+          config={resource.config as Parameters<typeof ObjectionActionsEditor>[0]['config']}
+        />
+      )}
     </div>
   );
 }
