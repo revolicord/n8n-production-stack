@@ -47,13 +47,27 @@ rebuild-dashboard: ## Reconstruir imagen dm-dashboard:local y refrescar servicio
 	docker build -t dm-dashboard:local -f apps/dashboard/Dockerfile .
 	docker service update --force --image dm-dashboard:local $(STACK)_dashboard
 
-rebuild-api: ## Reconstruir imagen dm-api:local y refrescar servicios
+rebuild-api: ## Reconstruir imagen dm-api:local, refrescar servicios y migrar (migrate siempre corre, aunque no haya .sql nuevo)
 	docker build -t dm-api:local -f apps/api/Dockerfile .
 	docker service update --force --image dm-api:local $(STACK)_api
 	docker service update --force --image dm-api:local $(STACK)_api-worker
+	$(MAKE) migrate
 
-migrate: ## Re-aplicar migraciones drizzle (one-shot)
-	docker service update --force --detach=true --image dm-api:local $(STACK)_api-migrate
+migrate: ## Re-aplicar migraciones drizzle (one-shot) y esperar a que termine; falla el make si el job falla
+	@docker service update --force --detach=true --image dm-api:local $(STACK)_api-migrate >/dev/null
+	@echo "[migrate] job disparado, esperando a que termine..."
+	@state=""; \
+	for i in $$(seq 1 60); do \
+		state=$$(docker service ps $(STACK)_api-migrate --format '{{.CurrentState}}' --no-trunc 2>/dev/null | head -1); \
+		case "$$state" in Complete*|Failed*) break ;; esac; \
+		sleep 2; \
+	done; \
+	docker service logs $(STACK)_api-migrate --tail 50 2>&1 || true; \
+	case "$$state" in \
+		Complete*) echo "[migrate] OK — $$state" ;; \
+		Failed*) echo "[migrate] FALLÓ — $$state"; exit 1 ;; \
+		*) echo "[migrate] timeout esperando el job (último estado: $$state)"; exit 1 ;; \
+	esac
 
 seed-tenant: ## Crea tenant inicial: make seed-tenant SLUG=dev N8N_WORKFLOW_URL=https://...
 	@test -n "$(SLUG)" || (echo "Falta SLUG=..." && exit 1)

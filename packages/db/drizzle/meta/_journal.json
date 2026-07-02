@@ -141,6 +141,13 @@
       "when": 1750377600000,
       "tag": "0020_stage_transition_trigger",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1750464000000,
+      "tag": "0021_agent_resources_config",
+      "breakpoints": true
     }
   ]
 }

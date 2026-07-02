@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import postgres from 'postgres';
@@ -59,6 +59,22 @@ async function main() {
   const journal = JSON.parse(readFileSync(journalPath, 'utf-8')) as {
     entries: JournalEntry[];
   };
+
+  // Guard: every numbered migration file on disk must be registered in the journal,
+  // or the runner silently skips it (root cause of the 0021 objection-detection outage).
+  const journalTags = new Set(journal.entries.map((e) => e.tag));
+  const orphanedFiles = readdirSync(migrationsFolder)
+    .filter((f) => /^\d{4}_.*\.sql$/.test(f))
+    .map((f) => f.replace(/\.sql$/, ''))
+    .filter((tag) => !journalTags.has(tag));
+
+  if (orphanedFiles.length > 0) {
+    console.error(
+      `[migrate] FATAL: ${orphanedFiles.length} migration file(s) exist but are missing from meta/_journal.json — they would be silently skipped: ${orphanedFiles.join(', ')}`,
+    );
+    console.error('[migrate] add a journal entry for each file before re-running.');
+    process.exit(1);
+  }
 
   let applied_count = 0;
   for (const entry of journal.entries.sort((a, b) => a.idx - b.idx)) {

@@ -49,6 +49,11 @@ info "Stack enviado. Esperando que los servicios arranquen..."
 sleep 5
 docker stack services "$STACK_NAME"
 
+# docker stack deploy no vuelve a disparar el job one-shot api-migrate si su spec
+# no cambió, así que se fuerza siempre aquí (idempotente: se salta por hash lo ya aplicado).
+info "Aplicando migraciones pendientes..."
+(cd "$ROOT_DIR" && make migrate)
+
 echo ""
 info "Comandos útiles:"
 echo "  Ver logs worker:   docker service logs -f ${STACK_NAME}_n8n-worker"
