@@ -159,10 +159,16 @@ Ver **[DEPLOYMENT.md](DEPLOYMENT.md)** para la guía completa:
 **Resumen rápido** (servidor Ubuntu 22.04, Docker instalado, DNS configurado):
 
 ```bash
-git clone https://github.com/revolicord/n8n-production-stack.git /root/n8n-production-stack
-cd /root/n8n-production-stack
+git clone https://github.com/revolicord/n8n-production-stack.git
+cd n8n-production-stack
 bash scripts/setup.sh   # guía interactiva ~10 min
 ```
+
+> Para probar una rama de feature en vez de `master` (ej. en un servidor nuevo de pruebas), agregá `-b <rama>` al clone:
+> ```bash
+> git clone -b feat/agent-fase1-contratos https://github.com/revolicord/n8n-production-stack.git
+> cd n8n-production-stack
+> ```
 
 ### DNS requerido (antes de instalar)
 

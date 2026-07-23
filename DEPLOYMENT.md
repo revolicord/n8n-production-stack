@@ -257,12 +257,18 @@ dig +short panel.tudominio.com
 
 ```bash
 # 1. Clonar el repositorio en el servidor
-git clone https://github.com/revolicord/n8n-production-stack.git /root/n8n-production-stack
-cd /root/n8n-production-stack
+git clone https://github.com/revolicord/n8n-production-stack.git
+cd n8n-production-stack
 
 # 2. Ejecutar el script de instalación interactivo
 bash scripts/setup.sh
 ```
+
+> Para probar una rama de feature en vez de `master` (ej. en un servidor nuevo de pruebas), agregá `-b <rama>` al clone:
+> ```bash
+> git clone -b feat/agent-fase1-contratos https://github.com/revolicord/n8n-production-stack.git
+> cd n8n-production-stack
+> ```
 
 ### Qué pide el script (en orden)
 
